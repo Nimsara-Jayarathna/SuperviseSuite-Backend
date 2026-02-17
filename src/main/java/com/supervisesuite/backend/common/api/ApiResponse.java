@@ -1,17 +1,21 @@
 package com.supervisesuite.backend.common.api;
 
+import com.supervisesuite.backend.common.error.ApiError;
+
 public class ApiResponse<T> {
     private boolean success;
     private String message;
     private T data;
+    private ApiError error;
 
     public ApiResponse() {
     }
 
-    public ApiResponse(boolean success, String message, T data) {
+    public ApiResponse(boolean success, String message, T data, ApiError error) {
         this.success = success;
         this.message = message;
         this.data = data;
+        this.error = error;
     }
 
     public boolean isSuccess() {
@@ -36,5 +40,13 @@ public class ApiResponse<T> {
 
     public void setData(T data) {
         this.data = data;
+    }
+
+    public ApiError getError() {
+        return error;
+    }
+
+    public void setError(ApiError error) {
+        this.error = error;
     }
 }
