@@ -22,3 +22,11 @@ Before commit/PR, run:
 - `./mvnw -q test`
 
 If the project has no tests yet, `./mvnw test` is still acceptable and should compile and execute the test phase.
+
+## Contributing / Workflow
+
+For branching rules, PR expectations, and local verification steps, see `CONTRIBUTING.md`.
+
+## Future: CI
+
+CI is intentionally not configured yet. In a later phase, automated pipelines will enforce the same local checks (build/test/verification) currently documented for developers.
