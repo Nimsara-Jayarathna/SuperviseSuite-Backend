@@ -37,6 +37,10 @@ Setup for local development:
 - Migration scripts are in `src/main/resources/db/migration`.
 - On each backend start, Flyway checks the schema history table and applies only pending versions.
 - `V1__init_schema.sql` creates the base tables for `users`, `projects`, and `project_members`.
+- Default safety: `baseline-on-migrate` is disabled.
+- Dev-only fallback exists in `application-dev.yaml` if you need one-time baseline for a legacy/local DB.
+  - Run with dev profile only when required:
+    `SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run`
 
 ## Verify Standard (Local)
 

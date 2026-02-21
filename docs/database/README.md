@@ -11,6 +11,9 @@ This directory tracks database structure and migration history for the backend.
 
 - Runtime migrations: `src/main/resources/db/migration`
 - Flyway history table: `flyway_schema_history`
+- Profile-specific Flyway behavior:
+  - default: `src/main/resources/application.yaml` (`baseline-on-migrate: false`)
+  - dev only: `src/main/resources/application-dev.yaml` (`baseline-on-migrate: true`)
 
 ## Change Workflow
 

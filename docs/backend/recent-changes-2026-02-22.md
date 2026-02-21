@@ -42,6 +42,8 @@
 - On every backend startup, Flyway checks `flyway_schema_history`.
 - Only missing migration versions are applied.
 - If schema is already at latest version, no migration runs.
+- Default profile keeps `baseline-on-migrate=false` to avoid silently skipping versioned migrations.
+- `application-dev.yaml` enables `baseline-on-migrate=true` only for dev/onboarding cases.
 
 ## 5) Security Behavior Update
 

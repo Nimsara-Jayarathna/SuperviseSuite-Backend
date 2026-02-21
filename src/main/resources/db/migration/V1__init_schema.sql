@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE users (
     id UUID PRIMARY KEY,
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ,
@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     role VARCHAR(64) NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS projects (
+CREATE TABLE projects (
     id UUID PRIMARY KEY,
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ,
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS projects (
     status VARCHAR(64)
 );
 
-CREATE TABLE IF NOT EXISTS project_members (
+CREATE TABLE project_members (
     id UUID PRIMARY KEY,
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ,
@@ -27,5 +27,5 @@ CREATE TABLE IF NOT EXISTS project_members (
     CONSTRAINT uk_project_members_user_project UNIQUE (user_id, project_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_project_members_user_id ON project_members (user_id);
-CREATE INDEX IF NOT EXISTS idx_project_members_project_id ON project_members (project_id);
+CREATE INDEX idx_project_members_user_id ON project_members (user_id);
+CREATE INDEX idx_project_members_project_id ON project_members (project_id);
