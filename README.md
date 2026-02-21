@@ -15,6 +15,29 @@ Always use Maven Wrapper for local commands:
 - Run tests: `./mvnw test`
 - Build jar: `./mvnw clean package`
 
+## Environment Variables
+
+The backend reads DB config from environment variables:
+
+- `DB_URL`
+- `DB_USERNAME`
+- `DB_PASSWORD`
+
+Setup for local development:
+
+1. Create your local env file: `cp .env.example .env`
+2. Run backend:
+   `./mvnw spring-boot:run`
+
+`.env` is auto-loaded by Spring via `spring.config.import`.
+
+## Flyway Migrations
+
+- Flyway is enabled in `src/main/resources/application.yaml`.
+- Migration scripts are in `src/main/resources/db/migration`.
+- On each backend start, Flyway checks the schema history table and applies only pending versions.
+- `V1__init_schema.sql` creates the base tables for `users`, `projects`, and `project_members`.
+
 ## Verify Standard (Local)
 
 Before commit/PR, run:
