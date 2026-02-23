@@ -6,7 +6,7 @@ Applies through Flyway migration:
 
 ## Tables
 
-## `users`
+### `users`
 
 - `id` UUID primary key
 - `created_at` timestamptz
@@ -14,7 +14,7 @@ Applies through Flyway migration:
 - `email` varchar(255), not null, unique
 - `role` varchar(64), not null
 
-## `projects`
+### `projects`
 
 - `id` UUID primary key
 - `created_at` timestamptz
@@ -22,13 +22,13 @@ Applies through Flyway migration:
 - `name` varchar(255)
 - `status` varchar(64)
 
-## `project_members`
+### `project_members`
 
 - `id` UUID primary key
 - `created_at` timestamptz
 - `updated_at` timestamptz
-- `user_id` UUID, not null, FK -> `users.id` (delete cascade)
-- `project_id` UUID, not null, FK -> `projects.id` (delete cascade)
+- `user_id` UUID, not null, FK → `users.id` (delete cascade)
+- `project_id` UUID, not null, FK → `projects.id` (delete cascade)
 - unique constraint: `(user_id, project_id)`
 
 ## Indexes
