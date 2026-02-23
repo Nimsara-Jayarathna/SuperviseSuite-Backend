@@ -7,15 +7,24 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+@Getter
+@Setter
+@NoArgsConstructor
 @Entity
 @Table(name = "users")
 public class User {
+
     @Id
     @GeneratedValue
     private UUID id;
 
+    @Column(nullable = false)
     private Instant createdAt;
+
     private Instant updatedAt;
 
     @Column(nullable = false, unique = true)
@@ -24,43 +33,15 @@ public class User {
     @Column(nullable = false)
     private String role;
 
-    public UUID getId() {
-        return id;
-    }
+    // --- V2 auth fields ---
 
-    public void setId(UUID id) {
-        this.id = id;
-    }
+    /** BCrypt hash of the user's password. Nullable to support existing rows pre-auth. */
+    private String passwordHash;
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+    private String firstName;
 
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+    private String lastName;
 
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
-    }
+    @Column(nullable = false)
+    private boolean isEmailVerified = false;
 }

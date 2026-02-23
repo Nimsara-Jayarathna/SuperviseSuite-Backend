@@ -1,8 +1,13 @@
 package com.supervisesuite.backend.users.repository;
 
 import com.supervisesuite.backend.users.entity.User;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
+
+    Optional<User> findByEmail(String email);
+
+    boolean existsByEmail(String email);
 }
