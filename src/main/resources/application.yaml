@@ -15,5 +15,23 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: false
+  mail:
+    host: ${SMTP_HOST}
+    port: ${SMTP_PORT}
+    username: ${SMTP_USERNAME}
+    password: ${SMTP_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
 server:
   port: ${APP_PORT}
+app:
+  base-url: ${APP_BASE_URL}
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-expiry-seconds: ${JWT_ACCESS_EXPIRY_SECONDS:900}
+    refresh-token-expiry-seconds: ${JWT_REFRESH_EXPIRY_SECONDS:604800}
