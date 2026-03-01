@@ -137,6 +137,21 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
+    @ExceptionHandler(ValidationException.class)
+    public ResponseEntity<ApiError> handleValidationException(
+        ValidationException exception,
+        HttpServletRequest request
+    ) {
+        ApiError error = buildError(
+            ErrorCode.VALIDATION_ERROR,
+            HttpStatus.BAD_REQUEST,
+            safeMessage(exception.getMessage(), "Validation failed."),
+            request,
+            exception.getDetails()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
     @ExceptionHandler(DomainException.class)
     public ResponseEntity<ApiError> handleDomainException(DomainException exception, HttpServletRequest request) {
         ApiError error = buildError(

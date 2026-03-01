@@ -3,12 +3,10 @@ package com.supervisesuite.backend.auth.service;
 import com.supervisesuite.backend.auth.dto.RegisterRequest;
 import com.supervisesuite.backend.auth.dto.RegisterResponse;
 import com.supervisesuite.backend.common.constants.Roles;
-import com.supervisesuite.backend.common.error.DomainException;
-import com.supervisesuite.backend.common.error.ErrorCode;
+import com.supervisesuite.backend.common.error.ConflictException;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import java.time.Instant;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,19 +26,11 @@ class AuthServiceImpl implements AuthService {
     @Transactional
     public RegisterResponse registerStudent(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new DomainException(
-                ErrorCode.CONFLICT,
-                HttpStatus.CONFLICT,
-                "An account with this email already exists."
-            );
+            throw new ConflictException("An account with this email already exists.");
         }
 
         if (userRepository.existsByRegistrationNumber(request.getRegistrationNumber())) {
-            throw new DomainException(
-                ErrorCode.CONFLICT,
-                HttpStatus.CONFLICT,
-                "An account with this registration number already exists."
-            );
+            throw new ConflictException("An account with this registration number already exists.");
         }
 
         User user = new User();
