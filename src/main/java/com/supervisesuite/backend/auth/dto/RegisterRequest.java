@@ -1,5 +1,6 @@
 package com.supervisesuite.backend.auth.dto;
 
+import com.supervisesuite.backend.common.validation.StrongPassword;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -23,7 +24,7 @@ public class RegisterRequest {
     private String registrationNumber;
 
     @NotBlank(message = "Password is required.")
-    @Size(min = 8, message = "Password must be at least 8 characters.")
+    @StrongPassword
     private String password;
 
     public String getFirstName() {
