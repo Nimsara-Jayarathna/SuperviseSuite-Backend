@@ -41,4 +41,7 @@ public class User {
     private String firstName;
 
     private String lastName;
+
+    @Column(name = "registration_number", unique = true)
+    private String registrationNumber;
 }

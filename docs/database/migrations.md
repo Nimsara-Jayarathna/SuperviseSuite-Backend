@@ -41,6 +41,13 @@
   - `deleted_at` timestamptz nullable (soft delete marker)
 - Added index: `idx_projects_supervisor_id`
 
+## 2026-03-02
+
+### V3__add_registration_number.sql
+
+- **`users`** extended:
+  - `registration_number` varchar(100) nullable, unique — populated on student registration; existing rows have no value
+
 ## Rules for Next Migrations
 
 - Use versioned files: `V{number}__{description}.sql`
