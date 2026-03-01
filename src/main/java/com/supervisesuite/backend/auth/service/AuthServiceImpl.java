@@ -11,6 +11,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Default implementation of {@link AuthService}.
+ *
+ * <p>Package-private — callers depend on the {@link AuthService} interface only.
+ */
 @Service
 class AuthServiceImpl implements AuthService {
 
@@ -22,6 +27,18 @@ class AuthServiceImpl implements AuthService {
         this.passwordEncoder = passwordEncoder;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Execution steps:
+     * <ol>
+     *   <li>Check email uniqueness — throws {@link com.supervisesuite.backend.common.error.ConflictException} on duplicate.</li>
+     *   <li>Check registration number uniqueness — throws {@link com.supervisesuite.backend.common.error.ConflictException} on duplicate.</li>
+     *   <li>Hash the plain-text password with BCrypt via {@link PasswordEncoder}.</li>
+     *   <li>Build and persist a {@link com.supervisesuite.backend.users.entity.User} with role {@code STUDENT}.</li>
+     *   <li>Return a {@link RegisterResponse} with the saved user's public fields.</li>
+     * </ol>
+     */
     @Override
     @Transactional
     public RegisterResponse registerStudent(RegisterRequest request) {
