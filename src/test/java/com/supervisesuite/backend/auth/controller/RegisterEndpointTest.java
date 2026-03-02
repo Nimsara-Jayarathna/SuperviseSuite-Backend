@@ -95,29 +95,30 @@ class RegisterEndpointTest {
             REGISTER_URL, validRequest(), Map.class
         );
 
-        Map<?, ?> data = (Map<?, ?>) response.getBody().get("data");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
         assertThat(data).doesNotContainKey("passwordHash");
         assertThat(data).doesNotContainKey("password");
     }
 
     @Test
-    void register_validRequest_persistsUserWithHashedPassword() {
+    void register_validRequest_persistsAllFieldsCorrectly() {
         RegisterRequest request = validRequest();
         restTemplate.postForEntity(REGISTER_URL, request, Map.class);
 
-        User saved = userRepository.findByEmail(request.getEmail()).orElseThrow();
+        User saved = savedUser(request.getEmail());
+
+        // Core identity fields
+        assertThat(saved.getEmail()).isEqualTo(request.getEmail());
+        assertThat(saved.getFirstName()).isEqualTo(request.getFirstName());
+        assertThat(saved.getLastName()).isEqualTo(request.getLastName());
+        assertThat(saved.getRegistrationNumber()).isEqualTo(request.getRegistrationNumber());
+        assertThat(saved.getRole()).isEqualTo(Roles.STUDENT);
+
+        // Password must be stored as a bcrypt hash, never plain-text
         assertThat(saved.getPasswordHash()).isNotNull();
         assertThat(saved.getPasswordHash()).isNotEqualTo(request.getPassword());
         assertThat(passwordEncoder.matches(request.getPassword(), saved.getPasswordHash())).isTrue();
-    }
-
-    @Test
-    void register_validRequest_persistsUserWithStudentRole() {
-        RegisterRequest request = validRequest();
-        restTemplate.postForEntity(REGISTER_URL, request, Map.class);
-
-        User saved = userRepository.findByEmail(request.getEmail()).orElseThrow();
-        assertThat(saved.getRole()).isEqualTo(Roles.STUDENT);
     }
 
     // -------------------------------------------------------------------------
@@ -126,9 +127,11 @@ class RegisterEndpointTest {
 
     @Test
     void register_duplicateEmail_returns409Conflict() {
-        persistUser("amal.perera@university.ac.lk", "CS/2021/001");
+        // Seed a user with the SAME email but a DIFFERENT registration number so that
+        // only the email uniqueness constraint is violated by the request below.
+        persistUser("amal.perera@university.ac.lk", "CS/2020/999");
 
-        RegisterRequest request = validRequest(); // same email, same registration number
+        RegisterRequest request = validRequest(); // email matches seeded user; reg number is unique
         ResponseEntity<Map> response = restTemplate.postForEntity(REGISTER_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
@@ -232,6 +235,17 @@ class RegisterEndpointTest {
         request.setRegistrationNumber("CS/2021/001");
         request.setPassword("Secure@123");
         return request;
+    }
+
+    /**
+     * Fetches the persisted {@link User} by email, failing fast if not found.
+     *
+     * @param email the email address to look up
+     * @return the saved {@link User}
+     */
+    private User savedUser(String email) {
+        return userRepository.findByEmail(email)
+            .orElseThrow(() -> new AssertionError("Expected a user with email '" + email + "' but none was found"));
     }
 
     /**

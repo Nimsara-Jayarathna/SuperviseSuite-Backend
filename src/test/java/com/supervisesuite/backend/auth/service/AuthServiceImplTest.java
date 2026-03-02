@@ -132,6 +132,29 @@ class AuthServiceImplTest {
     }
 
     // -------------------------------------------------------------------------
+    // Input normalization
+    // -------------------------------------------------------------------------
+
+    @Test
+    void registerStudent_lowercaseRegistrationNumber_storedAsUppercase() {
+        // Input has leading/trailing whitespace and lowercase letters.
+        validRequest.setRegistrationNumber("  it24100400  ");
+        String expectedNormalized = "IT24100400";
+
+        when(userRepository.existsByEmail(any())).thenReturn(false);
+        when(userRepository.existsByRegistrationNumber(expectedNormalized)).thenReturn(false);
+        when(passwordEncoder.encode(any())).thenReturn("hash");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        authService.registerStudent(validRequest);
+
+        // The normalized (uppercase, trimmed) value must be passed to both the
+        // duplicate check and the entity setter.
+        verify(userRepository).existsByRegistrationNumber(expectedNormalized);
+        verify(userRepository).save(argThat(user -> expectedNormalized.equals(user.getRegistrationNumber())));
+    }
+
+    // -------------------------------------------------------------------------
     // Duplicate email
     // -------------------------------------------------------------------------
 
