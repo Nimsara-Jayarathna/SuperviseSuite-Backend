@@ -43,7 +43,7 @@
 - Only missing migration versions are applied.
 - If schema is already at latest version, no migration runs.
 - Default profile keeps `baseline-on-migrate=false` to avoid silently skipping versioned migrations.
-- `application-dev.yaml` enables `baseline-on-migrate=true` only for dev/onboarding cases.
+- `application-dev.yaml` has no Flyway overrides — apply only to an empty database.
 
 ## 5) Security Behavior Update
 

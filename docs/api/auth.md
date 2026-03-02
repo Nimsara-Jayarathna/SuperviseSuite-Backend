@@ -19,7 +19,7 @@ Registers a new student account. No authentication required.
 | `firstName`        | string | yes      | Not blank. Max 100 characters.                                        |
 | `lastName`         | string | yes      | Not blank. Max 100 characters.                                        |
 | `email`            | string | yes      | Not blank. Must be a valid email format. Must be unique.              |
-| `registrationNumber` | string | yes    | Not blank. Max 100 characters. Must be unique.                        |
+| `registrationNumber` | string | yes    | Not blank. Max 20 characters. Must be unique. Stored in uppercase (normalized server-side). |
 | `password`         | string | yes      | Not blank. Min 8 characters. Must include uppercase, lowercase, digit, and special character. |
 
 **Example:**
@@ -29,7 +29,7 @@ Registers a new student account. No authentication required.
   "firstName": "Amal",
   "lastName": "Perera",
   "email": "amal.perera@university.ac.lk",
-  "registrationNumber": "CS/2021/001",
+  "registrationNumber": "IT24100400",
   "password": "Secure@123"
 }
 ```
@@ -49,7 +49,7 @@ Registers a new student account. No authentication required.
     "email": "amal.perera@university.ac.lk",
     "firstName": "Amal",
     "lastName": "Perera",
-    "registrationNumber": "CS/2021/001",
+    "registrationNumber": "IT24100400",
     "role": "STUDENT"
   },
   "error": null
@@ -121,4 +121,4 @@ Returned when a required field is missing, blank, fails format checks, or the pa
 
 - Assigned role is always `STUDENT`. Supervisor accounts are not self-registered.
 - Password is never returned in any response. BCrypt hash is stored server-side.
-- `isEmailVerified` is not yet implemented — tracked as a pending schema addition (V4 migration).
+- Email verification is out of scope — accounts are considered verified upon registration.
