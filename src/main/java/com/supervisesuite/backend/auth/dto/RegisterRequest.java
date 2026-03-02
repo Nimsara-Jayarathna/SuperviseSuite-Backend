@@ -31,10 +31,12 @@ public class RegisterRequest {
 
     /**
      * Institutional registration / student number.
-     * Must be unique across all users. Max 100 characters.
+     * Format: 2 uppercase letters followed by 8 digits (e.g. IT24100400).
+     * Input is normalized (trimmed and uppercased) before persistence.
+     * Must be unique across all users. Max 20 characters.
      */
     @NotBlank(message = "Registration number is required.")
-    @Size(max = 100, message = "Registration number must not exceed 100 characters.")
+    @Size(max = 20, message = "Registration number must not exceed 20 characters.")
     private String registrationNumber;
 
     /**

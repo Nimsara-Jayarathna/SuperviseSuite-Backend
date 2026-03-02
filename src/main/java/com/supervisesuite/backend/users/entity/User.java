@@ -75,9 +75,11 @@ public class User {
 
     /**
      * Institutional registration / student number.
-     * Unique across all users; nullable at the DB level for pre-existing rows.
+     * Format: 2 uppercase letters followed by 8 digits (e.g. IT24100400).
+     * Stored in normalized uppercase form via {@link com.supervisesuite.backend.common.util.NormalizationUtils}.
+     * Nullable at the DB level to support pre-seeded supervisor rows.
      * The application layer enforces a non-null value on student registration.
      */
-    @Column(name = "registration_number", unique = true)
+    @Column(name = "registration_number", unique = true, length = 20)
     private String registrationNumber;
 }
