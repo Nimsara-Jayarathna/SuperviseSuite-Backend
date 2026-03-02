@@ -9,6 +9,7 @@ import com.supervisesuite.backend.users.entity.User;
 import org.springframework.dao.DataIntegrityViolationException;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import java.time.Instant;
+import java.util.Locale;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,7 +45,7 @@ class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public RegisterResponse registerStudent(RegisterRequest request) {
-        String normalizedEmail = request.getEmail().trim().toLowerCase();
+        String normalizedEmail = request.getEmail().trim().toLowerCase(Locale.ROOT);
         String normalizedRegistrationNumber = NormalizationUtils.normalizeRegistrationNumber(request.getRegistrationNumber());
 
         if (userRepository.existsByEmail(normalizedEmail)) {

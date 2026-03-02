@@ -16,9 +16,9 @@ import lombok.Setter;
  *
  * <p>Maps to the {@code users} table. Schema is managed by Flyway:
  * <ul>
- *   <li>V1 — base table ({@code id}, {@code email}, {@code role})</li>
- *   <li>V2 — auth fields ({@code password_hash}, {@code first_name}, {@code last_name})</li>
- *   <li>V3 — {@code registration_number}</li>
+ *   <li>V1 — base table ({@code id}, {@code email}, {@code role}) with CHECK constraint on role</li>
+ *   <li>V2 — auth fields ({@code password_hash}, {@code first_name}, {@code last_name},
+ *       {@code registration_number}) and {@code refresh_tokens} table</li>
  * </ul>
  *
  * <p>Lombok generates all getters, setters, and a no-arg constructor.
@@ -71,7 +71,7 @@ public class User {
     /** Student or supervisor's family name. */
     private String lastName;
 
-    // --- V3 fields ---
+    // --- V2 additional fields ---
 
     /**
      * Institutional registration / student number.

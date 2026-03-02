@@ -1,52 +1,35 @@
 # Migration Log
 
-## 2026-02-22
+## 2026-03-02 — Full schema rewrite (no prior data; clean reset)
 
 ### V1__init_schema.sql
 
-- Created initial schema for:
-  - `users`
-  - `projects`
-  - `project_members`
+- Created core tables:
+  - `users` — `id` (UUID, `gen_random_uuid()`), `created_at` (NOT NULL), `updated_at`, `email` (NOT NULL UNIQUE), `role` (NOT NULL)
+  - `projects` — `id`, `created_at` (NOT NULL), `updated_at`, `name` (NOT NULL), `description`, `status` (NOT NULL), `supervisor_id` (FK → `users.id`), `deleted_at`
+  - `project_members` — `id`, `created_at` (NOT NULL), `updated_at`, `user_id` (NOT NULL, FK → `users`), `project_id` (NOT NULL, FK → `projects`)
 - Added constraints:
-  - unique `users.email`
-  - foreign keys on `project_members.user_id` and `project_members.project_id`
-  - unique `(user_id, project_id)` in `project_members`
+  - `chk_users_role`: `role IN ('SUPERVISOR', 'STUDENT')`
+  - `fk_projects_supervisor`: supervisor_id → users.id
+  - `fk_project_members_user`, `fk_project_members_project` with ON DELETE CASCADE
+  - `uk_project_members_user_project`: unique (user_id, project_id)
 - Added indexes:
   - `idx_project_members_user_id`
   - `idx_project_members_project_id`
-
-## 2026-02-23
+  - `idx_projects_supervisor_id`
 
 ### V2__auth_schema.sql
 
 - **`users`** extended:
-  - `password_hash` varchar(255) nullable — populated on registration; existing rows have no password
+  - `password_hash` varchar(255) nullable — populated on registration; pre-seeded rows have no password
   - `first_name`, `last_name` varchar(100) nullable
-  - `is_email_verified` boolean not null default false
-  - Added CHECK constraint on `role`: must be `'SUPERVISOR'` or `'STUDENT'`
-- **`verification_tokens`** new table:
-  - UUID token, unique, short-lived
-  - `used_at` nullable — null means not yet consumed
-  - `expires_at` enforces time-bound validity
-  - FK → `users.id` on delete cascade
+  - `registration_number` varchar(20) nullable, unique — populated on student registration; pre-seeded supervisor rows have no value
 - **`refresh_tokens`** new table:
-  - `token_hash` stores SHA-256 hash of raw token (raw never persisted)
+  - `token_hash` varchar(255) NOT NULL UNIQUE
   - `revoked_at` nullable — null means still active
-  - `expires_at` enforces time-bound validity
-  - FK → `users.id` on delete cascade
-- **`projects`** extended:
-  - `description` text nullable
-  - `supervisor_id` UUID nullable — FK → `users.id` (supervisor ownership; nullable for existing rows)
-  - `deleted_at` timestamptz nullable (soft delete marker)
-- Added index: `idx_projects_supervisor_id`
-
-## 2026-03-02
-
-### V3__add_registration_number.sql
-
-- **`users`** extended:
-  - `registration_number` varchar(100) nullable, unique — populated on student registration; existing rows have no value
+  - `expires_at` NOT NULL
+  - `created_at` NOT NULL
+  - FK → `users.id` ON DELETE CASCADE
 
 ## Rules for Next Migrations
 
@@ -54,9 +37,5 @@
 - Never edit a migration file that has been applied to shared environments.
 - Add a new version for every schema/data change.
 - Record each new migration in this file with date and summary.
-- Keep versioned DDL deterministic:
-  - do not use `IF NOT EXISTS` in versioned Flyway migrations.
-  - allow startup to fail when schema state does not match expected history.
-- `baseline-on-migrate` policy:
-  - default profile: disabled (`false`)
-  - `dev` profile only: enabled (`true`) for one-time onboarding of legacy/local schemas.
+- Keep versioned DDL deterministic — do not use `IF NOT EXISTS` in versioned Flyway migrations.
+- `baseline-on-migrate`: disabled (`false`) in all profiles. Apply only to an empty database.
