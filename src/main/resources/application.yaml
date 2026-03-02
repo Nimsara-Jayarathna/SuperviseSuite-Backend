@@ -22,3 +22,5 @@ app:
     secret: ${JWT_SECRET}
     access-token-expiry-seconds: ${JWT_ACCESS_EXPIRY_SECONDS:900}
     refresh-token-expiry-seconds: ${JWT_REFRESH_EXPIRY_SECONDS:604800}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
