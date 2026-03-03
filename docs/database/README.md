@@ -4,7 +4,7 @@ This directory tracks database structure and migration history for the backend.
 
 ## Structure
 
-- `schema-v1.md`: base schema created by Flyway `V1`.
+- `schema-v1.md`: full schema reference covering V1 and V2 migrations.
 - `migrations.md`: migration log and rules for future schema changes.
 
 ## Source of Truth
@@ -13,7 +13,7 @@ This directory tracks database structure and migration history for the backend.
 - Flyway history table: `flyway_schema_history`
 - Profile-specific Flyway behavior:
   - default: `src/main/resources/application.yaml` (`baseline-on-migrate: false`)
-  - dev only: `src/main/resources/application-dev.yaml` (`baseline-on-migrate: true`)
+  - dev: `src/main/resources/application-dev.yaml` — no Flyway overrides; apply only to an empty database
 
 ## Change Workflow
 
