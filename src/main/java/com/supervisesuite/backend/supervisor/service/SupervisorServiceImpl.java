@@ -10,11 +10,14 @@ import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
+import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
+import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectResponse;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
+import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
@@ -40,6 +43,13 @@ class SupervisorServiceImpl implements SupervisorService {
         "AT_RISK",
         "BEHIND",
         "COMPLETED"
+    );
+    private static final Set<String> ALLOWED_MILESTONE_STATUSES = Set.of(
+        "PLANNED",
+        "IN_PROGRESS",
+        "COMPLETED",
+        "MISSED",
+        "CANCELLED"
     );
 
     private final UserRepository userRepository;
@@ -114,6 +124,116 @@ class SupervisorServiceImpl implements SupervisorService {
 
         Project savedProject = projectRepository.save(project);
         return toProjectDetail(savedProject);
+    }
+
+    @Override
+    @Transactional
+    public SupervisorProjectDetailDto addProjectMembers(
+        String authenticatedUserId,
+        String projectId,
+        AddSupervisorProjectMembersRequest request
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        List<User> studentsToAdd = resolveStudents(request.getStudentIds());
+        for (User student : studentsToAdd) {
+            if (projectMemberRepository.existsByUserIdAndProjectId(student.getId(), project.getId())) {
+                throw new ValidationException("studentIds", "One or more selected students are already assigned.");
+            }
+        }
+
+        Instant now = Instant.now();
+        for (User student : studentsToAdd) {
+            projectMemberRepository.save(buildProjectMember(project.getId(), student.getId(), Roles.STUDENT, now));
+        }
+
+        project.setUpdatedAt(now);
+        project.setLastActivityAt(now);
+        projectRepository.save(project);
+
+        return toProjectDetail(project);
+    }
+
+    @Override
+    @Transactional
+    public SupervisorProjectDetailDto addProjectMilestone(
+        String authenticatedUserId,
+        String projectId,
+        AddSupervisorProjectMilestoneRequest request
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        Integer nextSequenceNo = projectMilestoneRepository.findTopByProjectIdOrderBySequenceNoDesc(project.getId())
+            .map(milestone -> milestone.getSequenceNo() + 1)
+            .orElse(1);
+
+        Instant now = Instant.now();
+        ProjectMilestone milestone = new ProjectMilestone();
+        milestone.setProjectId(project.getId());
+        milestone.setTitle(request.getTitle().trim());
+        milestone.setDescription(trimToNull(request.getDescription()));
+        milestone.setDueDate(request.getDueDate());
+        milestone.setStatus(DEFAULT_MILESTONE_STATUS);
+        milestone.setSequenceNo(nextSequenceNo);
+        milestone.setCreatedBy(supervisor.getId());
+        milestone.setCreatedAt(now);
+        projectMilestoneRepository.save(milestone);
+
+        project.setUpdatedAt(now);
+        project.setMilestoneDate(request.getDueDate());
+        project.setLastActivityAt(now);
+        projectRepository.save(project);
+
+        return toProjectDetail(project);
+    }
+
+    @Override
+    @Transactional
+    public SupervisorProjectDetailDto updateProjectMilestone(
+        String authenticatedUserId,
+        String projectId,
+        String milestoneId,
+        UpdateSupervisorProjectMilestoneRequest request
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        UUID parsedMilestoneId = parseMilestoneId(milestoneId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        ProjectMilestone milestone = projectMilestoneRepository.findByIdAndProjectId(parsedMilestoneId, project.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        String milestoneStatus = request.getStatus().trim().toUpperCase();
+        if (!ALLOWED_MILESTONE_STATUSES.contains(milestoneStatus)) {
+            throw new ValidationException("status", "Milestone status is invalid.");
+        }
+
+        Instant now = Instant.now();
+        milestone.setTitle(request.getTitle().trim());
+        milestone.setDescription(trimToNull(request.getDescription()));
+        milestone.setDueDate(request.getDueDate());
+        milestone.setStatus(milestoneStatus);
+        milestone.setUpdatedAt(now);
+        projectMilestoneRepository.save(milestone);
+
+        project.setUpdatedAt(now);
+        project.setLastActivityAt(now);
+        projectRepository.save(project);
+
+        return toProjectDetail(project);
     }
 
     @Override
@@ -350,6 +470,14 @@ class SupervisorServiceImpl implements SupervisorService {
     private UUID parseProjectId(String projectId) {
         try {
             return UUID.fromString(projectId);
+        } catch (IllegalArgumentException exception) {
+            throw new EntityNotFoundException();
+        }
+    }
+
+    private UUID parseMilestoneId(String milestoneId) {
+        try {
+            return UUID.fromString(milestoneId);
         } catch (IllegalArgumentException exception) {
             throw new EntityNotFoundException();
         }
