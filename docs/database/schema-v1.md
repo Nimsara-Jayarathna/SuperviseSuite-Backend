@@ -114,3 +114,29 @@ The schema is built by three Flyway migrations applied in order:
   - `status` CHECK: `IN ('PLANNED', 'IN_PROGRESS', 'COMPLETED', 'MISSED', 'CANCELLED')`
   - `sequence_no > 0`
   - unique per project order: `(project_id, sequence_no)`
+
+---
+
+## Current Backend Coverage
+
+The database schema is ahead of the currently implemented backend read/write APIs.
+
+### Implemented in the API today
+
+- Auth:
+  - register student
+  - login
+- Supervisor:
+  - project list summaries
+  - student search by email
+  - project creation with first milestone
+
+### Present in schema but not yet exposed as full workflow APIs
+
+- project detail read model
+- meeting management
+- action items
+- file handling
+- integration management (GitHub, Jira, communication links as first-class workflows)
+
+This means some tables/columns already exist for future work, but the frontend should only rely on currently implemented API contracts.
