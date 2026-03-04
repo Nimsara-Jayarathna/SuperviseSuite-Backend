@@ -1,30 +1,60 @@
 # Supervisor API
 
-Supervisor-only endpoints for project listing, project detail, student lookup, and project creation.
+Supervisor-only endpoints for dashboard, project list/detail reads, student lookup, and project management actions.
 
 All endpoints in this document:
 
 - require authentication
 - require the authenticated user to have role `SUPERVISOR`
-- return the standard `ApiResponse<T>` envelope on success
-- return the shared `ApiError` shape on failure
+- return `ApiResponse<T>` on success
+- return `ApiError` on failure
 
 ## Endpoints
 
-- [GET /api/supervisor/projects](#get-apisupervisorprojects)
-- [GET /api/supervisor/projects/{projectId}](#get-apisupervisorprojectsprojectid)
-- [GET /api/supervisor/students/search](#get-apisupervisorstudentssearch)
-- [POST /api/supervisor/projects](#post-apisupervisorprojects)
+- `GET /api/supervisor/dashboard`
+- `GET /api/supervisor/projects`
+- `GET /api/supervisor/projects/{projectId}`
+- `GET /api/supervisor/students/search?q=...`
+- `POST /api/supervisor/projects`
+- `PATCH /api/supervisor/projects/{projectId}`
+- `PATCH /api/supervisor/projects/{projectId}/status`
+- `POST /api/supervisor/projects/{projectId}/members`
+- `POST /api/supervisor/projects/{projectId}/milestones`
+- `PATCH /api/supervisor/projects/{projectId}/milestones/{milestoneId}`
+
+---
+
+## GET /api/supervisor/dashboard
+
+Returns dashboard aggregates and lightweight project records for `/supervisor/dashboard`.
+
+### Response fields
+
+- aggregate counts:
+  - `totalProjects`
+  - `planningProjects`
+  - `activeProjects`
+  - `atRiskProjects`
+  - `behindProjects`
+  - `completedProjects`
+  - `upcomingMilestonesCount` (within next 14 days, inclusive)
+- project collections:
+  - `projects[]` (all supervisor-owned projects in summary form)
+  - `recentProjects[]` (top 5 by `lastActivityAt`, fallback `createdAt`)
+
+### Notes
+
+- Includes only supervisor-owned, non-deleted projects.
+- `projects[]` item fields:
+  - `id`, `title`, `summary`, `lifecycleStatus`, `milestoneDate`, `lastActivityAt`, `progressPercent`, `healthNote`
 
 ---
 
 ## GET /api/supervisor/projects
 
-Returns the authenticated supervisor's project list as summary records for the `/supervisor/projects` route.
+Returns supervisor-owned project list records for `/supervisor/projects`.
 
-### Response shape
-
-Each item includes only summary fields needed by the current list UI:
+### Response fields per item
 
 - `id`
 - `title`
@@ -37,274 +67,184 @@ Each item includes only summary fields needed by the current list UI:
 - `healthNote`
 - `memberCount`
 
-### 200 OK
-
-```json
-{
-  "success": true,
-  "message": "Projects loaded.",
-  "data": [
-    {
-      "id": "f14699be-6c09-4a86-83b8-a4c4fd7d457d",
-      "title": "Smart Attendance Tracker",
-      "summary": "AI-assisted attendance project",
-      "lifecycleStatus": "PLANNING",
-      "batch": "2026",
-      "semester": "Semester 1",
-      "milestoneDate": "2026-03-21",
-      "progressPercent": 0,
-      "healthNote": null,
-      "memberCount": 3
-    }
-  ],
-  "error": null
-}
-```
-
 ### Notes
 
-- Only projects owned by `projects.supervisor_id = authenticated supervisor` are returned.
-- Soft-deleted projects (`deleted_at IS NOT NULL`) are excluded.
-- Empty result sets return `200 OK` with `data: []`.
+- Excludes soft-deleted projects.
+- Empty set returns `200` with `data: []`.
 
 ---
 
 ## GET /api/supervisor/projects/{projectId}
 
-Returns one supervisor-owned project as a trimmed detail record for the `/supervisor/projects/:projectId` route.
+Returns one supervisor-owned project detail record.
 
-### Response shape
+### Response fields
 
-The current detail endpoint includes only fields already backed by the database and current implementation:
+- core fields:
+  - `id`, `title`, `summary`, `lifecycleStatus`, `batch`, `semester`, `milestoneDate`, `progressPercent`, `healthNote`, `lastActivityAt`
+- `members[]`:
+  - `id`, `firstName`, `lastName`, `email`, `registrationNumber`, `memberRole`
+- `milestones[]`:
+  - `id`, `title`, `description`, `dueDate`, `status`, `sequenceNo`
 
-- project core fields:
-  - `id`
-  - `title`
-  - `summary`
-  - `lifecycleStatus`
-  - `batch`
-  - `semester`
-  - `milestoneDate`
-  - `progressPercent`
-  - `healthNote`
-  - `lastActivityAt`
-- `members[]`
-- `milestones[]`
+### 404 cases
 
-`members[]` items include:
+- invalid UUID
+- project not found
+- project is soft-deleted
+- project not owned by authenticated supervisor
+
+---
+
+## GET /api/supervisor/students/search?q=...
+
+Searches registered users with role `STUDENT`.
+
+### Rules
+
+- Query length below 3 characters returns empty array.
+- Current matching scope: email contains query (case-insensitive).
+- Returns at most 10 records, ordered by email.
+
+### Response item
 
 - `id`
 - `firstName`
 - `lastName`
 - `email`
 - `registrationNumber`
-- `memberRole`
-
-`milestones[]` items include:
-
-- `id`
-- `title`
-- `description`
-- `dueDate`
-- `status`
-- `sequenceNo`
-
-### 200 OK
-
-```json
-{
-  "success": true,
-  "message": "Project loaded.",
-  "data": {
-    "id": "f14699be-6c09-4a86-83b8-a4c4fd7d457d",
-    "title": "Smart Attendance Tracker",
-    "summary": "AI-assisted attendance project",
-    "lifecycleStatus": "PLANNING",
-    "batch": "2026",
-    "semester": "Semester 1",
-    "milestoneDate": "2026-03-21",
-    "progressPercent": 0,
-    "healthNote": null,
-    "lastActivityAt": "2026-03-04T10:15:00Z",
-    "members": [
-      {
-        "id": "d09ec85d-a704-44bf-b0fb-38a8d1e1e417",
-        "firstName": "Nimsara",
-        "lastName": "Jayarathna",
-        "email": "nimsara@example.com",
-        "registrationNumber": "IT24100400",
-        "memberRole": "STUDENT"
-      }
-    ],
-    "milestones": [
-      {
-        "id": "b54c4486-4d45-455a-93bc-4097148bf8d2",
-        "title": "Proposal Submission",
-        "description": "Initial proposal review",
-        "dueDate": "2026-03-21",
-        "status": "PLANNED",
-        "sequenceNo": 1
-      }
-    ]
-  },
-  "error": null
-}
-```
-
-### 404 Not Found
-
-Returned when:
-
-- the project does not exist
-- the project was soft-deleted
-- the project is not owned by the authenticated supervisor
-- the path `projectId` is not a valid UUID
-
-### Notes
-
-- This endpoint intentionally does not return meetings, files, action items, integrations, or activity analytics yet.
-- The current frontend detail page is trimmed to match this smaller real-data contract.
-
----
-
-## GET /api/supervisor/students/search
-
-Searches registered student users for project assignment.
-
-### Query parameters
-
-| Name | Required | Notes |
-|------|----------|-------|
-| `q` | yes | Email search term. Values shorter than 3 characters return an empty array. |
-
-### 200 OK
-
-```json
-{
-  "success": true,
-  "message": "Students loaded.",
-  "data": [
-    {
-      "id": "d09ec85d-a704-44bf-b0fb-38a8d1e1e417",
-      "firstName": "Nimsara",
-      "lastName": "Jayarathna",
-      "email": "nimsara@example.com",
-      "registrationNumber": "IT24100400"
-    }
-  ],
-  "error": null
-}
-```
-
-### Notes
-
-- Search currently targets student email only.
-- No-match results return `200 OK` with `data: []`.
-- This endpoint is intended for type-ahead lookup in the create-project form.
 
 ---
 
 ## POST /api/supervisor/projects
 
-Creates a new project, assigns the supervisor and selected students, and creates the first milestone in one transaction.
+Creates project + memberships + initial milestone in one transaction.
 
-### Request
+### Request fields
 
-**Content-Type:** `application/json`
-
-| Field | Type | Required | Rules |
-|------|------|----------|-------|
-| `title` | string | yes | Not blank. |
-| `summary` | string | yes | Not blank. |
-| `batch` | string | yes | Not blank. |
-| `semester` | string | yes | Not blank. |
-| `studentIds` | `uuid[]` | yes | At least one student. Must be unique. |
-| `milestone` | object | yes | First milestone payload. |
-| `milestone.title` | string | yes | Not blank. |
-| `milestone.description` | string | no | Optional. Blank is normalized to `null`. |
-| `milestone.dueDate` | date | yes | Required ISO date. |
-
-### Example request
-
-```json
-{
-  "title": "Smart Attendance Tracker",
-  "summary": "AI-assisted attendance project",
-  "batch": "2026",
-  "semester": "Semester 1",
-  "studentIds": [
-    "d09ec85d-a704-44bf-b0fb-38a8d1e1e417",
-    "f0c2f1a7-d955-463f-9b18-3daec2c54cf4"
-  ],
-  "milestone": {
-    "title": "Proposal Submission",
-    "description": "Initial proposal review",
-    "dueDate": "2026-03-21"
-  }
-}
-```
+- `title` (required)
+- `summary` (required)
+- `batch` (required)
+- `semester` (required)
+- `studentIds[]` (required, non-empty, unique)
+- `milestone`:
+  - `title` (required)
+  - `description` (optional)
+  - `dueDate` (required)
 
 ### Backend defaults
 
-These values are applied by the backend and are not required from the client:
+- `lifecycleStatus = PLANNING`
+- `progressPercent = 0`
+- `healthNote = null`
+- first milestone:
+  - `status = PLANNED`
+  - `sequenceNo = 1`
+- project `milestoneDate = initial milestone dueDate`
 
-- project `lifecycleStatus = PLANNING`
-- project `progressPercent = 0`
-- project `healthNote = null`
-- milestone `status = PLANNED`
-- milestone `sequenceNo = 1`
-- project `milestoneDate = milestone.dueDate`
+---
 
-### 201 Created
+## PATCH /api/supervisor/projects/{projectId}
 
-```json
-{
-  "success": true,
-  "message": "Project created successfully.",
-  "data": {
-    "id": "f14699be-6c09-4a86-83b8-a4c4fd7d457d",
-    "title": "Smart Attendance Tracker",
-    "summary": "AI-assisted attendance project",
-    "batch": "2026",
-    "semester": "Semester 1",
-    "lifecycleStatus": "PLANNING",
-    "progressPercent": 0,
-    "milestoneDate": "2026-03-21",
-    "students": [
-      {
-        "id": "d09ec85d-a704-44bf-b0fb-38a8d1e1e417",
-        "firstName": "Nimsara",
-        "lastName": "Jayarathna",
-        "email": "nimsara@example.com",
-        "registrationNumber": "IT24100400"
-      }
-    ],
-    "milestone": {
-      "id": "b54c4486-4d45-455a-93bc-4097148bf8d2",
-      "title": "Proposal Submission",
-      "description": "Initial proposal review",
-      "dueDate": "2026-03-21",
-      "status": "PLANNED",
-      "sequenceNo": 1
-    }
-  },
-  "error": null
-}
-```
+Updates core project fields used by overview edit.
 
-### Validation behavior
+### Request fields
 
-- duplicate `studentIds` -> `400 VALIDATION_ERROR`
-- non-existent student IDs -> `400 VALIDATION_ERROR`
-- non-student user IDs in `studentIds` -> `400 VALIDATION_ERROR`
-- malformed request body -> `400 BAD_REQUEST`
+- `title` (required)
+- `summary` (required)
+- `batch` (required)
+- `semester` (required)
+- `lifecycleStatus` (required, one of `PLANNING|ACTIVE|AT_RISK|BEHIND|COMPLETED`)
+- `healthNote` (optional nullable string)
 
-### Notes
+### Behavior
 
-- The supervisor is taken from the JWT principal, not from the request body.
-- The backend creates:
-  - one `projects` row
-  - one supervisor membership row
-  - one membership row per selected student
-  - one `project_milestones` row
-- The frontend invalidates the cached supervisor project list after success so `/supervisor/projects` reloads fresh data after redirect.
+- Updates `updatedAt` and `lastActivityAt`.
+- Returns refreshed project detail payload.
+
+---
+
+## PATCH /api/supervisor/projects/{projectId}/status
+
+Focused status update endpoint for quick header-level status changes.
+
+### Request fields
+
+- `lifecycleStatus` (required, one of `PLANNING|ACTIVE|AT_RISK|BEHIND|COMPLETED`)
+
+### Behavior
+
+- Updates only project lifecycle status (+ `updatedAt`, `lastActivityAt`).
+- Returns refreshed project detail payload.
+
+---
+
+## POST /api/supervisor/projects/{projectId}/members
+
+Adds one or more students to an existing project (add-only in current scope).
+
+### Request fields
+
+- `studentIds[]` (required, non-empty, unique)
+
+### Rules
+
+- All users must exist and have role `STUDENT`.
+- Already assigned users are rejected (validation error).
+- Supervisor membership remains unchanged.
+
+### Behavior
+
+- Creates new `project_members` rows with `memberRole = STUDENT`.
+- Updates `updatedAt` and `lastActivityAt`.
+- Returns refreshed project detail payload.
+
+---
+
+## POST /api/supervisor/projects/{projectId}/milestones
+
+Adds a new project milestone.
+
+### Request fields
+
+- `title` (required)
+- `description` (optional nullable)
+- `dueDate` (required)
+
+### Behavior
+
+- `status` defaults to `PLANNED`.
+- `sequenceNo` is auto-assigned as `(max existing sequenceNo + 1)`; starts at `1`.
+- Updates project `milestoneDate` to the added milestone’s due date.
+- Updates `updatedAt` and `lastActivityAt`.
+- Returns refreshed project detail payload.
+
+---
+
+## PATCH /api/supervisor/projects/{projectId}/milestones/{milestoneId}
+
+Updates one milestone.
+
+### Request fields
+
+- `title` (required)
+- `description` (optional nullable)
+- `dueDate` (required)
+- `status` (required: `PLANNED|IN_PROGRESS|COMPLETED|MISSED|CANCELLED`)
+
+### Behavior
+
+- Updates milestone `updatedAt`.
+- Updates project `updatedAt` and `lastActivityAt`.
+- Returns refreshed project detail payload.
+
+---
+
+## Validation and Errors
+
+Common supervisor mutation failures:
+
+- malformed UUID path parameters -> `404 NOT_FOUND`
+- project not owned by authenticated supervisor -> `404 NOT_FOUND`
+- invalid enum values (`lifecycleStatus`, milestone `status`) -> `400 VALIDATION_ERROR`
+- duplicate/invalid student assignment payloads -> `400 VALIDATION_ERROR`

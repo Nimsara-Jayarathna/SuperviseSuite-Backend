@@ -147,3 +147,56 @@
   - `ProjectRepository.findByIdAndDeletedAtIsNull(...)`
 - Updated student API reference:
   - `docs/api/student.md`
+
+## 9) Supervisor Project Edit and Team/Milestone Management (2026-03-05)
+
+- Extended supervisor APIs with edit actions:
+  - `PATCH /api/supervisor/projects/{projectId}`
+    - update core project fields (`title`, `summary`, `batch`, `semester`, `lifecycleStatus`, `healthNote`)
+  - `PATCH /api/supervisor/projects/{projectId}/status`
+    - focused lifecycle status update endpoint used by quick status controls
+  - `POST /api/supervisor/projects/{projectId}/members`
+    - add students to project (add-only scope)
+  - `POST /api/supervisor/projects/{projectId}/milestones`
+    - add milestone with auto `sequenceNo`
+  - `PATCH /api/supervisor/projects/{projectId}/milestones/{milestoneId}`
+    - edit milestone (`title`, `description`, `dueDate`, `status`)
+- Added new DTOs in `src/main/java/com/supervisesuite/backend/supervisor/dto/`:
+  - `UpdateSupervisorProjectRequest`
+  - `UpdateSupervisorProjectStatusRequest`
+  - `AddSupervisorProjectMembersRequest`
+  - `AddSupervisorProjectMilestoneRequest`
+  - `UpdateSupervisorProjectMilestoneRequest`
+- Service-level behavior updates:
+  - lifecycle status validation
+  - milestone status validation
+  - duplicate/invalid student assignment validation
+  - updates to `projects.updated_at` and `projects.last_activity_at` on successful writes
+- Repository extensions:
+  - `ProjectMemberRepository.existsByUserIdAndProjectId(...)`
+  - `ProjectMilestoneRepository.findByIdAndProjectId(...)`
+  - `ProjectMilestoneRepository.findTopByProjectIdOrderBySequenceNoDesc(...)`
+
+## 10) Supervisor Dashboard API (2026-03-05)
+
+- Added `GET /api/supervisor/dashboard`:
+  - returns aggregate counters and dashboard project summary lists
+  - payload includes:
+    - total/lifecycle counts
+    - upcoming milestone count (14-day window)
+    - full dashboard project list (summary shape)
+    - recent projects (top 5 by activity recency)
+- Added dashboard DTO:
+  - `SupervisorDashboardDto`
+- Dashboard visibility:
+  - supervisor-only
+  - scoped to authenticated supervisor-owned projects
+  - excludes soft-deleted projects
+- Updated API documentation:
+  - `docs/api/supervisor.md`
+
+## 11) Runtime Stability Fix for Dashboard Sorting (2026-03-05)
+
+- Hardened recent-project sorting in `SupervisorServiceImpl`:
+  - made comparator fully null-safe for timestamp fields used in recency ordering
+  - prevents `500` caused by nullable timestamp comparisons in edge rows
