@@ -33,10 +33,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
 
-    private final JwtService jwtService;
+    private final TokenService tokenService;
 
-    public JwtAuthFilter(JwtService jwtService) {
-        this.jwtService = jwtService;
+    public JwtAuthFilter(TokenService tokenService) {
+        this.tokenService = tokenService;
     }
 
     @Override
@@ -57,8 +57,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String token = authHeader.substring(BEARER_PREFIX.length());
 
         // Extract subject (userId) and role from JWT claims — both must be present
-        String userId = jwtService.extractSubject(token).orElse(null);
-        String role   = jwtService.extractRole(token).orElse(null);
+        String userId = tokenService.extractSubject(token).orElse(null);
+        String role   = tokenService.extractRole(token).orElse(null);
 
         if (userId == null || role == null) {
             // Token is expired, malformed, or tampered — proceed unauthenticated

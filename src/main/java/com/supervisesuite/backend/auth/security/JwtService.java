@@ -13,7 +13,7 @@ import javax.crypto.SecretKey;
 import org.springframework.stereotype.Service;
 
 @Service
-public class JwtService {
+public class JwtService implements TokenService {
 
     private final JwtProperties jwtProperties;
     private final SecretKey signingKey;
