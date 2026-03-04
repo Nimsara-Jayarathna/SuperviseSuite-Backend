@@ -91,8 +91,39 @@ class LoginEndpointTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> data = (Map<String, Object>) body.get("data");
         assertThat(data).isNotNull();
-        assertThat(data.get("accessToken")).isNotNull().asString().isNotBlank();
-        assertThat(data.get("refreshToken")).isNotNull().asString().isNotBlank();
+        // Tokens must NOT be in the body — they are delivered as httpOnly cookies
+        assertThat(data).doesNotContainKey("accessToken");
+        assertThat(data).doesNotContainKey("refreshToken");
+        // User profile is present in the body
+        assertThat(data.get("user")).isNotNull();
+    }
+
+    @Test
+    void login_validCredentials_setsAccessTokenCookie() {
+        ResponseEntity<Map> response = restTemplate.postForEntity(
+            LOGIN_URL, validRequest(), Map.class
+        );
+
+        java.util.List<String> setCookieHeaders = response.getHeaders().get("Set-Cookie");
+        assertThat(setCookieHeaders).isNotNull();
+        assertThat(setCookieHeaders).anyMatch(h -> h.startsWith("ss_access_token="));
+        assertThat(setCookieHeaders).anyMatch(h ->
+            h.startsWith("ss_access_token=") && h.contains("HttpOnly")
+        );
+    }
+
+    @Test
+    void login_validCredentials_setsRefreshTokenCookie() {
+        ResponseEntity<Map> response = restTemplate.postForEntity(
+            LOGIN_URL, validRequest(), Map.class
+        );
+
+        java.util.List<String> setCookieHeaders = response.getHeaders().get("Set-Cookie");
+        assertThat(setCookieHeaders).isNotNull();
+        assertThat(setCookieHeaders).anyMatch(h -> h.startsWith("ss_refresh_token="));
+        assertThat(setCookieHeaders).anyMatch(h ->
+            h.startsWith("ss_refresh_token=") && h.contains("HttpOnly")
+        );
     }
 
     @Test

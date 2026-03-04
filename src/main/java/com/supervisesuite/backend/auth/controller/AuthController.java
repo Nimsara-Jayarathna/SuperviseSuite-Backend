@@ -2,11 +2,15 @@ package com.supervisesuite.backend.auth.controller;
 
 import com.supervisesuite.backend.auth.dto.LoginRequest;
 import com.supervisesuite.backend.auth.dto.LoginResponse;
+import com.supervisesuite.backend.auth.dto.LoginUserResponse;
 import com.supervisesuite.backend.auth.dto.RegisterRequest;
 import com.supervisesuite.backend.auth.dto.RegisterResponse;
+import com.supervisesuite.backend.auth.security.CookieService;
 import com.supervisesuite.backend.auth.service.AuthService;
 import com.supervisesuite.backend.common.api.ApiResponse;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,9 +30,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final CookieService cookieService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, CookieService cookieService) {
         this.authService = authService;
+        this.cookieService = cookieService;
     }
 
     /**
@@ -77,19 +83,28 @@ public class AuthController {
      * and a wrong password to prevent user enumeration.
      *
      * @param request the login payload containing email and password
-     * @return {@code 200 OK} with an {@link ApiResponse} wrapping a {@link LoginResponse}
-     *         containing the access token, refresh token, and authenticated user's profile
+     * @param httpResponse the servlet response used to attach httpOnly cookies
+     * @return {@code 200 OK} with an {@link ApiResponse} wrapping a {@link LoginUserResponse}
+     *         containing the authenticated user's public profile; tokens are delivered
+     *         via {@code HttpOnly; Secure; SameSite=Strict} {@code Set-Cookie} headers
      */
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<LoginResponse>> login(
-        @Valid @RequestBody LoginRequest request
+    public ResponseEntity<ApiResponse<LoginUserResponse>> login(
+        @Valid @RequestBody LoginRequest request,
+        HttpServletResponse httpResponse
     ) {
         LoginResponse data = authService.login(request);
 
-        ApiResponse<LoginResponse> response = new ApiResponse<>(
+        // Deliver tokens as httpOnly cookies — never in the response body
+        httpResponse.addHeader(HttpHeaders.SET_COOKIE,
+            cookieService.buildAccessTokenCookie(data.getAccessToken()).toString());
+        httpResponse.addHeader(HttpHeaders.SET_COOKIE,
+            cookieService.buildRefreshTokenCookie(data.getRefreshToken()).toString());
+
+        ApiResponse<LoginUserResponse> response = new ApiResponse<>(
             true,
             "Login successful.",
-            data,
+            new LoginUserResponse(data.getUser()),
             null
         );
 
