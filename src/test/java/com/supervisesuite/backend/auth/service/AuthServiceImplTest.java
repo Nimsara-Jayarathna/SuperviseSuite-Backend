@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.supervisesuite.backend.auth.dto.RegisterRequest;
 import com.supervisesuite.backend.auth.dto.RegisterResponse;
+import com.supervisesuite.backend.auth.security.TokenService;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.ConflictException;
 import com.supervisesuite.backend.users.entity.User;
@@ -37,6 +38,12 @@ class AuthServiceImplTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
+    @Mock
+    private TokenService tokenService;
 
     @InjectMocks
     private AuthServiceImpl authService;
