@@ -3,16 +3,19 @@ package com.supervisesuite.backend.auth.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.supervisesuite.backend.TestcontainersConfiguration;
+import com.supervisesuite.backend.auth.entity.RefreshToken;
 import com.supervisesuite.backend.auth.repository.RefreshTokenRepository;
 import com.supervisesuite.backend.auth.security.CookieService;
 import com.supervisesuite.backend.auth.service.RefreshTokenService;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -189,6 +192,25 @@ class RefreshEndpointTest {
         assertThat(second.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    @Test
+    void refresh_expiredToken_returns401() {
+        // Insert an expired token directly — RefreshTokenService.issue() always
+        // sets a future expiry, so we must bypass it to test this path.
+        String rawToken = "manually-crafted-expired-token";
+        RefreshToken expired = new RefreshToken();
+        expired.setUser(savedUser);
+        expired.setTokenHash(sha256Base64(rawToken));
+        expired.setExpiresAt(Instant.now().minusSeconds(60)); // 1 minute in the past
+        expired.setCreatedAt(Instant.now().minusSeconds(120));
+        expired.setRevokedAt(null);
+        refreshTokenRepository.save(expired);
+
+        ResponseEntity<Map> response = postWithRefreshCookie(rawToken);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -211,5 +233,15 @@ class RefreshEndpointTest {
         user.setRole(Roles.STUDENT);
         user.setCreatedAt(Instant.now());
         return userRepository.save(user);
+    }
+
+    /** Mirrors the SHA-256/Base64 hashing used by {@code RefreshTokenServiceImpl}. */
+    private static String sha256Base64(String raw) {
+        try {
+            byte[] bytes = MessageDigest.getInstance("SHA-256").digest(raw.getBytes());
+            return Base64.getEncoder().encodeToString(bytes);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 }
