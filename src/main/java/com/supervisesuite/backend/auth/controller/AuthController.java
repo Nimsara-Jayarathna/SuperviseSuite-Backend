@@ -181,6 +181,48 @@ public class AuthController {
     }
 
     /**
+     * Revokes the caller's refresh token and clears both auth cookies.
+     *
+     * <pre>
+     * POST /api/auth/logout
+     * </pre>
+     *
+     * <p>This endpoint is intentionally idempotent and graceful:
+     * <ul>
+     *   <li>If the {@code ss_refresh_token} cookie is present, the token is
+     *       revoked so it cannot be used for future refresh calls.</li>
+     *   <li>If the cookie is absent or its value is unknown, the call still
+     *       succeeds — the client can always trust that after this response its
+     *       cookies have been cleared.</li>
+     * </ul>
+     *
+     * <p>The response always sets {@code Max-Age=0} on both auth cookies,
+     * instructing the browser to delete them immediately regardless of the
+     * token's validity.
+     *
+     * @param httpRequest  the incoming request, examined for a refresh token cookie
+     * @param httpResponse the response on which the clear-cookie headers are set
+     * @return {@code 204 No Content}
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(
+        HttpServletRequest httpRequest,
+        HttpServletResponse httpResponse
+    ) {
+        // Silently revoke the refresh token if one was sent — no error if absent/unknown
+        extractCookie(httpRequest, CookieService.REFRESH_TOKEN_COOKIE)
+            .ifPresent(refreshTokenService::revoke);
+
+        // Always clear both cookies so the browser drops them
+        httpResponse.addHeader(HttpHeaders.SET_COOKIE,
+            cookieService.buildClearAccessTokenCookie().toString());
+        httpResponse.addHeader(HttpHeaders.SET_COOKIE,
+            cookieService.buildClearRefreshTokenCookie().toString());
+
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Reads a single cookie value from the request by name.
      *
      * @param request    the current HTTP servlet request
