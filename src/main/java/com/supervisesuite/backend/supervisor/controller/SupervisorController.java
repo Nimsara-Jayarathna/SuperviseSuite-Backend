@@ -3,6 +3,7 @@ package com.supervisesuite.backend.supervisor.controller;
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectResponse;
+import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
 import com.supervisesuite.backend.supervisor.service.SupervisorService;
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,6 +41,21 @@ public class SupervisorController {
         return ResponseEntity.ok(new ApiResponse<>(
             true,
             "Projects loaded.",
+            data,
+            null
+        ));
+    }
+
+    @GetMapping("/projects/{projectId}")
+    public ResponseEntity<ApiResponse<SupervisorProjectDetailDto>> getProjectById(
+        Authentication authentication,
+        @PathVariable String projectId
+    ) {
+        SupervisorProjectDetailDto data = supervisorService.getProjectById(authentication.getName(), projectId);
+
+        return ResponseEntity.ok(new ApiResponse<>(
+            true,
+            "Project loaded.",
             data,
             null
         ));
