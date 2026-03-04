@@ -12,5 +12,7 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
 
     Optional<Project> findByIdAndSupervisor_IdAndDeletedAtIsNull(UUID id, UUID supervisorId);
 
+    Optional<Project> findByIdAndDeletedAtIsNull(UUID id);
+
     List<Project> findByIdInAndDeletedAtIsNullOrderByCreatedAtDesc(Collection<UUID> ids);
 }

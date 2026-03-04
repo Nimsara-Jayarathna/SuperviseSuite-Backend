@@ -125,3 +125,25 @@
   - `ProjectRepository.findByIdInAndDeletedAtIsNullOrderByCreatedAtDesc(...)`
 - Added dedicated student API reference:
   - `docs/api/student.md`
+
+## 8) Student Project Detail Read Flow (2026-03-05)
+
+- Extended student API with detail endpoint under `/api/student`:
+  - `GET /api/student/projects/{projectId}`
+    - Requires `STUDENT` role
+    - Returns one assigned project as a trimmed detail record
+    - Payload includes core project fields, members, and milestones
+- Added student detail DTO:
+  - `src/main/java/com/supervisesuite/backend/student/dto/StudentProjectDetailDto.java`
+- Extended student service contract and implementation:
+  - `StudentService.getProjectById(...)`
+  - `StudentServiceImpl.getProjectById(...)`
+- Added student ownership/visibility checks for detail reads:
+  - student must be assigned in `project_members` with `member_role = STUDENT`
+  - soft-deleted projects are excluded
+  - invalid UUID and unauthorized ownership both resolve as `404 NOT_FOUND`
+- Extended repositories for detail reads:
+  - `ProjectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(...)`
+  - `ProjectRepository.findByIdAndDeletedAtIsNull(...)`
+- Updated student API reference:
+  - `docs/api/student.md`

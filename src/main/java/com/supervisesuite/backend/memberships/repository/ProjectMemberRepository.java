@@ -11,4 +11,6 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, UU
     List<ProjectMember> findByProjectIdOrderByCreatedAtAsc(UUID projectId);
 
     List<ProjectMember> findByUserIdAndMemberRoleOrderByCreatedAtDesc(UUID userId, String memberRole);
+
+    boolean existsByUserIdAndProjectIdAndMemberRole(UUID userId, UUID projectId, String memberRole);
 }
