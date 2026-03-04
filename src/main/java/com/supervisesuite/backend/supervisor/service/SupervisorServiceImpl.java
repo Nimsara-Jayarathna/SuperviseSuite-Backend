@@ -12,6 +12,7 @@ import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectResponse;
+import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
@@ -44,6 +45,17 @@ class SupervisorServiceImpl implements SupervisorService {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.projectMilestoneRepository = projectMilestoneRepository;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SupervisorProjectSummaryDto> getProjects(String authenticatedUserId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+
+        return projectRepository.findBySupervisorIdAndDeletedAtIsNullOrderByCreatedAtDesc(supervisor.getId())
+            .stream()
+            .map(this::toProjectSummary)
+            .toList();
     }
 
     @Override
@@ -194,6 +206,21 @@ class SupervisorServiceImpl implements SupervisorService {
             user.getLastName(),
             user.getEmail(),
             user.getRegistrationNumber()
+        );
+    }
+
+    private SupervisorProjectSummaryDto toProjectSummary(Project project) {
+        return new SupervisorProjectSummaryDto(
+            project.getId(),
+            project.getName(),
+            project.getDescription(),
+            project.getStatus(),
+            project.getBatch(),
+            project.getSemester(),
+            project.getMilestoneDate(),
+            project.getProgressPercent(),
+            project.getHealthNote(),
+            projectMemberRepository.countByProjectId(project.getId())
         );
     }
 

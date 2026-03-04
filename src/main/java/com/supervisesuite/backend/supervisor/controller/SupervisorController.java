@@ -3,6 +3,7 @@ package com.supervisesuite.backend.supervisor.controller;
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectResponse;
+import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
 import com.supervisesuite.backend.supervisor.service.SupervisorService;
 import jakarta.validation.Valid;
@@ -27,6 +28,20 @@ public class SupervisorController {
 
     public SupervisorController(SupervisorService supervisorService) {
         this.supervisorService = supervisorService;
+    }
+
+    @GetMapping("/projects")
+    public ResponseEntity<ApiResponse<List<SupervisorProjectSummaryDto>>> getProjects(
+        Authentication authentication
+    ) {
+        List<SupervisorProjectSummaryDto> data = supervisorService.getProjects(authentication.getName());
+
+        return ResponseEntity.ok(new ApiResponse<>(
+            true,
+            "Projects loaded.",
+            data,
+            null
+        ));
     }
 
     @GetMapping("/students/search")
