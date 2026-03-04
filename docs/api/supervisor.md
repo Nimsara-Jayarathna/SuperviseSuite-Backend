@@ -1,6 +1,6 @@
 # Supervisor API
 
-Supervisor-only endpoints for project listing, student lookup, and project creation.
+Supervisor-only endpoints for project listing, project detail, student lookup, and project creation.
 
 All endpoints in this document:
 
@@ -12,6 +12,7 @@ All endpoints in this document:
 ## Endpoints
 
 - [GET /api/supervisor/projects](#get-apisupervisorprojects)
+- [GET /api/supervisor/projects/{projectId}](#get-apisupervisorprojectsprojectid)
 - [GET /api/supervisor/students/search](#get-apisupervisorstudentssearch)
 - [POST /api/supervisor/projects](#post-apisupervisorprojects)
 
@@ -65,6 +66,104 @@ Each item includes only summary fields needed by the current list UI:
 - Only projects owned by `projects.supervisor_id = authenticated supervisor` are returned.
 - Soft-deleted projects (`deleted_at IS NOT NULL`) are excluded.
 - Empty result sets return `200 OK` with `data: []`.
+
+---
+
+## GET /api/supervisor/projects/{projectId}
+
+Returns one supervisor-owned project as a trimmed detail record for the `/supervisor/projects/:projectId` route.
+
+### Response shape
+
+The current detail endpoint includes only fields already backed by the database and current implementation:
+
+- project core fields:
+  - `id`
+  - `title`
+  - `summary`
+  - `lifecycleStatus`
+  - `batch`
+  - `semester`
+  - `milestoneDate`
+  - `progressPercent`
+  - `healthNote`
+  - `lastActivityAt`
+- `members[]`
+- `milestones[]`
+
+`members[]` items include:
+
+- `id`
+- `firstName`
+- `lastName`
+- `email`
+- `registrationNumber`
+- `memberRole`
+
+`milestones[]` items include:
+
+- `id`
+- `title`
+- `description`
+- `dueDate`
+- `status`
+- `sequenceNo`
+
+### 200 OK
+
+```json
+{
+  "success": true,
+  "message": "Project loaded.",
+  "data": {
+    "id": "f14699be-6c09-4a86-83b8-a4c4fd7d457d",
+    "title": "Smart Attendance Tracker",
+    "summary": "AI-assisted attendance project",
+    "lifecycleStatus": "PLANNING",
+    "batch": "2026",
+    "semester": "Semester 1",
+    "milestoneDate": "2026-03-21",
+    "progressPercent": 0,
+    "healthNote": null,
+    "lastActivityAt": "2026-03-04T10:15:00Z",
+    "members": [
+      {
+        "id": "d09ec85d-a704-44bf-b0fb-38a8d1e1e417",
+        "firstName": "Nimsara",
+        "lastName": "Jayarathna",
+        "email": "nimsara@example.com",
+        "registrationNumber": "IT24100400",
+        "memberRole": "STUDENT"
+      }
+    ],
+    "milestones": [
+      {
+        "id": "b54c4486-4d45-455a-93bc-4097148bf8d2",
+        "title": "Proposal Submission",
+        "description": "Initial proposal review",
+        "dueDate": "2026-03-21",
+        "status": "PLANNED",
+        "sequenceNo": 1
+      }
+    ]
+  },
+  "error": null
+}
+```
+
+### 404 Not Found
+
+Returned when:
+
+- the project does not exist
+- the project was soft-deleted
+- the project is not owned by the authenticated supervisor
+- the path `projectId` is not a valid UUID
+
+### Notes
+
+- This endpoint intentionally does not return meetings, files, action items, integrations, or activity analytics yet.
+- The current frontend detail page is trimmed to match this smaller real-data contract.
 
 ---
 
@@ -208,3 +307,4 @@ These values are applied by the backend and are not required from the client:
   - one supervisor membership row
   - one membership row per selected student
   - one `project_milestones` row
+- The frontend invalidates the cached supervisor project list after success so `/supervisor/projects` reloads fresh data after redirect.

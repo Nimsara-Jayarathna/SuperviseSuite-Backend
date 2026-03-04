@@ -2,6 +2,13 @@
 
 Core SuperviseSuite backend built with Spring Boot. Provides REST APIs for authentication/authorization, user and project management, and project membership/assignment workflows. Owns the main database model and supports future expansion for analytics, reporting, and external tool connectivity.
 
+## API Documentation
+
+Current API references:
+
+- `docs/api/auth.md`
+- `docs/api/supervisor.md`
+
 ## Local Run and Check Standards
 
 Always use Maven Wrapper for local commands:

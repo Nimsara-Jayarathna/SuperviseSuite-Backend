@@ -58,7 +58,7 @@
 - Other endpoints require authentication.
 - Result: unauthenticated API calls return `401` instead of redirecting to default `/login` page.
 
-## 6) Supervisor Project Creation Flow (2026-03-04)
+## 6) Supervisor Project Read/Create Flow (2026-03-04)
 
 - Added a dedicated supervisor feature slice:
   - `src/main/java/com/supervisesuite/backend/supervisor/controller/SupervisorController.java`
@@ -70,6 +70,10 @@
     - Requires `SUPERVISOR` role
     - Returns the authenticated supervisor's project list as summary records
     - Current payload is intentionally limited to list-card fields only
+  - `GET /api/supervisor/projects/{projectId}`
+    - Requires `SUPERVISOR` role
+    - Returns one supervisor-owned project as a trimmed detail record
+    - Current payload is intentionally limited to core project fields, members, and milestones
   - `GET /api/supervisor/students/search?q=...`
     - Requires `SUPERVISOR` role via method security
     - Searches registered `STUDENT` accounts by email
@@ -92,7 +96,10 @@
 - Extended `UserRepository` with student email search support:
   - `findTop10ByRoleAndEmailContainingIgnoreCaseOrderByEmailAsc(...)`
 - Extended project/member repositories for supervisor project summaries:
+  - `ProjectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(...)`
   - `ProjectRepository.findBySupervisorIdAndDeletedAtIsNullOrderByCreatedAtDesc(...)`
   - `ProjectMemberRepository.countByProjectId(...)`
+  - `ProjectMemberRepository.findByProjectIdOrderByCreatedAtAsc(...)`
+  - `ProjectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(...)`
 - Added dedicated supervisor API reference:
   - `docs/api/supervisor.md`

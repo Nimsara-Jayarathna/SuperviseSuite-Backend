@@ -12,13 +12,17 @@ import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectResponse;
+import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
+import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -56,6 +60,50 @@ class SupervisorServiceImpl implements SupervisorService {
             .stream()
             .map(this::toProjectSummary)
             .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SupervisorProjectDetailDto getProjectById(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        List<ProjectMember> projectMembers = projectMemberRepository.findByProjectIdOrderByCreatedAtAsc(project.getId());
+        List<UUID> memberIds = projectMembers.stream()
+            .map(ProjectMember::getUserId)
+            .toList();
+        Map<UUID, User> userById = new HashMap<>();
+        userRepository.findAllById(memberIds).forEach(user -> userById.put(user.getId(), user));
+
+        List<SupervisorProjectDetailDto.Member> members = projectMembers.stream()
+            .map(member -> toDetailMember(member, userById.get(member.getUserId())))
+            .filter(member -> member != null)
+            .toList();
+
+        List<SupervisorProjectDetailDto.Milestone> milestones = projectMilestoneRepository
+            .findByProjectIdOrderBySequenceNoAsc(project.getId())
+            .stream()
+            .map(this::toDetailMilestone)
+            .toList();
+
+        return new SupervisorProjectDetailDto(
+            project.getId(),
+            project.getName(),
+            project.getDescription(),
+            project.getStatus(),
+            project.getBatch(),
+            project.getSemester(),
+            project.getMilestoneDate(),
+            project.getProgressPercent(),
+            project.getHealthNote(),
+            project.getLastActivityAt(),
+            members,
+            milestones
+        );
     }
 
     @Override
@@ -222,6 +270,40 @@ class SupervisorServiceImpl implements SupervisorService {
             project.getHealthNote(),
             projectMemberRepository.countByProjectId(project.getId())
         );
+    }
+
+    private SupervisorProjectDetailDto.Member toDetailMember(ProjectMember member, User user) {
+        if (user == null) {
+            return null;
+        }
+
+        return new SupervisorProjectDetailDto.Member(
+            user.getId(),
+            user.getFirstName(),
+            user.getLastName(),
+            user.getEmail(),
+            user.getRegistrationNumber(),
+            member.getMemberRole()
+        );
+    }
+
+    private SupervisorProjectDetailDto.Milestone toDetailMilestone(ProjectMilestone milestone) {
+        return new SupervisorProjectDetailDto.Milestone(
+            milestone.getId(),
+            milestone.getTitle(),
+            milestone.getDescription(),
+            milestone.getDueDate(),
+            milestone.getStatus(),
+            milestone.getSequenceNo()
+        );
+    }
+
+    private UUID parseProjectId(String projectId) {
+        try {
+            return UUID.fromString(projectId);
+        } catch (IllegalArgumentException exception) {
+            throw new EntityNotFoundException();
+        }
     }
 
     private String trimToNull(String value) {
