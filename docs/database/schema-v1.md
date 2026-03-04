@@ -1,9 +1,10 @@
 # Schema Reference
 
-The schema is built by two Flyway migrations applied in order:
+The schema is built by three Flyway migrations applied in order:
 
 - `V1__init_schema.sql` — core tables
 - `V2__auth_schema.sql` — auth fields and refresh tokens
+- `V3__project_domain_expansion.sql` — project domain expansion and milestones
 
 ---
 
@@ -62,3 +63,54 @@ The schema is built by two Flyway migrations applied in order:
 - `expires_at` timestamptz, not null
 - `revoked_at` timestamptz, nullable — null means still active
 - `created_at` timestamptz, not null
+
+---
+
+## V3 Changes
+
+### `projects` (expanded)
+
+- existing columns retained:
+  - `id`, `created_at`, `updated_at`, `supervisor_id`, `deleted_at`
+- renamed columns:
+  - `name` -> `title`
+  - `description` -> `summary`
+  - `status` -> `lifecycle_status`
+- new columns:
+  - `batch` varchar(32)
+  - `semester` varchar(64)
+  - `progress_percent` integer
+  - `health_note` text
+  - `milestone_date` date
+  - `last_activity_at` timestamptz
+  - `communication_url` text
+  - `repository_url` text
+  - `jira_project_key` varchar(32)
+  - `jira_board_url` text
+- constraints:
+  - `lifecycle_status` CHECK: `IN ('PLANNING', 'ACTIVE', 'AT_RISK', 'BEHIND', 'COMPLETED')`
+  - `progress_percent` CHECK: `0..100` when present
+
+### `project_members` (expanded)
+
+- existing columns retained:
+  - `id`, `created_at`, `updated_at`, `user_id`, `project_id`
+- new column:
+  - `member_role` varchar(64), not null — CHECK: `IN ('SUPERVISOR', 'STUDENT')`
+
+### `project_milestones` (new table)
+
+- `id` UUID primary key, `DEFAULT gen_random_uuid()`
+- `project_id` UUID, not null, FK → `projects.id` (delete cascade)
+- `title` varchar(255), not null
+- `description` text
+- `due_date` date, not null
+- `status` varchar(64), not null
+- `sequence_no` integer, not null
+- `created_by` UUID, FK → `users.id`
+- `created_at` timestamptz, not null
+- `updated_at` timestamptz
+- constraints:
+  - `status` CHECK: `IN ('PLANNED', 'IN_PROGRESS', 'COMPLETED', 'MISSED', 'CANCELLED')`
+  - `sequence_no > 0`
+  - unique per project order: `(project_id, sequence_no)`
