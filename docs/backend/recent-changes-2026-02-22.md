@@ -66,6 +66,10 @@
   - `src/main/java/com/supervisesuite/backend/supervisor/service/SupervisorServiceImpl.java`
   - DTOs under `src/main/java/com/supervisesuite/backend/supervisor/dto/`
 - New supervisor-only endpoints under `/api/supervisor`:
+  - `GET /api/supervisor/projects`
+    - Requires `SUPERVISOR` role
+    - Returns the authenticated supervisor's project list as summary records
+    - Current payload is intentionally limited to list-card fields only
   - `GET /api/supervisor/students/search?q=...`
     - Requires `SUPERVISOR` role via method security
     - Searches registered `STUDENT` accounts by email
@@ -87,3 +91,8 @@
   - `src/main/java/com/supervisesuite/backend/projects/repository/ProjectMilestoneRepository.java`
 - Extended `UserRepository` with student email search support:
   - `findTop10ByRoleAndEmailContainingIgnoreCaseOrderByEmailAsc(...)`
+- Extended project/member repositories for supervisor project summaries:
+  - `ProjectRepository.findBySupervisorIdAndDeletedAtIsNullOrderByCreatedAtDesc(...)`
+  - `ProjectMemberRepository.countByProjectId(...)`
+- Added dedicated supervisor API reference:
+  - `docs/api/supervisor.md`
