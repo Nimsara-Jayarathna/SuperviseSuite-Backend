@@ -1,11 +1,14 @@
 package com.supervisesuite.backend.supervisor.service;
 
+import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
+import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectResponse;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
+import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import java.util.List;
 
 public interface SupervisorService {
@@ -17,6 +20,25 @@ public interface SupervisorService {
         String authenticatedUserId,
         String projectId,
         UpdateSupervisorProjectRequest request
+    );
+
+    SupervisorProjectDetailDto addProjectMembers(
+        String authenticatedUserId,
+        String projectId,
+        AddSupervisorProjectMembersRequest request
+    );
+
+    SupervisorProjectDetailDto addProjectMilestone(
+        String authenticatedUserId,
+        String projectId,
+        AddSupervisorProjectMilestoneRequest request
+    );
+
+    SupervisorProjectDetailDto updateProjectMilestone(
+        String authenticatedUserId,
+        String projectId,
+        String milestoneId,
+        UpdateSupervisorProjectMilestoneRequest request
     );
 
     List<StudentSearchResultDto> searchStudents(String query);
