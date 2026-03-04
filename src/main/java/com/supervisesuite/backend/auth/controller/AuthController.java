@@ -1,5 +1,7 @@
 package com.supervisesuite.backend.auth.controller;
 
+import com.supervisesuite.backend.auth.dto.LoginRequest;
+import com.supervisesuite.backend.auth.dto.LoginResponse;
 import com.supervisesuite.backend.auth.dto.RegisterRequest;
 import com.supervisesuite.backend.auth.dto.RegisterResponse;
 import com.supervisesuite.backend.auth.service.AuthService;
@@ -58,5 +60,39 @@ public class AuthController {
         );
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * Authenticates a user and issues access and refresh tokens.
+     *
+     * <pre>
+     * POST /api/auth/login
+     * </pre>
+     *
+     * <p>Request body is validated via Bean Validation. Any constraint violation
+     * produces a {@code 400 VALIDATION_ERROR} response before the service layer is reached.
+     *
+     * <p>Invalid credentials always return {@code 401} with a generic message —
+     * the response deliberately does not distinguish between an unknown email
+     * and a wrong password to prevent user enumeration.
+     *
+     * @param request the login payload containing email and password
+     * @return {@code 200 OK} with an {@link ApiResponse} wrapping a {@link LoginResponse}
+     *         containing the access token, refresh token, and authenticated user's profile
+     */
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<LoginResponse>> login(
+        @Valid @RequestBody LoginRequest request
+    ) {
+        LoginResponse data = authService.login(request);
+
+        ApiResponse<LoginResponse> response = new ApiResponse<>(
+            true,
+            "Login successful.",
+            data,
+            null
+        );
+
+        return ResponseEntity.ok(response);
     }
 }

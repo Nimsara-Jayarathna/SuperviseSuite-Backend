@@ -40,4 +40,30 @@ public final class NormalizationUtils {
         }
         return input.trim().toUpperCase(Locale.ROOT);
     }
+
+    /**
+     * Returns the canonical form of an email address.
+     *
+     * <p>Rules:
+     * <ul>
+     *   <li>Leading and trailing whitespace is removed.</li>
+     *   <li>All letters are converted to lowercase using {@link Locale#ROOT} so that
+     *       the result is independent of the JVM's default locale.</li>
+     * </ul>
+     *
+     * <p>Examples:
+     * <pre>
+     *   " Alice@Example.COM " → "alice@example.com"
+     *   "BOB@DOMAIN.ORG"      → "bob@domain.org"
+     * </pre>
+     *
+     * @param input the raw email address from user input; may be {@code null}
+     * @return the normalized email address, or {@code null} if {@code input} is {@code null}
+     */
+    public static String normalizeEmail(String input) {
+        if (input == null) {
+            return null;
+        }
+        return input.trim().toLowerCase(Locale.ROOT);
+    }
 }
