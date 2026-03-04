@@ -127,10 +127,16 @@ The database schema is ahead of the currently implemented backend read/write API
   - register student
   - login
 - Supervisor:
+  - dashboard summary read model
   - project list summaries
   - project detail read model
   - student search by email
   - project creation with first milestone
+  - project core-field updates
+  - project lifecycle status quick update
+  - add students to existing projects (add-only scope)
+  - add milestone
+  - update milestone
 - Student:
   - assigned project list summaries
   - assigned project detail read model
