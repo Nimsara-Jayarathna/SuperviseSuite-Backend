@@ -32,4 +32,7 @@ public class ProjectMember {
 
     @Column(nullable = false)
     private UUID projectId;
+
+    @Column(nullable = false)
+    private String memberRole;
 }
