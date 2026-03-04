@@ -37,7 +37,8 @@ class ResponseCookieServiceTest {
         props.setAccessTokenExpirySeconds(ACCESS_TTL);
         props.setRefreshTokenExpirySeconds(REFRESH_TTL);
 
-        cookieService = new ResponseCookieService(props);
+        // true = production mode (Secure flag on). A separate test covers false = dev mode.
+        cookieService = new ResponseCookieService(props, true);
     }
 
     // -------------------------------------------------------------------------
@@ -182,6 +183,24 @@ class ResponseCookieServiceTest {
             assertThat(cookieService.buildClearAccessTokenCookie().getSameSite())
                 .isEqualTo("Strict");
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // cookiesSecure flag
+    // -------------------------------------------------------------------------
+
+    @Test
+    void cookiesSecureFalse_accessTokenCookieIsNotSecure() {
+        JwtProperties props = new JwtProperties();
+        props.setSecret("does-not-matter");
+        props.setAccessTokenExpirySeconds(ACCESS_TTL);
+        props.setRefreshTokenExpirySeconds(REFRESH_TTL);
+        ResponseCookieService devService = new ResponseCookieService(props, false);
+
+        assertThat(devService.buildAccessTokenCookie(TOKEN_VALUE).isSecure()).isFalse();
+        assertThat(devService.buildRefreshTokenCookie(TOKEN_VALUE).isSecure()).isFalse();
+        assertThat(devService.buildClearAccessTokenCookie().isSecure()).isFalse();
+        assertThat(devService.buildClearRefreshTokenCookie().isSecure()).isFalse();
     }
 
     // -------------------------------------------------------------------------
