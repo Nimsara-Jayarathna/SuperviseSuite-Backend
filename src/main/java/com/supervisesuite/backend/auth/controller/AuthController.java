@@ -6,10 +6,19 @@ import com.supervisesuite.backend.auth.dto.LoginUserResponse;
 import com.supervisesuite.backend.auth.dto.RegisterRequest;
 import com.supervisesuite.backend.auth.dto.RegisterResponse;
 import com.supervisesuite.backend.auth.security.CookieService;
+import com.supervisesuite.backend.auth.security.TokenService;
 import com.supervisesuite.backend.auth.service.AuthService;
+import com.supervisesuite.backend.auth.service.RefreshTokenService;
+import com.supervisesuite.backend.auth.service.RefreshTokenValidator;
 import com.supervisesuite.backend.common.api.ApiResponse;
+import com.supervisesuite.backend.common.error.UnauthorizedException;
+import com.supervisesuite.backend.users.entity.User;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import java.util.Arrays;
+import java.util.Optional;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,10 +40,22 @@ public class AuthController {
 
     private final AuthService authService;
     private final CookieService cookieService;
+    private final TokenService tokenService;
+    private final RefreshTokenService refreshTokenService;
+    private final RefreshTokenValidator refreshTokenValidator;
 
-    public AuthController(AuthService authService, CookieService cookieService) {
+    public AuthController(
+        AuthService authService,
+        CookieService cookieService,
+        TokenService tokenService,
+        RefreshTokenService refreshTokenService,
+        RefreshTokenValidator refreshTokenValidator
+    ) {
         this.authService = authService;
         this.cookieService = cookieService;
+        this.tokenService = tokenService;
+        this.refreshTokenService = refreshTokenService;
+        this.refreshTokenValidator = refreshTokenValidator;
     }
 
     /**
@@ -109,5 +130,71 @@ public class AuthController {
         );
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Issues a new access token and rotates the refresh token.
+     *
+     * <pre>
+     * POST /api/auth/refresh
+     * </pre>
+     *
+     * <p>Reads the refresh token from the {@code ss_refresh_token} httpOnly cookie.
+     * The old refresh token is revoked immediately after validation (token rotation)
+     * so each refresh token can only be used once.
+     *
+     * @param httpRequest  the incoming request carrying the refresh token cookie
+     * @param httpResponse the response on which the new cookies are set
+     * @return {@code 200 OK} with the authenticated user's public profile;
+     *         {@code 401} if the cookie is absent, the token is unknown, expired,
+     *         or has already been revoked
+     */
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<LoginUserResponse>> refresh(
+        HttpServletRequest httpRequest,
+        HttpServletResponse httpResponse
+    ) {
+        String rawRefreshToken = extractCookie(httpRequest, CookieService.REFRESH_TOKEN_COOKIE)
+            .orElseThrow(() -> new UnauthorizedException("Refresh token is missing."));
+
+        // Validate — throws UnauthorizedException if unknown, revoked, or expired
+        User user = refreshTokenValidator.validate(rawRefreshToken);
+
+        // Rotate: revoke the consumed token, issue a fresh one
+        refreshTokenService.revoke(rawRefreshToken);
+        String newRawRefreshToken = refreshTokenService.issue(user);
+        String newAccessToken = tokenService.generateAccessToken(user);
+
+        httpResponse.addHeader(HttpHeaders.SET_COOKIE,
+            cookieService.buildAccessTokenCookie(newAccessToken).toString());
+        httpResponse.addHeader(HttpHeaders.SET_COOKIE,
+            cookieService.buildRefreshTokenCookie(newRawRefreshToken).toString());
+
+        LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(
+            user.getId(), user.getEmail(), user.getFirstName(),
+            user.getLastName(), user.getRole()
+        );
+
+        return ResponseEntity.ok(new ApiResponse<>(
+            true, "Token refreshed.", new LoginUserResponse(userInfo), null
+        ));
+    }
+
+    /**
+     * Reads a single cookie value from the request by name.
+     *
+     * @param request    the current HTTP servlet request
+     * @param cookieName the exact cookie name to find
+     * @return an {@link Optional} containing the cookie value, or empty if absent
+     */
+    private static Optional<String> extractCookie(HttpServletRequest request, String cookieName) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return Optional.empty();
+        }
+        return Arrays.stream(cookies)
+            .filter(c -> cookieName.equals(c.getName()))
+            .map(Cookie::getValue)
+            .findFirst();
     }
 }

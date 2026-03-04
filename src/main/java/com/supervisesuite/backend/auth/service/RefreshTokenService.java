@@ -30,4 +30,18 @@ public interface RefreshTokenService {
      * @return the raw (unhashed) refresh token string
      */
     String issue(User user);
+
+    /**
+     * Marks the refresh token identified by the given raw token as revoked.
+     *
+     * <p>Sets {@code revokedAt} to the current instant so that subsequent
+     * validation attempts are rejected immediately. Used during token rotation
+     * (refresh flow) and logout.
+     *
+     * <p>If the token hash is not found in the store the call is silently ignored —
+     * it is safe to call this method on already-deleted or unknown tokens.
+     *
+     * @param rawToken the raw (unhashed) refresh token received from the client
+     */
+    void revoke(String rawToken);
 }

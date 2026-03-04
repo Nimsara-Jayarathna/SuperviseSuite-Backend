@@ -9,6 +9,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Base64;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Default implementation of {@link RefreshTokenValidator}.
@@ -41,11 +42,12 @@ class RefreshTokenValidatorImpl implements RefreshTokenValidator {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public User validate(String rawToken) {
         String tokenHash = sha256Base64(rawToken);
 
         RefreshToken refreshToken = refreshTokenRepository
-            .findByTokenHash(tokenHash)
+            .findByTokenHashWithUser(tokenHash)
             .orElseThrow(() -> new UnauthorizedException(INVALID_TOKEN));
 
         // Explicitly revoked (logout or rotation)
