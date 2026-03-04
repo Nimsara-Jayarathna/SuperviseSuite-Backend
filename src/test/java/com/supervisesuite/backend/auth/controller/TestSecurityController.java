@@ -1,5 +1,6 @@
 package com.supervisesuite.backend.auth.controller;
 
+import java.util.Map;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,8 +25,8 @@ class TestSecurityController {
      * No token or invalid token → 401 via {@code authenticationEntryPoint}.
      */
     @GetMapping("/authenticated")
-    String authenticated() {
-        return "ok";
+    Map<String, String> authenticated() {
+        return Map.of("status", "ok");
     }
 
     /**
@@ -35,7 +36,7 @@ class TestSecurityController {
      */
     @GetMapping("/supervisor-only")
     @PreAuthorize("hasRole('SUPERVISOR')")
-    String supervisorOnly() {
-        return "ok";
+    Map<String, String> supervisorOnly() {
+        return Map.of("status", "ok");
     }
 }
