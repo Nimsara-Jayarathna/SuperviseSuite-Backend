@@ -142,7 +142,8 @@ class LoginEndpointTest {
         assertThat(user.get("role")).isEqualTo(Roles.STUDENT);
         assertThat(user.get("firstName")).isNotNull();
         assertThat(user.get("lastName")).isNotNull();
-        assertThat(user.get("emailVerified")).isEqualTo(true);
+        // emailVerified is not part of the response — no email verification flow exists
+        assertThat(user).doesNotContainKey("emailVerified");
     }
 
     @Test
