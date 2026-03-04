@@ -133,6 +133,7 @@ The database schema is ahead of the currently implemented backend read/write API
   - project creation with first milestone
 - Student:
   - assigned project list summaries
+  - assigned project detail read model
 
 ### Present in schema but not yet exposed as full workflow APIs
 
@@ -140,6 +141,5 @@ The database schema is ahead of the currently implemented backend read/write API
 - action items
 - file handling
 - integration management (GitHub, Jira, communication links as first-class workflows)
-- student project detail read model
 
 This means some tables/columns already exist for future work, but the frontend should only rely on currently implemented API contracts.
