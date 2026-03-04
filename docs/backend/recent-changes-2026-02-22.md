@@ -57,3 +57,33 @@
   - `OPTIONS /**`
 - Other endpoints require authentication.
 - Result: unauthenticated API calls return `401` instead of redirecting to default `/login` page.
+
+## 6) Supervisor Project Creation Flow (2026-03-04)
+
+- Added a dedicated supervisor feature slice:
+  - `src/main/java/com/supervisesuite/backend/supervisor/controller/SupervisorController.java`
+  - `src/main/java/com/supervisesuite/backend/supervisor/service/SupervisorService.java`
+  - `src/main/java/com/supervisesuite/backend/supervisor/service/SupervisorServiceImpl.java`
+  - DTOs under `src/main/java/com/supervisesuite/backend/supervisor/dto/`
+- New supervisor-only endpoints under `/api/supervisor`:
+  - `GET /api/supervisor/students/search?q=...`
+    - Requires `SUPERVISOR` role via method security
+    - Searches registered `STUDENT` accounts by email
+    - Returns `200 OK` with an empty array when no students match
+  - `POST /api/supervisor/projects`
+    - Requires `SUPERVISOR` role
+    - Creates a project, project memberships, and the initial milestone in one transaction
+- Backend defaults applied during project creation:
+  - `lifecycle_status = 'PLANNING'`
+  - `progress_percent = 0`
+  - initial milestone `status = 'PLANNED'`
+  - initial milestone `sequence_no = 1`
+- Added validation rules in the supervisor service:
+  - duplicate `studentIds` are rejected
+  - all selected users must exist
+  - all selected users must have role `STUDENT`
+- Added persistence for milestones:
+  - `src/main/java/com/supervisesuite/backend/projects/entity/ProjectMilestone.java`
+  - `src/main/java/com/supervisesuite/backend/projects/repository/ProjectMilestoneRepository.java`
+- Extended `UserRepository` with student email search support:
+  - `findTop10ByRoleAndEmailContainingIgnoreCaseOrderByEmailAsc(...)`

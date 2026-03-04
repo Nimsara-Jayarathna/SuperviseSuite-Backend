@@ -1,6 +1,7 @@
 package com.supervisesuite.backend.users.repository;
 
 import com.supervisesuite.backend.users.entity.User;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -38,4 +39,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * @return {@code true} if the registration number is already taken
      */
     boolean existsByRegistrationNumber(String registrationNumber);
+
+    List<User> findTop10ByRoleAndEmailContainingIgnoreCaseOrderByEmailAsc(String role, String email);
 }
