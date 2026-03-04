@@ -19,6 +19,7 @@ import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
+import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -107,10 +108,7 @@ class SupervisorServiceImpl implements SupervisorService {
             .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
             .orElseThrow(EntityNotFoundException::new);
 
-        String lifecycleStatus = request.getLifecycleStatus().trim().toUpperCase();
-        if (!ALLOWED_LIFECYCLE_STATUSES.contains(lifecycleStatus)) {
-            throw new ValidationException("lifecycleStatus", "Lifecycle status is invalid.");
-        }
+        String lifecycleStatus = validateLifecycleStatus(request.getLifecycleStatus());
 
         Instant now = Instant.now();
         project.setName(request.getTitle().trim());
@@ -119,6 +117,31 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setSemester(request.getSemester().trim());
         project.setStatus(lifecycleStatus);
         project.setHealthNote(trimToNull(request.getHealthNote()));
+        project.setUpdatedAt(now);
+        project.setLastActivityAt(now);
+
+        Project savedProject = projectRepository.save(project);
+        return toProjectDetail(savedProject);
+    }
+
+    @Override
+    @Transactional
+    public SupervisorProjectDetailDto updateProjectStatus(
+        String authenticatedUserId,
+        String projectId,
+        UpdateSupervisorProjectStatusRequest request
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        String lifecycleStatus = validateLifecycleStatus(request.getLifecycleStatus());
+        Instant now = Instant.now();
+
+        project.setStatus(lifecycleStatus);
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
 
@@ -489,5 +512,13 @@ class SupervisorServiceImpl implements SupervisorService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String validateLifecycleStatus(String rawStatus) {
+        String lifecycleStatus = rawStatus.trim().toUpperCase();
+        if (!ALLOWED_LIFECYCLE_STATUSES.contains(lifecycleStatus)) {
+            throw new ValidationException("lifecycleStatus", "Lifecycle status is invalid.");
+        }
+        return lifecycleStatus;
     }
 }

@@ -10,6 +10,7 @@ import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
+import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
 import com.supervisesuite.backend.supervisor.service.SupervisorService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -106,6 +107,26 @@ public class SupervisorController {
         return ResponseEntity.ok(new ApiResponse<>(
             true,
             "Project updated successfully.",
+            data,
+            null
+        ));
+    }
+
+    @PatchMapping("/projects/{projectId}/status")
+    public ResponseEntity<ApiResponse<SupervisorProjectDetailDto>> updateProjectStatus(
+        Authentication authentication,
+        @PathVariable String projectId,
+        @Valid @RequestBody UpdateSupervisorProjectStatusRequest request
+    ) {
+        SupervisorProjectDetailDto data = supervisorService.updateProjectStatus(
+            authentication.getName(),
+            projectId,
+            request
+        );
+
+        return ResponseEntity.ok(new ApiResponse<>(
+            true,
+            "Project status updated successfully.",
             data,
             null
         ));
