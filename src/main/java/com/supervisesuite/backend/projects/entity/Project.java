@@ -10,6 +10,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -31,13 +32,13 @@ public class Project {
 
     private Instant updatedAt;
 
-    @Column(nullable = false)
+    @Column(name = "title", nullable = false)
     private String name;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "summary", columnDefinition = "TEXT")
     private String description;
 
-    @Column(nullable = false)
+    @Column(name = "lifecycle_status", nullable = false)
     private String status;
 
     /** Owning supervisor. Nullable for existing rows that predate V2 migration. */
@@ -47,4 +48,28 @@ public class Project {
 
     /** Soft delete marker. Null means the project is active. */
     private Instant deletedAt;
+
+    private String batch;
+
+    private String semester;
+
+    private Integer progressPercent;
+
+    @Column(columnDefinition = "TEXT")
+    private String healthNote;
+
+    private LocalDate milestoneDate;
+
+    private Instant lastActivityAt;
+
+    @Column(columnDefinition = "TEXT")
+    private String communicationUrl;
+
+    @Column(columnDefinition = "TEXT")
+    private String repositoryUrl;
+
+    private String jiraProjectKey;
+
+    @Column(columnDefinition = "TEXT")
+    private String jiraBoardUrl;
 }
