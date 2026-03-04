@@ -8,6 +8,7 @@ Current API references:
 
 - `docs/api/auth.md`
 - `docs/api/supervisor.md`
+- `docs/api/student.md`
 
 ## Local Run and Check Standards
 

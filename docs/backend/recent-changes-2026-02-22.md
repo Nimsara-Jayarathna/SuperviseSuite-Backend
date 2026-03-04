@@ -103,3 +103,25 @@
   - `ProjectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(...)`
 - Added dedicated supervisor API reference:
   - `docs/api/supervisor.md`
+
+## 7) Student Project List Read Flow (2026-03-05)
+
+- Added a dedicated student feature slice:
+  - `src/main/java/com/supervisesuite/backend/student/controller/StudentController.java`
+  - `src/main/java/com/supervisesuite/backend/student/service/StudentService.java`
+  - `src/main/java/com/supervisesuite/backend/student/service/StudentServiceImpl.java`
+  - DTOs under `src/main/java/com/supervisesuite/backend/student/dto/`
+- New student-only endpoint under `/api/student`:
+  - `GET /api/student/projects`
+    - Requires `STUDENT` role
+    - Returns projects assigned to the authenticated student
+    - Current payload is intentionally limited to student list-card summary fields
+- Student visibility/ownership rules:
+  - source membership is `project_members.user_id = authenticated student`
+  - membership must have `member_role = STUDENT`
+  - soft-deleted projects are excluded
+- Extended repositories for student list reads:
+  - `ProjectMemberRepository.findByUserIdAndMemberRoleOrderByCreatedAtDesc(...)`
+  - `ProjectRepository.findByIdInAndDeletedAtIsNullOrderByCreatedAtDesc(...)`
+- Added dedicated student API reference:
+  - `docs/api/student.md`
