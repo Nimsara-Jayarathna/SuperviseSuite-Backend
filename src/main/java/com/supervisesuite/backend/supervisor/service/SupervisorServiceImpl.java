@@ -14,6 +14,7 @@ import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequ
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectResponse;
+import com.supervisesuite.backend.supervisor.dto.SupervisorDashboardDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
@@ -24,10 +25,12 @@ import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Comparator;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -68,6 +71,71 @@ class SupervisorServiceImpl implements SupervisorService {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.projectMilestoneRepository = projectMilestoneRepository;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SupervisorDashboardDto getDashboard(String authenticatedUserId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        List<Project> projects = projectRepository
+            .findBySupervisorIdAndDeletedAtIsNullOrderByCreatedAtDesc(supervisor.getId());
+
+        int planningProjects = 0;
+        int activeProjects = 0;
+        int atRiskProjects = 0;
+        int behindProjects = 0;
+        int completedProjects = 0;
+        int upcomingMilestonesCount = 0;
+
+        LocalDate today = LocalDate.now();
+        LocalDate milestoneWindowEnd = today.plusDays(14);
+
+        for (Project project : projects) {
+            String lifecycleStatus = project.getStatus();
+            if ("PLANNING".equals(lifecycleStatus)) {
+                planningProjects++;
+            } else if ("ACTIVE".equals(lifecycleStatus)) {
+                activeProjects++;
+            } else if ("AT_RISK".equals(lifecycleStatus)) {
+                atRiskProjects++;
+            } else if ("BEHIND".equals(lifecycleStatus)) {
+                behindProjects++;
+            } else if ("COMPLETED".equals(lifecycleStatus)) {
+                completedProjects++;
+            }
+
+            LocalDate milestoneDate = project.getMilestoneDate();
+            if (milestoneDate != null
+                && !milestoneDate.isBefore(today)
+                && !milestoneDate.isAfter(milestoneWindowEnd)
+            ) {
+                upcomingMilestonesCount++;
+            }
+        }
+
+        List<SupervisorDashboardDto.ProjectItem> dashboardProjects = projects.stream()
+            .map(this::toDashboardProjectItem)
+            .toList();
+
+        List<SupervisorDashboardDto.ProjectItem> recentProjects = projects.stream()
+            .sorted(Comparator
+                .comparing(Project::getLastActivityAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(Project::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+            .limit(5)
+            .map(this::toDashboardProjectItem)
+            .toList();
+
+        return new SupervisorDashboardDto(
+            projects.size(),
+            planningProjects,
+            activeProjects,
+            atRiskProjects,
+            behindProjects,
+            completedProjects,
+            upcomingMilestonesCount,
+            dashboardProjects,
+            recentProjects
+        );
     }
 
     @Override
@@ -461,6 +529,19 @@ class SupervisorServiceImpl implements SupervisorService {
             project.getProgressPercent(),
             project.getHealthNote(),
             projectMemberRepository.countByProjectId(project.getId())
+        );
+    }
+
+    private SupervisorDashboardDto.ProjectItem toDashboardProjectItem(Project project) {
+        return new SupervisorDashboardDto.ProjectItem(
+            project.getId(),
+            project.getName(),
+            project.getDescription(),
+            project.getStatus(),
+            project.getMilestoneDate(),
+            project.getLastActivityAt(),
+            project.getProgressPercent(),
+            project.getHealthNote()
         );
     }
 

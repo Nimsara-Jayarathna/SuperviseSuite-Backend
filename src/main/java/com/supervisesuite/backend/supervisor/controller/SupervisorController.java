@@ -5,6 +5,7 @@ import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequ
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectResponse;
+import com.supervisesuite.backend.supervisor.dto.SupervisorDashboardDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
@@ -36,6 +37,20 @@ public class SupervisorController {
 
     public SupervisorController(SupervisorService supervisorService) {
         this.supervisorService = supervisorService;
+    }
+
+    @GetMapping("/dashboard")
+    public ResponseEntity<ApiResponse<SupervisorDashboardDto>> getDashboard(
+        Authentication authentication
+    ) {
+        SupervisorDashboardDto data = supervisorService.getDashboard(authentication.getName());
+
+        return ResponseEntity.ok(new ApiResponse<>(
+            true,
+            "Dashboard loaded.",
+            data,
+            null
+        ));
     }
 
     @GetMapping("/projects")
