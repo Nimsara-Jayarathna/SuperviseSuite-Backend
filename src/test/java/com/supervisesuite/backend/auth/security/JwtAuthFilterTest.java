@@ -3,6 +3,7 @@ package com.supervisesuite.backend.auth.security;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.supervisesuite.backend.TestcontainersConfiguration;
+import com.supervisesuite.backend.auth.security.CookieService;
 import com.supervisesuite.backend.config.JwtProperties;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.users.entity.User;
@@ -27,7 +28,7 @@ import org.springframework.http.ResponseEntity;
  * <p>The filter does <em>not</em> query the database on every request — it reads the
  * {@code role} claim directly from the JWT — so these tests need no {@code users}
  * table rows. Tokens are generated against the test secret via the auto-wired
- * {@link JwtService}.
+ * {@link JwtService} and delivered via the {@code ss_access_token} httpOnly cookie.
  *
  * <p>The two helper endpoints exercised here are provided by
  * {@link com.supervisesuite.backend.auth.controller.TestSecurityController}, which
@@ -169,10 +170,10 @@ class JwtAuthFilterTest {
     // Helpers
     // -------------------------------------------------------------------------
 
-    /** Performs a GET request with {@code Authorization: Bearer <token>}. */
+    /** Performs a GET request with the token set as an httpOnly-style cookie. */
     private ResponseEntity<Map> get(String url, String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(token);
+        headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + token);
         return restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
     }
 
