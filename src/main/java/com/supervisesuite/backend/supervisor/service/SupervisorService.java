@@ -5,12 +5,19 @@ import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectResponse
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
+import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import java.util.List;
 
 public interface SupervisorService {
     List<SupervisorProjectSummaryDto> getProjects(String authenticatedUserId);
 
     SupervisorProjectDetailDto getProjectById(String authenticatedUserId, String projectId);
+
+    SupervisorProjectDetailDto updateProject(
+        String authenticatedUserId,
+        String projectId,
+        UpdateSupervisorProjectRequest request
+    );
 
     List<StudentSearchResultDto> searchStudents(String query);
 

@@ -15,6 +15,7 @@ import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectResponse
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
+import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -33,6 +34,13 @@ class SupervisorServiceImpl implements SupervisorService {
 
     private static final String DEFAULT_LIFECYCLE_STATUS = "PLANNING";
     private static final String DEFAULT_MILESTONE_STATUS = "PLANNED";
+    private static final Set<String> ALLOWED_LIFECYCLE_STATUSES = Set.of(
+        "PLANNING",
+        "ACTIVE",
+        "AT_RISK",
+        "BEHIND",
+        "COMPLETED"
+    );
 
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;
@@ -72,38 +80,40 @@ class SupervisorServiceImpl implements SupervisorService {
             .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
             .orElseThrow(EntityNotFoundException::new);
 
-        List<ProjectMember> projectMembers = projectMemberRepository.findByProjectIdOrderByCreatedAtAsc(project.getId());
-        List<UUID> memberIds = projectMembers.stream()
-            .map(ProjectMember::getUserId)
-            .toList();
-        Map<UUID, User> userById = new HashMap<>();
-        userRepository.findAllById(memberIds).forEach(user -> userById.put(user.getId(), user));
+        return toProjectDetail(project);
+    }
 
-        List<SupervisorProjectDetailDto.Member> members = projectMembers.stream()
-            .map(member -> toDetailMember(member, userById.get(member.getUserId())))
-            .filter(member -> member != null)
-            .toList();
+    @Override
+    @Transactional
+    public SupervisorProjectDetailDto updateProject(
+        String authenticatedUserId,
+        String projectId,
+        UpdateSupervisorProjectRequest request
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
 
-        List<SupervisorProjectDetailDto.Milestone> milestones = projectMilestoneRepository
-            .findByProjectIdOrderBySequenceNoAsc(project.getId())
-            .stream()
-            .map(this::toDetailMilestone)
-            .toList();
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
 
-        return new SupervisorProjectDetailDto(
-            project.getId(),
-            project.getName(),
-            project.getDescription(),
-            project.getStatus(),
-            project.getBatch(),
-            project.getSemester(),
-            project.getMilestoneDate(),
-            project.getProgressPercent(),
-            project.getHealthNote(),
-            project.getLastActivityAt(),
-            members,
-            milestones
-        );
+        String lifecycleStatus = request.getLifecycleStatus().trim().toUpperCase();
+        if (!ALLOWED_LIFECYCLE_STATUSES.contains(lifecycleStatus)) {
+            throw new ValidationException("lifecycleStatus", "Lifecycle status is invalid.");
+        }
+
+        Instant now = Instant.now();
+        project.setName(request.getTitle().trim());
+        project.setDescription(request.getSummary().trim());
+        project.setBatch(request.getBatch().trim());
+        project.setSemester(request.getSemester().trim());
+        project.setStatus(lifecycleStatus);
+        project.setHealthNote(trimToNull(request.getHealthNote()));
+        project.setUpdatedAt(now);
+        project.setLastActivityAt(now);
+
+        Project savedProject = projectRepository.save(project);
+        return toProjectDetail(savedProject);
     }
 
     @Override
@@ -183,6 +193,45 @@ class SupervisorServiceImpl implements SupervisorService {
                 savedMilestone.getSequenceNo()
             )
         );
+    }
+
+    private SupervisorProjectDetailDto toProjectDetail(Project project) {
+        return new SupervisorProjectDetailDto(
+            project.getId(),
+            project.getName(),
+            project.getDescription(),
+            project.getStatus(),
+            project.getBatch(),
+            project.getSemester(),
+            project.getMilestoneDate(),
+            project.getProgressPercent(),
+            project.getHealthNote(),
+            project.getLastActivityAt(),
+            getProjectMembers(project.getId()),
+            getProjectMilestones(project.getId())
+        );
+    }
+
+    private List<SupervisorProjectDetailDto.Member> getProjectMembers(UUID projectId) {
+        List<ProjectMember> projectMembers = projectMemberRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
+        List<UUID> memberIds = projectMembers.stream()
+            .map(ProjectMember::getUserId)
+            .toList();
+        Map<UUID, User> userById = new HashMap<>();
+        userRepository.findAllById(memberIds).forEach(user -> userById.put(user.getId(), user));
+
+        return projectMembers.stream()
+            .map(member -> toDetailMember(member, userById.get(member.getUserId())))
+            .filter(member -> member != null)
+            .toList();
+    }
+
+    private List<SupervisorProjectDetailDto.Milestone> getProjectMilestones(UUID projectId) {
+        return projectMilestoneRepository
+            .findByProjectIdOrderBySequenceNoAsc(projectId)
+            .stream()
+            .map(this::toDetailMilestone)
+            .toList();
     }
 
     private User resolveSupervisor(String authenticatedUserId) {
