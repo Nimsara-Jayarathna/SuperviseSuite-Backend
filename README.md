@@ -25,11 +25,13 @@ Always use Maven Wrapper for local commands:
 
 ## Environment Variables
 
-The backend reads DB config from environment variables:
+The backend reads DB and auth config from environment variables:
 
 - `DB_URL`
 - `DB_USERNAME`
 - `DB_PASSWORD`
+- `COOKIE_SECURE` — set to `false` for local HTTP development (default: `true`)
+- `JWT_SECRET` — base64-encoded secret used to sign and verify access token JWTs
 
 Setup for local development:
 
@@ -45,6 +47,7 @@ Setup for local development:
 - Migration scripts are in `src/main/resources/db/migration`.
 - On each backend start, Flyway checks the schema history table and applies only pending versions.
 - `V1__init_schema.sql` creates the base tables for `users`, `projects`, and `project_members`.
+- `V2__add_refresh_tokens.sql` adds the `refresh_tokens` table for httpOnly cookie session management.
 - Default safety: `baseline-on-migrate` is disabled.
 - Dev-only fallback exists in `application-dev.yaml` if you need one-time baseline for a legacy/local DB.
   - Run with dev profile only when required:
