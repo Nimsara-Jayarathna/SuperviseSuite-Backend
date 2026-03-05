@@ -1,6 +1,7 @@
 package com.supervisesuite.backend.auth.security;
 
 import com.supervisesuite.backend.config.JwtProperties;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
 
@@ -33,9 +34,14 @@ import org.springframework.stereotype.Component;
 class ResponseCookieService implements CookieService {
 
     private final JwtProperties jwtProperties;
+    private final boolean cookiesSecure;
 
-    ResponseCookieService(JwtProperties jwtProperties) {
+    ResponseCookieService(
+        JwtProperties jwtProperties,
+        @Value("${app.cookie.secure:true}") boolean cookiesSecure
+    ) {
         this.jwtProperties = jwtProperties;
+        this.cookiesSecure = cookiesSecure;
     }
 
     @Override
@@ -78,7 +84,7 @@ class ResponseCookieService implements CookieService {
     private ResponseCookie.ResponseCookieBuilder base(String name, String value) {
         return ResponseCookie.from(name, value)
             .httpOnly(true)
-            .secure(true)
+            .secure(cookiesSecure)
             .sameSite("Strict");
     }
 }

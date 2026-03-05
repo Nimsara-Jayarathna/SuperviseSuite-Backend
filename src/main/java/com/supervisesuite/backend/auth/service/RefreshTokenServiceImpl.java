@@ -10,6 +10,7 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Default implementation of {@link RefreshTokenService}.
@@ -77,5 +78,29 @@ class RefreshTokenServiceImpl implements RefreshTokenService {
 
         // 5. Return raw token — caller must send this to the client once, never log it
         return rawToken;
+    }
+
+    @Override
+    @Transactional
+    public void revoke(String rawToken) {
+        String tokenHash = sha256Base64(rawToken);
+        refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(token -> {
+            token.setRevokedAt(Instant.now());
+            refreshTokenRepository.save(token);
+        });
+    }
+
+    /**
+     * Computes the SHA-256 hash of the raw token and returns it as standard
+     * Base64 — identical to the algorithm used when the token is stored.
+     */
+    private static String sha256Base64(String raw) {
+        try {
+            byte[] hashBytes = MessageDigest.getInstance("SHA-256")
+                .digest(raw.getBytes());
+            return Base64.getEncoder().encodeToString(hashBytes);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
     }
 }

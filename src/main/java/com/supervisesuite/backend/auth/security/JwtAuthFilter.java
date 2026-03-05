@@ -16,11 +16,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * Stateless JWT authentication filter.
  *
- * <p>Runs once per request (extends {@link OncePerRequestFilter}). Extracts the Bearer
- * token from the {@code Authorization} header, validates it via {@link JwtService},
- * and populates the {@link SecurityContextHolder} with the authenticated principal.
+ * <p>Runs once per request (extends {@link OncePerRequestFilter}). Extracts the
+ * access token from the incoming request via {@link CookieTokenExtractor}, validates
+ * it via {@link TokenService}, and populates the {@link SecurityContextHolder} with
+ * the authenticated principal.
  *
- * <p>If the header is absent, the token is invalid/expired, or any field cannot be
+ * <p>If the cookie is absent, the token is invalid/expired, or any claim cannot be
  * extracted, the filter proceeds without setting authentication. Spring Security will
  * then reject the request based on the route's authorization rule (401/403).
  *
@@ -31,12 +32,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
-    private static final String BEARER_PREFIX = "Bearer ";
-
     private final TokenService tokenService;
+    private final CookieTokenExtractor tokenExtractor;
 
-    public JwtAuthFilter(TokenService tokenService) {
+    public JwtAuthFilter(TokenService tokenService, CookieTokenExtractor tokenExtractor) {
         this.tokenService = tokenService;
+        this.tokenExtractor = tokenExtractor;
     }
 
     @Override
@@ -46,15 +47,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         FilterChain filterChain
     ) throws ServletException, IOException {
 
-        String authHeader = request.getHeader("Authorization");
-
-        // No Authorization header or wrong scheme — skip, let Spring Security decide
-        if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
+        // No access token cookie — skip, let Spring Security decide
+        String token = tokenExtractor.extractAccessToken(request).orElse(null);
+        if (token == null) {
             filterChain.doFilter(request, response);
             return;
         }
-
-        String token = authHeader.substring(BEARER_PREFIX.length());
 
         // Extract subject (userId) and role from JWT claims — both must be present
         String userId = tokenService.extractSubject(token).orElse(null);

@@ -3,13 +3,12 @@ package com.supervisesuite.backend.auth.dto;
 import java.util.UUID;
 
 /**
- * Response payload returned by {@code POST /api/auth/login} on success.
+ * Internal DTO returned by {@link com.supervisesuite.backend.auth.service.AuthService}.
  *
- * <p>Shape mirrors the frontend {@code AuthResponse} type exactly:
- * {@code accessToken}, {@code refreshToken}, and a nested {@code user} object.
- *
- * <p>Note: {@code isEmailVerified} is always {@code true} — email verification
- * is out of scope for this project (no verification flow exists).
+ * <p>Carries the raw access token, refresh token, and user profile from the
+ * service layer to the controller. The controller places the tokens in httpOnly
+ * cookies and sends only the {@link UserInfo} in the JSON response body via
+ * {@link LoginUserResponse}.
  */
 public class LoginResponse {
 
@@ -39,7 +38,6 @@ public class LoginResponse {
      * Public profile of the authenticated user embedded in the login response.
      *
      * <p>Intentionally excludes sensitive fields such as {@code passwordHash}.
-     * {@code isEmailVerified} is always {@code true} — no email verification flow exists.
      */
     public static class UserInfo {
 
@@ -48,7 +46,6 @@ public class LoginResponse {
         private final String firstName;
         private final String lastName;
         private final String role;
-        private final boolean isEmailVerified;
 
         public UserInfo(UUID id, String email, String firstName, String lastName, String role) {
             this.id = id;
@@ -56,7 +53,6 @@ public class LoginResponse {
             this.firstName = firstName;
             this.lastName = lastName;
             this.role = role;
-            this.isEmailVerified = true;
         }
 
         public UUID getId() {
@@ -77,10 +73,6 @@ public class LoginResponse {
 
         public String getRole() {
             return role;
-        }
-
-        public boolean isEmailVerified() {
-            return isEmailVerified;
         }
     }
 }

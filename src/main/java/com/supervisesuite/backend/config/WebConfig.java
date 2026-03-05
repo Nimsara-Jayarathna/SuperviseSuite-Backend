@@ -32,8 +32,10 @@ public class WebConfig {
      *   <li><b>Allowed methods</b> — GET, POST, PUT, PATCH, DELETE, OPTIONS.</li>
      *   <li><b>Allowed headers</b> — all headers permitted ({@code *}); avoids
      *       CORS rejections from browsers and custom API clients.</li>
-     *   <li><b>Credentials</b> — {@code false}; JWT is sent as a Bearer token in
-     *       the {@code Authorization} header, not as a cookie.</li>
+     *   <li><b>Credentials</b> — {@code true}; the access and refresh tokens are
+     *       delivered as {@code HttpOnly} cookies, so the browser must be allowed
+     *       to include credentials on cross-origin requests. This requires the
+     *       allowed-origins list to contain explicit origins (never {@code *}).</li>
      *   <li><b>Preflight cache</b> — 3600 seconds (1 hour).</li>
      * </ul>
      *
@@ -46,7 +48,9 @@ public class WebConfig {
         config.setAllowedOrigins(corsProperties.getAllowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.addAllowedHeader("*");
-        config.setAllowCredentials(false);
+        // Must be true — tokens travel as httpOnly cookies, not as Authorization headers.
+        // Note: allowedOrigins must never use the wildcard "*" when credentials=true.
+        config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
