@@ -27,6 +27,9 @@ replay_pid*
 /target/
 !.mvn/wrapper/maven-wrapper.jar
 
+# Test output captures
+test-output.txt
+
 # Environment files
 .env
 .env.*

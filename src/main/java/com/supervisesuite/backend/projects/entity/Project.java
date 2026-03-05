@@ -1,62 +1,75 @@
 package com.supervisesuite.backend.projects.entity;
 
+import com.supervisesuite.backend.users.entity.User;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+@Getter
+@Setter
+@NoArgsConstructor
 @Entity
 @Table(name = "projects")
 public class Project {
+
     @Id
     @GeneratedValue
     private UUID id;
 
+    @Column(nullable = false)
     private Instant createdAt;
+
     private Instant updatedAt;
 
+    @Column(name = "title", nullable = false)
     private String name;
+
+    @Column(name = "summary", columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "lifecycle_status", nullable = false)
     private String status;
 
-    public UUID getId() {
-        return id;
-    }
+    /** Owning supervisor. Nullable for existing rows that predate V2 migration. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supervisor_id")
+    private User supervisor;
 
-    public void setId(UUID id) {
-        this.id = id;
-    }
+    /** Soft delete marker. Null means the project is active. */
+    private Instant deletedAt;
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+    private String batch;
 
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+    private String semester;
 
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
+    private Integer progressPercent;
 
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+    @Column(columnDefinition = "TEXT")
+    private String healthNote;
 
-    public String getName() {
-        return name;
-    }
+    private LocalDate milestoneDate;
 
-    public void setName(String name) {
-        this.name = name;
-    }
+    private Instant lastActivityAt;
 
-    public String getStatus() {
-        return status;
-    }
+    @Column(columnDefinition = "TEXT")
+    private String communicationUrl;
 
-    public void setStatus(String status) {
-        this.status = status;
-    }
+    @Column(columnDefinition = "TEXT")
+    private String repositoryUrl;
+
+    private String jiraProjectKey;
+
+    @Column(columnDefinition = "TEXT")
+    private String jiraBoardUrl;
 }

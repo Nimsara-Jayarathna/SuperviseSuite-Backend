@@ -1,3 +1,35 @@
 spring:
+  config:
+    import: optional:file:.env[.properties]
   application:
     name: SuperviseSuite Backend
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+    validate-on-migrate: false
+server:
+  port: ${APP_PORT}
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-expiry-seconds: ${JWT_ACCESS_EXPIRY_SECONDS:900}
+    refresh-token-expiry-seconds: ${JWT_REFRESH_EXPIRY_SECONDS:604800}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  cookie:
+    # Set to false in local dev (HTTP). Must be true in production (HTTPS).
+    # Browsers (except Chrome) block Secure cookies over plain HTTP even on localhost.
+    secure: ${COOKIE_SECURE:true}

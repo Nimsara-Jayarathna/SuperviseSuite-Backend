@@ -2,6 +2,14 @@
 
 Core SuperviseSuite backend built with Spring Boot. Provides REST APIs for authentication/authorization, user and project management, and project membership/assignment workflows. Owns the main database model and supports future expansion for analytics, reporting, and external tool connectivity.
 
+## API Documentation
+
+Current API references:
+
+- `docs/api/auth.md`
+- `docs/api/supervisor.md`
+- `docs/api/student.md`
+
 ## Local Run and Check Standards
 
 Always use Maven Wrapper for local commands:
@@ -14,6 +22,36 @@ Always use Maven Wrapper for local commands:
 - Run dev: `./mvnw spring-boot:run`
 - Run tests: `./mvnw test`
 - Build jar: `./mvnw clean package`
+
+## Environment Variables
+
+The backend reads DB and auth config from environment variables:
+
+- `DB_URL`
+- `DB_USERNAME`
+- `DB_PASSWORD`
+- `COOKIE_SECURE` — set to `false` for local HTTP development (default: `true`)
+- `JWT_SECRET` — base64-encoded secret used to sign and verify access token JWTs
+
+Setup for local development:
+
+1. Create your local env file: `cp .env.example .env`
+2. Run backend:
+   `./mvnw spring-boot:run`
+
+`.env` is auto-loaded by Spring via `spring.config.import`.
+
+## Flyway Migrations
+
+- Flyway is enabled in `src/main/resources/application.yaml`.
+- Migration scripts are in `src/main/resources/db/migration`.
+- On each backend start, Flyway checks the schema history table and applies only pending versions.
+- `V1__init_schema.sql` creates the base tables for `users`, `projects`, and `project_members`.
+- `V2__add_refresh_tokens.sql` adds the `refresh_tokens` table for httpOnly cookie session management.
+- Default safety: `baseline-on-migrate` is disabled.
+- Dev-only fallback exists in `application-dev.yaml` if you need one-time baseline for a legacy/local DB.
+  - Run with dev profile only when required:
+    `SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run`
 
 ## Verify Standard (Local)
 

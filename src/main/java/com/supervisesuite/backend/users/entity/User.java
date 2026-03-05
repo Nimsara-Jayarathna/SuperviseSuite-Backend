@@ -7,60 +7,79 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+/**
+ * JPA entity representing an application user.
+ *
+ * <p>Maps to the {@code users} table. Schema is managed by Flyway:
+ * <ul>
+ *   <li>V1 — base table ({@code id}, {@code email}, {@code role}) with CHECK constraint on role</li>
+ *   <li>V2 — auth fields ({@code password_hash}, {@code first_name}, {@code last_name},
+ *       {@code registration_number}) and {@code refresh_tokens} table</li>
+ * </ul>
+ *
+ * <p>Lombok generates all getters, setters, and a no-arg constructor.
+ * No builder is used; the service layer populates fields via setters.
+ */
+@Getter
+@Setter
+@NoArgsConstructor
 @Entity
 @Table(name = "users")
 public class User {
+
+    /** Auto-generated UUID primary key. */
     @Id
     @GeneratedValue
     private UUID id;
 
+    /** Timestamp when the record was created. Set once on registration; never updated. */
+    @Column(nullable = false)
     private Instant createdAt;
+
+    /** Timestamp of the last update. {@code null} until the record is first modified. */
     private Instant updatedAt;
 
+    /** Unique email address used as the login identifier. */
     @Column(nullable = false, unique = true)
     private String email;
 
+    /**
+     * Application role assigned to this user.
+     * Constrained by a DB CHECK to {@code 'SUPERVISOR'} or {@code 'STUDENT'} (V2).
+     *
+     * @see com.supervisesuite.backend.common.constants.Roles
+     */
     @Column(nullable = false)
     private String role;
 
-    public UUID getId() {
-        return id;
-    }
+    // --- V2 auth fields ---
 
-    public void setId(UUID id) {
-        this.id = id;
-    }
+    /**
+     * BCrypt hash of the user's password.
+     * Nullable at the DB level to support rows created before auth was introduced.
+     * The application layer enforces a non-null value on registration.
+     */
+    private String passwordHash;
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+    /** Student or supervisor's given name. */
+    private String firstName;
 
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+    /** Student or supervisor's family name. */
+    private String lastName;
 
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
+    // --- V2 additional fields ---
 
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
-    }
+    /**
+     * Institutional registration / student number.
+     * Format: 2 uppercase letters followed by 8 digits (e.g. IT24100400).
+     * Stored in normalized uppercase form via {@link com.supervisesuite.backend.common.util.NormalizationUtils}.
+     * Nullable at the DB level to support pre-seeded supervisor rows.
+     * The application layer enforces a non-null value on student registration.
+     */
+    @Column(name = "registration_number", unique = true, length = 20)
+    private String registrationNumber;
 }

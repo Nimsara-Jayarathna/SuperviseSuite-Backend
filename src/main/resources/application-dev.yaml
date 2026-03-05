@@ -1,0 +1,6 @@
+# Dev profile overrides.
+app:
+  cookie:
+    # Disable Secure flag in local dev so cookies work over plain HTTP (http://localhost).
+    # Firefox and Safari block Secure cookies on http://localhost; Chrome allows it.
+    secure: false
