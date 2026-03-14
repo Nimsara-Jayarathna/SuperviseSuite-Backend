@@ -30,13 +30,28 @@ The backend reads DB and auth config from environment variables:
 - `DB_URL`
 - `DB_USERNAME`
 - `DB_PASSWORD`
+- `APP_PORT`
+- `CORS_ALLOWED_ORIGINS`
 - `COOKIE_SECURE` — set to `false` for local HTTP development (default: `true`)
 - `JWT_SECRET` — base64-encoded secret used to sign and verify access token JWTs
 
 Setup for local development:
 
 1. Create your local env file: `cp .env.example .env`
-2. Run backend:
+2. Use these local defaults (or confirm your `.env` matches them):
+
+```
+APP_PORT=8081
+CORS_ALLOWED_ORIGINS=http://localhost:5173
+COOKIE_SECURE=false
+```
+
+3. Keep hostnames consistent across FE/BE in local dev:
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:8081`
+- Avoid mixing `localhost` and `127.0.0.1` across these values.
+
+4. Run backend:
    `./mvnw spring-boot:run`
 
 `.env` is auto-loaded by Spring via `spring.config.import`.
