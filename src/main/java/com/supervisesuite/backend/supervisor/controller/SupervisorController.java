@@ -9,6 +9,7 @@ import com.supervisesuite.backend.supervisor.dto.SupervisorDashboardDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
+import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
@@ -142,6 +143,26 @@ public class SupervisorController {
         return ResponseEntity.ok(new ApiResponse<>(
             true,
             "Project status updated successfully.",
+            data,
+            null
+        ));
+    }
+
+    @PatchMapping("/projects/{projectId}/repository")
+    public ResponseEntity<ApiResponse<SupervisorProjectDetailDto>> updateRepository(
+        Authentication authentication,
+        @PathVariable String projectId,
+        @Valid @RequestBody UpdateRepositoryRequest request
+    ) {
+        SupervisorProjectDetailDto data = supervisorService.updateRepository(
+            authentication.getName(),
+            projectId,
+            request
+        );
+
+        return ResponseEntity.ok(new ApiResponse<>(
+            true,
+            "Project repository updated successfully.",
             data,
             null
         ));

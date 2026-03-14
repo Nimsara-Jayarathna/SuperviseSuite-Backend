@@ -110,6 +110,7 @@ class StudentServiceImpl implements StudentService {
             project.getLastActivityAt(),
             project.getProgressPercent(),
             project.getHealthNote(),
+            project.getRepositoryUrl(),
             members,
             milestones
         );

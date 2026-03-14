@@ -8,6 +8,7 @@ import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
+import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
@@ -219,6 +220,29 @@ class SupervisorServiceImpl implements SupervisorService {
 
     @Override
     @Transactional
+    public SupervisorProjectDetailDto updateRepository(
+        String authenticatedUserId,
+        String projectId,
+        UpdateRepositoryRequest request
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        Instant now = Instant.now();
+        project.setRepositoryUrl(trimToNull(request.getRepositoryUrl()));
+        project.setUpdatedAt(now);
+        project.setLastActivityAt(now);
+
+        Project savedProject = projectRepository.save(project);
+        return toProjectDetail(savedProject);
+    }
+
+    @Override
+    @Transactional
     public SupervisorProjectDetailDto addProjectMembers(
         String authenticatedUserId,
         String projectId,
@@ -417,6 +441,7 @@ class SupervisorServiceImpl implements SupervisorService {
             project.getMilestoneDate(),
             project.getProgressPercent(),
             project.getHealthNote(),
+            project.getRepositoryUrl(),
             project.getLastActivityAt(),
             getProjectMembers(project.getId()),
             getProjectMilestones(project.getId())

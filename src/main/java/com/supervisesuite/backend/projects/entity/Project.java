@@ -65,7 +65,7 @@ public class Project {
     @Column(columnDefinition = "TEXT")
     private String communicationUrl;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "repository_url", columnDefinition = "TEXT")
     private String repositoryUrl;
 
     private String jiraProjectKey;
