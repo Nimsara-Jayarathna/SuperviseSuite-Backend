@@ -11,6 +11,19 @@ Current API references:
 - `docs/api/student.md`
 - `docs/api-response-contract.md`
 
+## Recent API Contract Update (March 2026)
+
+Backend API responses are standardized for all normal JSON endpoints:
+
+- Top-level keys are always: `success`, `message`, `data`, `error`, `meta`.
+- Security failures (`401`/`403`) now follow the same contract as controller exceptions.
+- Framework fallback errors are normalized to avoid leaking raw Spring default error shapes.
+
+Frontend integration note:
+
+- Frontend must parse wrapped errors (`message` + nested `error.code/status/details` + `meta`), not legacy raw top-level error payloads.
+- `POST /api/auth/logout` remains an intentional `204 No Content` exception.
+
 ## Local Run and Check Standards
 
 Always use Maven Wrapper for local commands:
