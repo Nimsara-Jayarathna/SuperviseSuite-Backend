@@ -65,7 +65,7 @@ class JwtAuthFilterTest {
         ResponseEntity<Map> response = restTemplate.getForEntity(AUTHENTICATED_URL, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     @Test
@@ -73,7 +73,7 @@ class JwtAuthFilterTest {
         ResponseEntity<Map> response = get(AUTHENTICATED_URL, "invalid.token.here");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     @Test
@@ -147,7 +147,7 @@ class JwtAuthFilterTest {
         ResponseEntity<Map> response = get(SUPERVISOR_ONLY_URL, token);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(response.getBody().get("code")).isEqualTo("FORBIDDEN");
+        assertThat(error(response).get("code")).isEqualTo("FORBIDDEN");
     }
 
     @Test
@@ -187,5 +187,10 @@ class JwtAuthFilterTest {
         user.setId(UUID.randomUUID());
         user.setRole(role);
         return user;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> error(ResponseEntity<Map> response) {
+        return (Map<String, Object>) response.getBody().get("error");
     }
 }

@@ -7,6 +7,15 @@
 - [POST /api/auth/refresh](#post-apiauthrefresh)
 - [POST /api/auth/logout](#post-apiauthlogout)
 
+## Response Model
+
+All standard JSON responses in this file follow the unified envelope documented in:
+
+- `docs/api-response-contract.md`
+- `docs/api/error-handling.md`
+
+`POST /api/auth/logout` is an intentional exception and returns `204 No Content`.
+
 ---
 
 ## Cookie-Based Authentication
@@ -79,7 +88,12 @@ Registers a new student account. No authentication required.
     "registrationNumber": "IT24100400",
     "role": "STUDENT"
   },
-  "error": null
+  "error": null,
+  "meta": {
+    "timestamp": "2026-03-14T16:30:00Z",
+    "path": "/api/auth/register",
+    "traceId": null
+  }
 }
 ```
 
@@ -89,17 +103,22 @@ Returned when a required field is missing, blank, fails format checks, or the pa
 
 ```json
 {
-  "timestamp": "2026-03-02T10:00:00Z",
-  "status": 400,
-  "error": "Bad Request",
-  "code": "VALIDATION_ERROR",
+  "success": false,
   "message": "Validation failed.",
-  "path": "/api/auth/register",
-  "traceId": null,
-  "details": [
-    { "field": "email", "issue": "Email must be a valid email address." },
-    { "field": "password", "issue": "Password must contain: an uppercase letter, a digit." }
-  ]
+  "data": null,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "status": 400,
+    "details": [
+      { "field": "email", "issue": "Email must be a valid email address." },
+      { "field": "password", "issue": "Password must contain: an uppercase letter, a digit." }
+    ]
+  },
+  "meta": {
+    "timestamp": "2026-03-14T16:30:00Z",
+    "path": "/api/auth/register",
+    "traceId": null
+  }
 }
 ```
 
@@ -107,14 +126,19 @@ Returned when a required field is missing, blank, fails format checks, or the pa
 
 ```json
 {
-  "timestamp": "2026-03-02T10:00:00Z",
-  "status": 409,
-  "error": "Conflict",
-  "code": "CONFLICT",
+  "success": false,
   "message": "An account with this email already exists.",
-  "path": "/api/auth/register",
-  "traceId": null,
-  "details": []
+  "data": null,
+  "error": {
+    "code": "CONFLICT",
+    "status": 409,
+    "details": []
+  },
+  "meta": {
+    "timestamp": "2026-03-14T16:30:00Z",
+    "path": "/api/auth/register",
+    "traceId": null
+  }
 }
 ```
 
@@ -122,14 +146,19 @@ Returned when a required field is missing, blank, fails format checks, or the pa
 
 ```json
 {
-  "timestamp": "2026-03-02T10:00:00Z",
-  "status": 409,
-  "error": "Conflict",
-  "code": "CONFLICT",
+  "success": false,
   "message": "An account with this registration number already exists.",
-  "path": "/api/auth/register",
-  "traceId": null,
-  "details": []
+  "data": null,
+  "error": {
+    "code": "CONFLICT",
+    "status": 409,
+    "details": []
+  },
+  "meta": {
+    "timestamp": "2026-03-14T16:30:00Z",
+    "path": "/api/auth/register",
+    "traceId": null
+  }
 }
 ```
 
@@ -138,7 +167,7 @@ Returned when a required field is missing, blank, fails format checks, or the pa
 ### Frontend Handling Guidance
 
 - On `201`: navigate to `/login`. No session is created by registration — the user must sign in separately.
-- On `400 VALIDATION_ERROR`: map each `details[].field` to the corresponding input and show `details[].issue` inline.
+- On `400 VALIDATION_ERROR`: map each `error.details[].field` to the corresponding input and show `error.details[].issue` inline.
 - On `409 CONFLICT`: show a targeted message on the specific field (`email` or `registrationNumber`).
 - See [error-handling.md](error-handling.md) for the full error response contract and all error codes.
 
@@ -195,7 +224,12 @@ Tokens are **not** in the body — they are delivered as `HttpOnly; Secure; Same
       "role": "STUDENT"
     }
   },
-  "error": null
+  "error": null,
+  "meta": {
+    "timestamp": "2026-03-14T16:30:00Z",
+    "path": "/api/auth/login",
+    "traceId": null
+  }
 }
 ```
 
@@ -210,16 +244,21 @@ Set-Cookie: ss_refresh_token=<token>; Path=/api/auth; Max-Age=604800; HttpOnly; 
 
 ```json
 {
-  "timestamp": "2026-03-05T10:00:00Z",
-  "status": 400,
-  "error": "Bad Request",
-  "code": "VALIDATION_ERROR",
+  "success": false,
   "message": "Validation failed.",
-  "path": "/api/auth/login",
-  "traceId": null,
-  "details": [
-    { "field": "email", "issue": "Email must not be blank." }
-  ]
+  "data": null,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "status": 400,
+    "details": [
+      { "field": "email", "issue": "Email must not be blank." }
+    ]
+  },
+  "meta": {
+    "timestamp": "2026-03-14T16:30:00Z",
+    "path": "/api/auth/login",
+    "traceId": null
+  }
 }
 ```
 
@@ -229,14 +268,19 @@ The response deliberately does not distinguish between an unknown email and a wr
 
 ```json
 {
-  "timestamp": "2026-03-05T10:00:00Z",
-  "status": 401,
-  "error": "Unauthorized",
-  "code": "UNAUTHORIZED",
+  "success": false,
   "message": "Invalid email or password.",
-  "path": "/api/auth/login",
-  "traceId": null,
-  "details": []
+  "data": null,
+  "error": {
+    "code": "UNAUTHORIZED",
+    "status": 401,
+    "details": []
+  },
+  "meta": {
+    "timestamp": "2026-03-14T16:30:00Z",
+    "path": "/api/auth/login",
+    "traceId": null
+  }
 }
 ```
 
@@ -245,7 +289,7 @@ The response deliberately does not distinguish between an unknown email and a wr
 ### Frontend Handling Guidance
 
 - On `200`: store the `data.user` profile locally; the browser holds the cookies automatically.
-- On `400 VALIDATION_ERROR`: show field-level errors from `details[]`.
+- On `400 VALIDATION_ERROR`: show field-level errors from `error.details[]`.
 - On `401`: show a generic "Invalid email or password" banner — do not specify which field is wrong.
 
 ---
@@ -286,7 +330,12 @@ Both cookies are replaced. The old refresh token is immediately revoked (token r
       "role": "STUDENT"
     }
   },
-  "error": null
+  "error": null,
+  "meta": {
+    "timestamp": "2026-03-14T16:30:00Z",
+    "path": "/api/auth/refresh",
+    "traceId": null
+  }
 }
 ```
 
@@ -296,14 +345,19 @@ Both cookies are replaced. The old refresh token is immediately revoked (token r
 
 ```json
 {
-  "timestamp": "2026-03-05T10:00:00Z",
-  "status": 401,
-  "error": "Unauthorized",
-  "code": "UNAUTHORIZED",
+  "success": false,
   "message": "Refresh token is missing.",
-  "path": "/api/auth/refresh",
-  "traceId": null,
-  "details": []
+  "data": null,
+  "error": {
+    "code": "UNAUTHORIZED",
+    "status": 401,
+    "details": []
+  },
+  "meta": {
+    "timestamp": "2026-03-14T16:30:00Z",
+    "path": "/api/auth/refresh",
+    "traceId": null
+  }
 }
 ```
 

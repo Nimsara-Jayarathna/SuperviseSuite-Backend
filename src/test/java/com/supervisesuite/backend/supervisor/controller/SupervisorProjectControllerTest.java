@@ -123,10 +123,10 @@ class SupervisorProjectControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
 
         @SuppressWarnings("unchecked")
-        List<Map<String, Object>> details = (List<Map<String, Object>>) response.getBody().get("details");
+        List<Map<String, Object>> details = (List<Map<String, Object>>) error(response).get("details");
         assertThat(details).anyMatch(detail -> "repositoryUrl".equals(detail.get("field")));
     }
 
@@ -143,7 +143,7 @@ class SupervisorProjectControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
     }
 
     @Test
@@ -156,7 +156,7 @@ class SupervisorProjectControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     @Test
@@ -172,7 +172,7 @@ class SupervisorProjectControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("code")).isEqualTo("FORBIDDEN");
+        assertThat(error(response).get("code")).isEqualTo("FORBIDDEN");
     }
 
     private ResponseEntity<Map> patchRepository(UUID projectId, Map<String, Object> body, String accessToken) {
@@ -210,5 +210,10 @@ class SupervisorProjectControllerTest {
         project.setSemester("Y3S2");
         project.setSupervisor(supervisor);
         return projectRepository.save(project);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> error(ResponseEntity<Map> response) {
+        return (Map<String, Object>) response.getBody().get("error");
     }
 }

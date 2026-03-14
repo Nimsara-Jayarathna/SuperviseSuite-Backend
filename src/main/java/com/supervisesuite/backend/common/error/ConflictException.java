@@ -17,7 +17,7 @@ import org.springframework.http.HttpStatus;
  *
  * <p>Handled by
  * {@link GlobalExceptionHandler#handleDomainException} which returns a
- * structured {@link ApiError} response.
+ * unified API error envelope.
  */
 public class ConflictException extends DomainException {
 
