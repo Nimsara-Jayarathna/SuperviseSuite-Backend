@@ -18,6 +18,7 @@ All endpoints in this document:
 - `POST /api/supervisor/projects`
 - `PATCH /api/supervisor/projects/{projectId}`
 - `PATCH /api/supervisor/projects/{projectId}/status`
+- `PATCH /api/supervisor/projects/{projectId}/repository`
 - `POST /api/supervisor/projects/{projectId}/members`
 - `POST /api/supervisor/projects/{projectId}/milestones`
 - `PATCH /api/supervisor/projects/{projectId}/milestones/{milestoneId}`
@@ -81,7 +82,7 @@ Returns one supervisor-owned project detail record.
 ### Response fields
 
 - core fields:
-  - `id`, `title`, `summary`, `lifecycleStatus`, `batch`, `semester`, `milestoneDate`, `progressPercent`, `healthNote`, `lastActivityAt`
+  - `id`, `title`, `summary`, `lifecycleStatus`, `batch`, `semester`, `milestoneDate`, `progressPercent`, `healthNote`, `repositoryUrl`, `lastActivityAt`
 - `members[]`:
   - `id`, `firstName`, `lastName`, `email`, `registrationNumber`, `memberRole`
 - `milestones[]`:
@@ -176,6 +177,61 @@ Focused status update endpoint for quick header-level status changes.
 
 - Updates only project lifecycle status (+ `updatedAt`, `lastActivityAt`).
 - Returns refreshed project detail payload.
+
+---
+
+## PATCH /api/supervisor/projects/{projectId}/repository
+
+Adds, updates, or clears a project's GitHub repository URL.
+
+### Request fields
+
+- `repositoryUrl` (nullable)
+  - `null` clears the linked repository URL
+  - otherwise must match: `^https://github\.com/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$`
+  - max length: `500`
+
+### Validation messages
+
+- `Repository URL must be a valid GitHub repository URL (e.g., https://github.com/owner/repo)`
+- `Repository URL must not exceed 500 characters`
+
+### Example request
+
+```http
+PATCH /api/supervisor/projects/{projectId}/repository
+Content-Type: application/json
+
+{
+  "repositoryUrl": "https://github.com/team/project"
+}
+```
+
+To remove:
+
+```http
+PATCH /api/supervisor/projects/{projectId}/repository
+Content-Type: application/json
+
+{
+  "repositoryUrl": null
+}
+```
+
+### Behavior
+
+- Only supervisor-owned, non-deleted projects can be updated.
+- Not found, not owned, deleted, and malformed UUID all return `404 NOT_FOUND`.
+- Updates `updatedAt` and `lastActivityAt`.
+- Returns refreshed project detail payload, including `repositoryUrl`.
+
+### Status codes
+
+- `200 OK` - repository URL updated/cleared
+- `400 BAD_REQUEST` - validation failure
+- `401 UNAUTHORIZED` - not authenticated
+- `403 FORBIDDEN` - authenticated but not supervisor role
+- `404 NOT_FOUND` - project missing or not owned by authenticated supervisor
 
 ---
 

@@ -18,6 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -193,7 +194,11 @@ class LoginEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(response.getHeaders().getContentType()).isNotNull();
+        assertThat(response.getHeaders().getContentType().isCompatibleWith(MediaType.APPLICATION_JSON)).isTrue();
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().get("success")).isEqualTo(false);
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
         assertThat(response.getBody().get("message")).isEqualTo("Invalid email or password.");
     }
 
@@ -206,7 +211,11 @@ class LoginEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(response.getHeaders().getContentType()).isNotNull();
+        assertThat(response.getHeaders().getContentType().isCompatibleWith(MediaType.APPLICATION_JSON)).isTrue();
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().get("success")).isEqualTo(false);
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
         // Same message as wrong password — prevents user enumeration
         assertThat(response.getBody().get("message")).isEqualTo("Invalid email or password.");
     }
@@ -235,9 +244,9 @@ class LoginEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<Map<?, ?>>) response.getBody().get("details");
+        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
         assertThat(details).anyMatch(d -> "email".equals(d.get("field")));
     }
 
@@ -250,9 +259,9 @@ class LoginEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<Map<?, ?>>) response.getBody().get("details");
+        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
         assertThat(details).anyMatch(d -> "email".equals(d.get("field")));
     }
 
@@ -265,9 +274,9 @@ class LoginEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<Map<?, ?>>) response.getBody().get("details");
+        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
         assertThat(details).anyMatch(d -> "password".equals(d.get("field")));
     }
 
@@ -292,5 +301,10 @@ class LoginEndpointTest {
         user.setRegistrationNumber("CS/2021/001");
         user.setCreatedAt(Instant.now());
         userRepository.save(user);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> error(ResponseEntity<Map> response) {
+        return (Map<String, Object>) response.getBody().get("error");
     }
 }

@@ -8,6 +8,7 @@ import com.supervisesuite.backend.supervisor.dto.SupervisorDashboardDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
+import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
@@ -30,6 +31,12 @@ public interface SupervisorService {
         String authenticatedUserId,
         String projectId,
         UpdateSupervisorProjectStatusRequest request
+    );
+
+    SupervisorProjectDetailDto updateRepository(
+        String authenticatedUserId,
+        String projectId,
+        UpdateRepositoryRequest request
     );
 
     SupervisorProjectDetailDto addProjectMembers(

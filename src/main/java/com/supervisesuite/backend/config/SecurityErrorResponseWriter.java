@@ -1,24 +1,25 @@
 package com.supervisesuite.backend.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.supervisesuite.backend.common.error.ApiError;
+import com.supervisesuite.backend.common.api.ApiResponse;
+import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.common.error.ErrorCode;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.time.Instant;
-import java.util.List;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 
 /**
- * Writes a structured {@link ApiError} JSON response directly to the HTTP servlet
+ * Writes the unified API error envelope directly to the HTTP servlet
  * response, bypassing the Spring MVC dispatcher.
  *
  * <p>Needed by {@link SecurityConfig} because Spring Security's
  * {@code AuthenticationEntryPoint} and {@code AccessDeniedHandler} fire outside
  * the MVC filter chain, so {@link com.supervisesuite.backend.common.error.GlobalExceptionHandler}
  * is never invoked for these cases. Without this component, {@link SecurityConfig}
- * would have to build {@link ApiError} objects inline — duplicating error-construction
+ * would have to build error envelopes inline — duplicating error-construction
  * logic that belongs to the error layer.
  *
  * <p>Single Responsibility: this class owns exactly <em>one</em> concern —
@@ -28,54 +29,46 @@ import org.springframework.stereotype.Component;
 public class SecurityErrorResponseWriter {
 
     private final ObjectMapper objectMapper;
+    private final ApiResponseFactory apiResponseFactory;
 
-    public SecurityErrorResponseWriter(ObjectMapper objectMapper) {
+    public SecurityErrorResponseWriter(ObjectMapper objectMapper, ApiResponseFactory apiResponseFactory) {
         this.objectMapper = objectMapper;
+        this.apiResponseFactory = apiResponseFactory;
     }
 
     /**
-     * Builds an {@link ApiError} with the supplied fields and writes it as JSON
-     * to the given response.
+     * Builds a unified API error response and writes it as JSON.
      *
-     * @param response the HTTP response to write to
-     * @param status   the HTTP status code (e.g. 401, 403)
-     * @param error    the reason phrase (e.g. "Unauthorized")
-     * @param code     the application error code
-     * @param message  the human-readable message safe to surface to the client
-     * @param path     the request URI
+     * @param request  current HTTP request (used for meta.path/trace resolution)
+     * @param response HTTP response to write to
+     * @param status   HTTP status code (for example 401/403)
+     * @param code     application error code
+     * @param message  client-safe message
      * @throws IOException if writing to the response stream fails
      */
     public void write(
+        HttpServletRequest request,
         HttpServletResponse response,
-        int status,
-        String error,
+        HttpStatus status,
         ErrorCode code,
-        String message,
-        String path
+        String message
     ) throws IOException {
-        ApiError apiError = buildApiError(status, error, code, message, path);
-        response.setStatus(status);
+        if (response.isCommitted()) {
+            return;
+        }
+
+        ApiResponse<Void> apiErrorResponse = apiResponseFactory.errorBody(
+            status,
+            code,
+            message,
+            java.util.List.of(),
+            request
+        );
+
+        response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
-        objectMapper.writeValue(response.getWriter(), apiError);
-    }
-
-    private ApiError buildApiError(
-        int status,
-        String error,
-        ErrorCode code,
-        String message,
-        String path
-    ) {
-        ApiError apiError = new ApiError();
-        apiError.setTimestamp(Instant.now());
-        apiError.setStatus(status);
-        apiError.setError(error);
-        apiError.setCode(code.name());
-        apiError.setMessage(message);
-        apiError.setPath(path);
-        apiError.setTraceId(null);
-        apiError.setDetails(List.of());
-        return apiError;
+        objectMapper.writeValue(response.getWriter(), apiErrorResponse);
+        response.flushBuffer();
     }
 }

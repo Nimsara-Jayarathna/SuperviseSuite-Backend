@@ -135,7 +135,7 @@ class RegisterEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(REGISTER_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(response.getBody().get("code")).isEqualTo("CONFLICT");
+        assertThat(error(response).get("code")).isEqualTo("CONFLICT");
         assertThat(response.getBody().get("message").toString()).containsIgnoringCase("email");
     }
 
@@ -147,7 +147,7 @@ class RegisterEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(REGISTER_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(response.getBody().get("code")).isEqualTo("CONFLICT");
+        assertThat(error(response).get("code")).isEqualTo("CONFLICT");
         assertThat(response.getBody().get("message").toString()).containsIgnoringCase("registration number");
     }
 
@@ -162,9 +162,9 @@ class RegisterEndpointTest {
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<?>) response.getBody().get("details");
+        var details = (java.util.List<?>) error(response).get("details");
         assertThat(details).isNotEmpty();
     }
 
@@ -176,9 +176,9 @@ class RegisterEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(REGISTER_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<Map<?, ?>>) response.getBody().get("details");
+        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
         assertThat(details).anyMatch(d -> "email".equals(d.get("field")));
     }
 
@@ -190,9 +190,9 @@ class RegisterEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(REGISTER_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<Map<?, ?>>) response.getBody().get("details");
+        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
         assertThat(details).anyMatch(d -> "password".equals(d.get("field")));
     }
 
@@ -204,7 +204,7 @@ class RegisterEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(REGISTER_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        var details = (java.util.List<Map<?, ?>>) response.getBody().get("details");
+        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
         assertThat(details).anyMatch(d -> "firstName".equals(d.get("field")));
     }
 
@@ -216,7 +216,7 @@ class RegisterEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(REGISTER_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        var details = (java.util.List<Map<?, ?>>) response.getBody().get("details");
+        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
         assertThat(details).anyMatch(d -> "registrationNumber".equals(d.get("field")));
     }
 
@@ -264,5 +264,10 @@ class RegisterEndpointTest {
         user.setLastName("User");
         user.setCreatedAt(Instant.now());
         userRepository.save(user);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> error(ResponseEntity<Map> response) {
+        return (Map<String, Object>) response.getBody().get("error");
     }
 }

@@ -15,6 +15,7 @@ public class SupervisorProjectDetailDto {
     private LocalDate milestoneDate;
     private Integer progressPercent;
     private String healthNote;
+    private String repositoryUrl;
     private Instant lastActivityAt;
     private List<Member> members;
     private List<Milestone> milestones;
@@ -32,6 +33,7 @@ public class SupervisorProjectDetailDto {
         LocalDate milestoneDate,
         Integer progressPercent,
         String healthNote,
+        String repositoryUrl,
         Instant lastActivityAt,
         List<Member> members,
         List<Milestone> milestones
@@ -45,6 +47,7 @@ public class SupervisorProjectDetailDto {
         this.milestoneDate = milestoneDate;
         this.progressPercent = progressPercent;
         this.healthNote = healthNote;
+        this.repositoryUrl = repositoryUrl;
         this.lastActivityAt = lastActivityAt;
         this.members = members;
         this.milestones = milestones;
@@ -120,6 +123,14 @@ public class SupervisorProjectDetailDto {
 
     public void setHealthNote(String healthNote) {
         this.healthNote = healthNote;
+    }
+
+    public String getRepositoryUrl() {
+        return repositoryUrl;
+    }
+
+    public void setRepositoryUrl(String repositoryUrl) {
+        this.repositoryUrl = repositoryUrl;
     }
 
     public Instant getLastActivityAt() {

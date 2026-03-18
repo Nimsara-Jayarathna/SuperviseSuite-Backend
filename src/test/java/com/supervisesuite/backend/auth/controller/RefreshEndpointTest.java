@@ -157,7 +157,7 @@ class RefreshEndpointTest {
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     @Test
@@ -165,7 +165,7 @@ class RefreshEndpointTest {
         ResponseEntity<Map> response = postWithRefreshCookie("completely-invalid-token");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     @Test
@@ -176,7 +176,7 @@ class RefreshEndpointTest {
         ResponseEntity<Map> response = postWithRefreshCookie(rawToken);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     @Test
@@ -208,7 +208,7 @@ class RefreshEndpointTest {
         ResponseEntity<Map> response = postWithRefreshCookie(rawToken);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     // -------------------------------------------------------------------------
@@ -243,5 +243,10 @@ class RefreshEndpointTest {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> error(ResponseEntity<Map> response) {
+        return (Map<String, Object>) response.getBody().get("error");
     }
 }

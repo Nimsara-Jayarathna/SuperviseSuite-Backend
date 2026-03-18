@@ -16,6 +16,7 @@ public class StudentProjectDetailDto {
     private Instant lastActivityAt;
     private Integer progressPercent;
     private String healthNote;
+    private String repositoryUrl;
     private List<Member> members;
     private List<Milestone> milestones;
 
@@ -33,6 +34,7 @@ public class StudentProjectDetailDto {
         Instant lastActivityAt,
         Integer progressPercent,
         String healthNote,
+        String repositoryUrl,
         List<Member> members,
         List<Milestone> milestones
     ) {
@@ -46,6 +48,7 @@ public class StudentProjectDetailDto {
         this.lastActivityAt = lastActivityAt;
         this.progressPercent = progressPercent;
         this.healthNote = healthNote;
+        this.repositoryUrl = repositoryUrl;
         this.members = members;
         this.milestones = milestones;
     }
@@ -128,6 +131,14 @@ public class StudentProjectDetailDto {
 
     public void setHealthNote(String healthNote) {
         this.healthNote = healthNote;
+    }
+
+    public String getRepositoryUrl() {
+        return repositoryUrl;
+    }
+
+    public void setRepositoryUrl(String repositoryUrl) {
+        this.repositoryUrl = repositoryUrl;
     }
 
     public List<Member> getMembers() {
