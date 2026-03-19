@@ -11,6 +11,7 @@ import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
+import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
 import java.util.List;
 
 public interface SupervisorService {
@@ -19,6 +20,8 @@ public interface SupervisorService {
     List<SupervisorProjectSummaryDto> getProjects(String authenticatedUserId);
 
     SupervisorProjectDetailDto getProjectById(String authenticatedUserId, String projectId);
+
+    ProjectCommitActivityDto getProjectCommitActivity(String authenticatedUserId, String projectId);
 
     SupervisorProjectDetailDto updateProject(
         String authenticatedUserId,

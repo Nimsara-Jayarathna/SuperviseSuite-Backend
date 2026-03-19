@@ -12,6 +12,8 @@ import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
+import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
+import com.supervisesuite.backend.projects.service.ProjectService;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -29,17 +31,19 @@ class StudentServiceImpl implements StudentService {
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectRepository projectRepository;
     private final ProjectMilestoneRepository projectMilestoneRepository;
-
+    private final ProjectService projectService;
     StudentServiceImpl(
-        UserRepository userRepository,
-        ProjectMemberRepository projectMemberRepository,
-        ProjectRepository projectRepository,
-        ProjectMilestoneRepository projectMilestoneRepository
-    ) {
-        this.userRepository = userRepository;
-        this.projectMemberRepository = projectMemberRepository;
-        this.projectRepository = projectRepository;
-        this.projectMilestoneRepository = projectMilestoneRepository;
+         UserRepository userRepository,
+         ProjectMemberRepository projectMemberRepository,
+         ProjectRepository projectRepository,
+         ProjectMilestoneRepository projectMilestoneRepository,
+         ProjectService projectService
+) {
+         this.userRepository = userRepository;
+         this.projectMemberRepository = projectMemberRepository;
+         this.projectRepository = projectRepository;
+         this.projectMilestoneRepository = projectMilestoneRepository;
+         this.projectService = projectService;
     }
 
     @Override
@@ -114,6 +118,27 @@ class StudentServiceImpl implements StudentService {
             milestones
         );
     }
+
+    @Override
+@Transactional(readOnly = true)
+public ProjectCommitActivityDto getProjectCommits(String authenticatedUserId, String projectId) {
+    User student = resolveStudent(authenticatedUserId);
+    UUID parsedProjectId = parseProjectId(projectId);
+
+    boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
+        student.getId(),
+        parsedProjectId,
+        Roles.STUDENT
+    );
+    if (!hasAccess) {
+        throw new EntityNotFoundException();
+    }
+
+    Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
+        .orElseThrow(EntityNotFoundException::new);
+
+    return projectService.getCommitActivity(project.getRepositoryUrl());
+}
 
     private User resolveStudent(String authenticatedUserId) {
         UUID studentId;

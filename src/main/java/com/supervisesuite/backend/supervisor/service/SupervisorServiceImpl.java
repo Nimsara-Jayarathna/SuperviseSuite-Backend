@@ -35,7 +35,8 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
+import com.supervisesuite.backend.projects.service.ProjectService;
 @Service
 class SupervisorServiceImpl implements SupervisorService {
 
@@ -60,18 +61,21 @@ class SupervisorServiceImpl implements SupervisorService {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectMilestoneRepository projectMilestoneRepository;
+    private final ProjectService projectService;
 
-    SupervisorServiceImpl(
-        UserRepository userRepository,
-        ProjectRepository projectRepository,
-        ProjectMemberRepository projectMemberRepository,
-        ProjectMilestoneRepository projectMilestoneRepository
-    ) {
-        this.userRepository = userRepository;
-        this.projectRepository = projectRepository;
-        this.projectMemberRepository = projectMemberRepository;
-        this.projectMilestoneRepository = projectMilestoneRepository;
-    }
+SupervisorServiceImpl(
+    UserRepository userRepository,
+    ProjectRepository projectRepository,
+    ProjectMemberRepository projectMemberRepository,
+    ProjectMilestoneRepository projectMilestoneRepository,
+    ProjectService projectService
+) {
+    this.userRepository = userRepository;
+    this.projectRepository = projectRepository;
+    this.projectMemberRepository = projectMemberRepository;
+    this.projectMilestoneRepository = projectMilestoneRepository;
+    this.projectService = projectService;
+}
 
     @Override
     @Transactional(readOnly = true)
@@ -405,6 +409,19 @@ class SupervisorServiceImpl implements SupervisorService {
             )
         );
     }
+
+    @Override
+@Transactional(readOnly = true)
+public ProjectCommitActivityDto getProjectCommitActivity(String authenticatedUserId, String projectId) {
+    User supervisor = resolveSupervisor(authenticatedUserId);
+    UUID parsedProjectId = parseProjectId(projectId);
+
+    Project project = projectRepository
+        .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+        .orElseThrow(EntityNotFoundException::new);
+
+    return projectService.getCommitActivity(project.getRepositoryUrl());
+}
 
     private SupervisorProjectDetailDto toProjectDetail(Project project) {
         return new SupervisorProjectDetailDto(
