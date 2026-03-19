@@ -1,5 +1,7 @@
 package com.supervisesuite.backend.projects.service;
 
+import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
+
 public interface ProjectService {
-    // TODO: Add project service methods.
+    ProjectCommitActivityDto getCommitActivity(String repositoryUrl);
 }
