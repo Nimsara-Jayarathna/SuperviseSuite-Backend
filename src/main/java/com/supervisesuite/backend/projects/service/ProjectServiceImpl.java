@@ -2,6 +2,7 @@ package com.supervisesuite.backend.projects.service;
 
 import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
 import com.supervisesuite.backend.projects.integration.github.GitHubCommitClient;
+import java.util.List;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -16,7 +17,7 @@ class ProjectServiceImpl implements ProjectService {
     @Override
     public ProjectCommitActivityDto getCommitActivity(String repositoryUrl) {
         if (repositoryUrl == null || repositoryUrl.isBlank()) {
-            return new ProjectCommitActivityDto(false, java.util.List.of());
+            return new ProjectCommitActivityDto(false, List.of());
         }
 
         return new ProjectCommitActivityDto(true, gitHubCommitClient.fetchRecentCommits(repositoryUrl));
