@@ -27,11 +27,12 @@ import com.supervisesuite.backend.users.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Comparator;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -374,8 +375,13 @@ class SupervisorServiceImpl implements SupervisorService {
     ) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         List<User> students = resolveStudents(request.getStudentIds());
+        List<CreateSupervisorProjectRequest.InitialMilestone> requestedMilestones = request.getMilestones();
 
         Instant now = Instant.now();
+        LocalDate earliestMilestoneDate = requestedMilestones.stream()
+            .map(CreateSupervisorProjectRequest.InitialMilestone::getDueDate)
+            .min(Comparator.naturalOrder())
+            .orElseThrow();
 
         Project project = new Project();
         project.setCreatedAt(now);
@@ -386,7 +392,7 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setStatus(DEFAULT_LIFECYCLE_STATUS);
         project.setProgressPercent(0);
         project.setHealthNote(null);
-        project.setMilestoneDate(request.getMilestone().getDueDate());
+        project.setMilestoneDate(earliestMilestoneDate);
         project.setLastActivityAt(now);
         project.setSupervisor(supervisor);
 
@@ -397,17 +403,22 @@ class SupervisorServiceImpl implements SupervisorService {
             projectMemberRepository.save(buildProjectMember(savedProject.getId(), student.getId(), Roles.STUDENT, now));
         }
 
-        ProjectMilestone milestone = new ProjectMilestone();
-        milestone.setProjectId(savedProject.getId());
-        milestone.setTitle(request.getMilestone().getTitle().trim());
-        milestone.setDescription(trimToNull(request.getMilestone().getDescription()));
-        milestone.setDueDate(request.getMilestone().getDueDate());
-        milestone.setStatus(DEFAULT_MILESTONE_STATUS);
-        milestone.setSequenceNo(1);
-        milestone.setCreatedBy(supervisor.getId());
-        milestone.setCreatedAt(now);
+        List<CreateSupervisorProjectResponse.Milestone> milestones = new ArrayList<>();
+        int sequenceNo = 1;
+        for (CreateSupervisorProjectRequest.InitialMilestone requestMilestone : requestedMilestones) {
+            ProjectMilestone milestone = new ProjectMilestone();
+            milestone.setProjectId(savedProject.getId());
+            milestone.setTitle(requestMilestone.getTitle().trim());
+            milestone.setDescription(trimToNull(requestMilestone.getDescription()));
+            milestone.setDueDate(requestMilestone.getDueDate());
+            milestone.setStatus(DEFAULT_MILESTONE_STATUS);
+            milestone.setSequenceNo(sequenceNo++);
+            milestone.setCreatedBy(supervisor.getId());
+            milestone.setCreatedAt(now);
 
-        ProjectMilestone savedMilestone = projectMilestoneRepository.save(milestone);
+            ProjectMilestone savedMilestone = projectMilestoneRepository.save(milestone);
+            milestones.add(toCreateMilestone(savedMilestone));
+        }
 
         return new CreateSupervisorProjectResponse(
             savedProject.getId(),
@@ -419,14 +430,7 @@ class SupervisorServiceImpl implements SupervisorService {
             savedProject.getProgressPercent(),
             savedProject.getMilestoneDate(),
             students.stream().map(this::toStudentAssignment).toList(),
-            new CreateSupervisorProjectResponse.Milestone(
-                savedMilestone.getId(),
-                savedMilestone.getTitle(),
-                savedMilestone.getDescription(),
-                savedMilestone.getDueDate(),
-                savedMilestone.getStatus(),
-                savedMilestone.getSequenceNo()
-            )
+            milestones
         );
     }
 
@@ -539,6 +543,17 @@ class SupervisorServiceImpl implements SupervisorService {
             user.getLastName(),
             user.getEmail(),
             user.getRegistrationNumber()
+        );
+    }
+
+    private CreateSupervisorProjectResponse.Milestone toCreateMilestone(ProjectMilestone milestone) {
+        return new CreateSupervisorProjectResponse.Milestone(
+            milestone.getId(),
+            milestone.getTitle(),
+            milestone.getDescription(),
+            milestone.getDueDate(),
+            milestone.getStatus(),
+            milestone.getSequenceNo()
         );
     }
 
