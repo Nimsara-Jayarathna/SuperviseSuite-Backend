@@ -83,6 +83,8 @@ Returns one supervisor-owned project detail record.
 
 - core fields:
   - `id`, `title`, `summary`, `lifecycleStatus`, `batch`, `semester`, `milestoneDate`, `progressPercent`, `healthNote`, `repositoryUrl`, `lastActivityAt`
+- `leader` (nullable):
+  - `id`, `firstName`, `lastName`, `email`, `registrationNumber`
 - `members[]`:
   - `id`, `firstName`, `lastName`, `email`, `registrationNumber`, `memberRole`
 - `milestones[]`:
@@ -119,7 +121,7 @@ Searches registered users with role `STUDENT`.
 
 ## POST /api/supervisor/projects
 
-Creates project + memberships + initial milestone in one transaction.
+Creates project + memberships + initial milestones in one transaction.
 
 ### Request fields
 
@@ -128,7 +130,10 @@ Creates project + memberships + initial milestone in one transaction.
 - `batch` (required)
 - `semester` (required)
 - `studentIds[]` (required, non-empty, unique)
-- `milestone`:
+- `leaderStudentId` (optional, nullable)
+  - when present, must be one of `studentIds[]`
+- `milestones[]` (required, non-empty)
+  - each milestone:
   - `title` (required)
   - `description` (optional)
   - `dueDate` (required)
@@ -138,10 +143,16 @@ Creates project + memberships + initial milestone in one transaction.
 - `lifecycleStatus = PLANNING`
 - `progressPercent = 0`
 - `healthNote = null`
-- first milestone:
+- each initial milestone:
   - `status = PLANNED`
-  - `sequenceNo = 1`
-- project `milestoneDate = initial milestone dueDate`
+  - `sequenceNo` starts at `1` and increments in request order
+- project `milestoneDate = earliest dueDate among milestones[]`
+
+### Response highlights
+
+- Returns assigned students in `students[]`.
+- Returns selected leader in `leader` (nullable).
+- Returns all created milestones in `milestones[]`.
 
 ---
 
@@ -157,6 +168,8 @@ Updates core project fields used by overview edit.
 - `semester` (required)
 - `lifecycleStatus` (required, one of `PLANNING|ACTIVE|AT_RISK|BEHIND|COMPLETED`)
 - `healthNote` (optional nullable string)
+- `leaderStudentId` (optional nullable UUID)
+  - when present, must refer to an already assigned project student member
 
 ### Behavior
 
@@ -272,6 +285,7 @@ Adds a new project milestone.
 - `status` defaults to `PLANNED`.
 - `sequenceNo` is auto-assigned as `(max existing sequenceNo + 1)`; starts at `1`.
 - Updates project `milestoneDate` to the added milestone’s due date.
+- Recalculates and persists project `progressPercent` using milestone statuses.
 - Updates `updatedAt` and `lastActivityAt`.
 - Returns refreshed project detail payload.
 
@@ -291,6 +305,7 @@ Updates one milestone.
 ### Behavior
 
 - Updates milestone `updatedAt`.
+- Recalculates and persists project `progressPercent` using milestone statuses.
 - Updates project `updatedAt` and `lastActivityAt`.
 - Returns refreshed project detail payload.
 

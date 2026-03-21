@@ -68,6 +68,18 @@
   - FK to `users.id` for `created_by`
   - Unique per project milestone order: `(project_id, sequence_no)`
 
+## 2026-03-21 — Project leader assignment
+
+### V4__project_leader_assignment.sql
+
+- **`projects`** updated:
+  - Added column:
+    - `leader_user_id UUID NULL`
+  - Added constraints:
+    - `fk_projects_leader_user`: `leader_user_id` -> `users.id`
+  - Added indexes:
+    - `idx_projects_leader_user_id`
+
 ## Rules for Next Migrations
 
 - Use versioned files: `V{number}__{description}.sql`

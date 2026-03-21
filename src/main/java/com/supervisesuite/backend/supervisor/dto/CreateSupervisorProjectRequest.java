@@ -24,9 +24,11 @@ public class CreateSupervisorProjectRequest {
     @NotEmpty(message = "At least one student must be selected.")
     private List<@NotNull(message = "Student ID is required.") UUID> studentIds;
 
+    private UUID leaderStudentId;
+
     @Valid
-    @NotNull(message = "An initial milestone is required.")
-    private InitialMilestone milestone;
+    @NotEmpty(message = "At least one milestone is required.")
+    private List<@NotNull(message = "Milestone is required.") InitialMilestone> milestones;
 
     public String getTitle() {
         return title;
@@ -68,12 +70,20 @@ public class CreateSupervisorProjectRequest {
         this.studentIds = studentIds;
     }
 
-    public InitialMilestone getMilestone() {
-        return milestone;
+    public UUID getLeaderStudentId() {
+        return leaderStudentId;
     }
 
-    public void setMilestone(InitialMilestone milestone) {
-        this.milestone = milestone;
+    public void setLeaderStudentId(UUID leaderStudentId) {
+        this.leaderStudentId = leaderStudentId;
+    }
+
+    public List<InitialMilestone> getMilestones() {
+        return milestones;
+    }
+
+    public void setMilestones(List<InitialMilestone> milestones) {
+        this.milestones = milestones;
     }
 
     public static class InitialMilestone {

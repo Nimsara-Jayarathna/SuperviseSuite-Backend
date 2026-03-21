@@ -27,11 +27,13 @@ import com.supervisesuite.backend.users.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Comparator;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -42,6 +44,8 @@ class SupervisorServiceImpl implements SupervisorService {
 
     private static final String DEFAULT_LIFECYCLE_STATUS = "PLANNING";
     private static final String DEFAULT_MILESTONE_STATUS = "PLANNED";
+    private static final String CANCELLED_MILESTONE_STATUS = "CANCELLED";
+    private static final String COMPLETED_MILESTONE_STATUS = "COMPLETED";
     private static final Set<String> ALLOWED_LIFECYCLE_STATUSES = Set.of(
         "PLANNING",
         "ACTIVE",
@@ -186,6 +190,10 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setSemester(request.getSemester().trim());
         project.setStatus(lifecycleStatus);
         project.setHealthNote(trimToNull(request.getHealthNote()));
+        if (request.getLeaderStudentId() != null) {
+            validateLeaderAssignment(project.getId(), request.getLeaderStudentId());
+            project.setLeaderUserId(request.getLeaderStudentId());
+        }
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
 
@@ -304,6 +312,7 @@ class SupervisorServiceImpl implements SupervisorService {
         milestone.setCreatedAt(now);
         projectMilestoneRepository.save(milestone);
 
+        refreshProjectProgressPercent(project);
         project.setUpdatedAt(now);
         project.setMilestoneDate(request.getDueDate());
         project.setLastActivityAt(now);
@@ -344,6 +353,7 @@ class SupervisorServiceImpl implements SupervisorService {
         milestone.setUpdatedAt(now);
         projectMilestoneRepository.save(milestone);
 
+        refreshProjectProgressPercent(project);
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
         projectRepository.save(project);
@@ -374,8 +384,13 @@ class SupervisorServiceImpl implements SupervisorService {
     ) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         List<User> students = resolveStudents(request.getStudentIds());
+        List<CreateSupervisorProjectRequest.InitialMilestone> requestedMilestones = request.getMilestones();
 
         Instant now = Instant.now();
+        LocalDate earliestMilestoneDate = requestedMilestones.stream()
+            .map(CreateSupervisorProjectRequest.InitialMilestone::getDueDate)
+            .min(Comparator.naturalOrder())
+            .orElseThrow();
 
         Project project = new Project();
         project.setCreatedAt(now);
@@ -386,7 +401,8 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setStatus(DEFAULT_LIFECYCLE_STATUS);
         project.setProgressPercent(0);
         project.setHealthNote(null);
-        project.setMilestoneDate(request.getMilestone().getDueDate());
+        project.setLeaderUserId(resolveLeaderForCreate(request.getLeaderStudentId(), students));
+        project.setMilestoneDate(earliestMilestoneDate);
         project.setLastActivityAt(now);
         project.setSupervisor(supervisor);
 
@@ -397,36 +413,38 @@ class SupervisorServiceImpl implements SupervisorService {
             projectMemberRepository.save(buildProjectMember(savedProject.getId(), student.getId(), Roles.STUDENT, now));
         }
 
-        ProjectMilestone milestone = new ProjectMilestone();
-        milestone.setProjectId(savedProject.getId());
-        milestone.setTitle(request.getMilestone().getTitle().trim());
-        milestone.setDescription(trimToNull(request.getMilestone().getDescription()));
-        milestone.setDueDate(request.getMilestone().getDueDate());
-        milestone.setStatus(DEFAULT_MILESTONE_STATUS);
-        milestone.setSequenceNo(1);
-        milestone.setCreatedBy(supervisor.getId());
-        milestone.setCreatedAt(now);
+        List<CreateSupervisorProjectResponse.Milestone> milestones = new ArrayList<>();
+        int sequenceNo = 1;
+        for (CreateSupervisorProjectRequest.InitialMilestone requestMilestone : requestedMilestones) {
+            ProjectMilestone milestone = new ProjectMilestone();
+            milestone.setProjectId(savedProject.getId());
+            milestone.setTitle(requestMilestone.getTitle().trim());
+            milestone.setDescription(trimToNull(requestMilestone.getDescription()));
+            milestone.setDueDate(requestMilestone.getDueDate());
+            milestone.setStatus(DEFAULT_MILESTONE_STATUS);
+            milestone.setSequenceNo(sequenceNo++);
+            milestone.setCreatedBy(supervisor.getId());
+            milestone.setCreatedAt(now);
 
-        ProjectMilestone savedMilestone = projectMilestoneRepository.save(milestone);
+            ProjectMilestone savedMilestone = projectMilestoneRepository.save(milestone);
+            milestones.add(toCreateMilestone(savedMilestone));
+        }
+
+        refreshProjectProgressPercent(savedProject);
+        Project updatedProject = projectRepository.save(savedProject);
 
         return new CreateSupervisorProjectResponse(
-            savedProject.getId(),
-            savedProject.getName(),
-            savedProject.getDescription(),
-            savedProject.getBatch(),
-            savedProject.getSemester(),
-            savedProject.getStatus(),
-            savedProject.getProgressPercent(),
-            savedProject.getMilestoneDate(),
+            updatedProject.getId(),
+            updatedProject.getName(),
+            updatedProject.getDescription(),
+            updatedProject.getBatch(),
+            updatedProject.getSemester(),
+            updatedProject.getStatus(),
+            updatedProject.getProgressPercent(),
+            updatedProject.getMilestoneDate(),
             students.stream().map(this::toStudentAssignment).toList(),
-            new CreateSupervisorProjectResponse.Milestone(
-                savedMilestone.getId(),
-                savedMilestone.getTitle(),
-                savedMilestone.getDescription(),
-                savedMilestone.getDueDate(),
-                savedMilestone.getStatus(),
-                savedMilestone.getSequenceNo()
-            )
+            toCreateLeaderAssignment(updatedProject.getLeaderUserId()),
+            milestones
         );
     }
 
@@ -443,6 +461,7 @@ class SupervisorServiceImpl implements SupervisorService {
             project.getHealthNote(),
             project.getRepositoryUrl(),
             project.getLastActivityAt(),
+            toDetailLeader(project.getLeaderUserId()),
             getProjectMembers(project.getId()),
             getProjectMilestones(project.getId())
         );
@@ -542,6 +561,26 @@ class SupervisorServiceImpl implements SupervisorService {
         );
     }
 
+    private CreateSupervisorProjectResponse.StudentAssignment toCreateLeaderAssignment(UUID leaderUserId) {
+        if (leaderUserId == null) {
+            return null;
+        }
+        return userRepository.findById(leaderUserId)
+            .map(this::toStudentAssignment)
+            .orElse(null);
+    }
+
+    private CreateSupervisorProjectResponse.Milestone toCreateMilestone(ProjectMilestone milestone) {
+        return new CreateSupervisorProjectResponse.Milestone(
+            milestone.getId(),
+            milestone.getTitle(),
+            milestone.getDescription(),
+            milestone.getDueDate(),
+            milestone.getStatus(),
+            milestone.getSequenceNo()
+        );
+    }
+
     private SupervisorProjectSummaryDto toProjectSummary(Project project) {
         return new SupervisorProjectSummaryDto(
             project.getId(),
@@ -585,6 +624,25 @@ class SupervisorServiceImpl implements SupervisorService {
         );
     }
 
+    private SupervisorProjectDetailDto.Leader toDetailLeader(UUID leaderUserId) {
+        if (leaderUserId == null) {
+            return null;
+        }
+        return userRepository.findById(leaderUserId)
+            .map(this::toDetailLeader)
+            .orElse(null);
+    }
+
+    private SupervisorProjectDetailDto.Leader toDetailLeader(User user) {
+        return new SupervisorProjectDetailDto.Leader(
+            user.getId(),
+            user.getFirstName(),
+            user.getLastName(),
+            user.getEmail(),
+            user.getRegistrationNumber()
+        );
+    }
+
     private SupervisorProjectDetailDto.Milestone toDetailMilestone(ProjectMilestone milestone) {
         return new SupervisorProjectDetailDto.Milestone(
             milestone.getId(),
@@ -618,6 +676,60 @@ class SupervisorServiceImpl implements SupervisorService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private UUID resolveLeaderForCreate(UUID leaderStudentId, List<User> students) {
+        if (leaderStudentId == null) {
+            return null;
+        }
+
+        boolean leaderIncluded = students.stream()
+            .map(User::getId)
+            .anyMatch(id -> Objects.equals(id, leaderStudentId));
+        if (!leaderIncluded) {
+            throw new ValidationException(
+                "leaderStudentId",
+                "Leader must be one of the selected student members."
+            );
+        }
+
+        return leaderStudentId;
+    }
+
+    private void validateLeaderAssignment(UUID projectId, UUID leaderStudentId) {
+        boolean isStudentMember = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
+            leaderStudentId,
+            projectId,
+            Roles.STUDENT
+        );
+        if (!isStudentMember) {
+            throw new ValidationException(
+                "leaderStudentId",
+                "Leader must be an assigned student of this project."
+            );
+        }
+    }
+
+    private void refreshProjectProgressPercent(Project project) {
+        List<ProjectMilestone> milestones = projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(project.getId());
+        project.setProgressPercent(calculateProgressPercent(milestones));
+    }
+
+    private int calculateProgressPercent(List<ProjectMilestone> milestones) {
+        long activeMilestones = milestones.stream()
+            .filter(milestone -> !CANCELLED_MILESTONE_STATUS.equals(milestone.getStatus()))
+            .count();
+
+        if (activeMilestones == 0) {
+            return 0;
+        }
+
+        long completedMilestones = milestones.stream()
+            .filter(milestone -> !CANCELLED_MILESTONE_STATUS.equals(milestone.getStatus()))
+            .filter(milestone -> COMPLETED_MILESTONE_STATUS.equals(milestone.getStatus()))
+            .count();
+
+        return (int) Math.round((completedMilestones * 100.0) / activeMilestones);
     }
 
     private String validateLifecycleStatus(String rawStatus) {

@@ -68,6 +68,8 @@ public class Project {
     @Column(name = "repository_url", columnDefinition = "TEXT")
     private String repositoryUrl;
 
+    private UUID leaderUserId;
+
     private String jiraProjectKey;
 
     @Column(columnDefinition = "TEXT")
