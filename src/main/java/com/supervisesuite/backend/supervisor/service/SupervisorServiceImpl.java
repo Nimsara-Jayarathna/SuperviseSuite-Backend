@@ -43,6 +43,8 @@ class SupervisorServiceImpl implements SupervisorService {
 
     private static final String DEFAULT_LIFECYCLE_STATUS = "PLANNING";
     private static final String DEFAULT_MILESTONE_STATUS = "PLANNED";
+    private static final String CANCELLED_MILESTONE_STATUS = "CANCELLED";
+    private static final String COMPLETED_MILESTONE_STATUS = "COMPLETED";
     private static final Set<String> ALLOWED_LIFECYCLE_STATUSES = Set.of(
         "PLANNING",
         "ACTIVE",
@@ -305,6 +307,7 @@ class SupervisorServiceImpl implements SupervisorService {
         milestone.setCreatedAt(now);
         projectMilestoneRepository.save(milestone);
 
+        refreshProjectProgressPercent(project);
         project.setUpdatedAt(now);
         project.setMilestoneDate(request.getDueDate());
         project.setLastActivityAt(now);
@@ -345,6 +348,7 @@ class SupervisorServiceImpl implements SupervisorService {
         milestone.setUpdatedAt(now);
         projectMilestoneRepository.save(milestone);
 
+        refreshProjectProgressPercent(project);
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
         projectRepository.save(project);
@@ -420,15 +424,18 @@ class SupervisorServiceImpl implements SupervisorService {
             milestones.add(toCreateMilestone(savedMilestone));
         }
 
+        refreshProjectProgressPercent(savedProject);
+        Project updatedProject = projectRepository.save(savedProject);
+
         return new CreateSupervisorProjectResponse(
-            savedProject.getId(),
-            savedProject.getName(),
-            savedProject.getDescription(),
-            savedProject.getBatch(),
-            savedProject.getSemester(),
-            savedProject.getStatus(),
-            savedProject.getProgressPercent(),
-            savedProject.getMilestoneDate(),
+            updatedProject.getId(),
+            updatedProject.getName(),
+            updatedProject.getDescription(),
+            updatedProject.getBatch(),
+            updatedProject.getSemester(),
+            updatedProject.getStatus(),
+            updatedProject.getProgressPercent(),
+            updatedProject.getMilestoneDate(),
             students.stream().map(this::toStudentAssignment).toList(),
             milestones
         );
@@ -633,6 +640,28 @@ class SupervisorServiceImpl implements SupervisorService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void refreshProjectProgressPercent(Project project) {
+        List<ProjectMilestone> milestones = projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(project.getId());
+        project.setProgressPercent(calculateProgressPercent(milestones));
+    }
+
+    private int calculateProgressPercent(List<ProjectMilestone> milestones) {
+        long activeMilestones = milestones.stream()
+            .filter(milestone -> !CANCELLED_MILESTONE_STATUS.equals(milestone.getStatus()))
+            .count();
+
+        if (activeMilestones == 0) {
+            return 0;
+        }
+
+        long completedMilestones = milestones.stream()
+            .filter(milestone -> !CANCELLED_MILESTONE_STATUS.equals(milestone.getStatus()))
+            .filter(milestone -> COMPLETED_MILESTONE_STATUS.equals(milestone.getStatus()))
+            .count();
+
+        return (int) Math.round((completedMilestones * 100.0) / activeMilestones);
     }
 
     private String validateLifecycleStatus(String rawStatus) {
