@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
 
 @RestController
 @RequestMapping("/api/student")
@@ -45,5 +46,16 @@ public class StudentController {
     ) {
         StudentProjectDetailDto data = studentService.getProjectById(authentication.getName(), projectId);
         return apiResponseFactory.ok("Project loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/commits")
+    public ResponseEntity<ApiResponse<ProjectCommitActivityDto>> getProjectCommits(
+        Authentication authentication,
+        @PathVariable String projectId,
+        HttpServletRequest request
+    ) {
+        ProjectCommitActivityDto data = studentService.getProjectCommits(authentication.getName(), projectId);
+        String message = data.isRepositoryLinked() ? "Commit activity loaded." : "No repository connected.";
+        return apiResponseFactory.ok(message, data, request);
     }
 }

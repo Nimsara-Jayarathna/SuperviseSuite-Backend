@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
 
 @RestController
 @RequestMapping("/api/supervisor")
@@ -82,6 +83,20 @@ public class SupervisorController {
             data,
             request
         );
+    }
+
+    @GetMapping("/projects/{projectId}/commits")
+    public ResponseEntity<ApiResponse<ProjectCommitActivityDto>> getProjectCommits(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        ProjectCommitActivityDto data = supervisorService.getProjectCommitActivity(
+            authentication.getName(),
+            projectId
+        );
+        String message = data.isRepositoryLinked() ? "Commit activity loaded." : "No repository connected.";
+        return apiResponseFactory.ok(message, data, request);
     }
 
     @PostMapping("/projects")
