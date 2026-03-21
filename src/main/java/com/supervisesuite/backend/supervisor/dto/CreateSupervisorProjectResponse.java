@@ -14,6 +14,7 @@ public class CreateSupervisorProjectResponse {
     private Integer progressPercent;
     private LocalDate milestoneDate;
     private List<StudentAssignment> students;
+    private StudentAssignment leader;
     private List<Milestone> milestones;
 
     public CreateSupervisorProjectResponse() {
@@ -29,6 +30,7 @@ public class CreateSupervisorProjectResponse {
         Integer progressPercent,
         LocalDate milestoneDate,
         List<StudentAssignment> students,
+        StudentAssignment leader,
         List<Milestone> milestones
     ) {
         this.id = id;
@@ -40,6 +42,7 @@ public class CreateSupervisorProjectResponse {
         this.progressPercent = progressPercent;
         this.milestoneDate = milestoneDate;
         this.students = students;
+        this.leader = leader;
         this.milestones = milestones;
     }
 
@@ -113,6 +116,14 @@ public class CreateSupervisorProjectResponse {
 
     public void setStudents(List<StudentAssignment> students) {
         this.students = students;
+    }
+
+    public StudentAssignment getLeader() {
+        return leader;
+    }
+
+    public void setLeader(StudentAssignment leader) {
+        this.leader = leader;
     }
 
     public List<Milestone> getMilestones() {

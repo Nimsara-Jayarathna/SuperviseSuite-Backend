@@ -1,6 +1,7 @@
 package com.supervisesuite.backend.supervisor.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import java.util.UUID;
 
 public class UpdateSupervisorProjectRequest {
     @NotBlank(message = "Title is required.")
@@ -19,6 +20,7 @@ public class UpdateSupervisorProjectRequest {
     private String lifecycleStatus;
 
     private String healthNote;
+    private UUID leaderStudentId;
 
     public String getTitle() {
         return title;
@@ -66,5 +68,13 @@ public class UpdateSupervisorProjectRequest {
 
     public void setHealthNote(String healthNote) {
         this.healthNote = healthNote;
+    }
+
+    public UUID getLeaderStudentId() {
+        return leaderStudentId;
+    }
+
+    public void setLeaderStudentId(UUID leaderStudentId) {
+        this.leaderStudentId = leaderStudentId;
     }
 }

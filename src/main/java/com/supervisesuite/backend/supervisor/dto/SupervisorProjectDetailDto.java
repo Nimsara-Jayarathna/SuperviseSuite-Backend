@@ -17,6 +17,7 @@ public class SupervisorProjectDetailDto {
     private String healthNote;
     private String repositoryUrl;
     private Instant lastActivityAt;
+    private Leader leader;
     private List<Member> members;
     private List<Milestone> milestones;
 
@@ -35,6 +36,7 @@ public class SupervisorProjectDetailDto {
         String healthNote,
         String repositoryUrl,
         Instant lastActivityAt,
+        Leader leader,
         List<Member> members,
         List<Milestone> milestones
     ) {
@@ -49,6 +51,7 @@ public class SupervisorProjectDetailDto {
         this.healthNote = healthNote;
         this.repositoryUrl = repositoryUrl;
         this.lastActivityAt = lastActivityAt;
+        this.leader = leader;
         this.members = members;
         this.milestones = milestones;
     }
@@ -141,6 +144,14 @@ public class SupervisorProjectDetailDto {
         this.lastActivityAt = lastActivityAt;
     }
 
+    public Leader getLeader() {
+        return leader;
+    }
+
+    public void setLeader(Leader leader) {
+        this.leader = leader;
+    }
+
     public List<Member> getMembers() {
         return members;
     }
@@ -230,6 +241,71 @@ public class SupervisorProjectDetailDto {
 
         public void setMemberRole(String memberRole) {
             this.memberRole = memberRole;
+        }
+    }
+
+    public static class Leader {
+        private UUID id;
+        private String firstName;
+        private String lastName;
+        private String email;
+        private String registrationNumber;
+
+        public Leader() {
+        }
+
+        public Leader(
+            UUID id,
+            String firstName,
+            String lastName,
+            String email,
+            String registrationNumber
+        ) {
+            this.id = id;
+            this.firstName = firstName;
+            this.lastName = lastName;
+            this.email = email;
+            this.registrationNumber = registrationNumber;
+        }
+
+        public UUID getId() {
+            return id;
+        }
+
+        public void setId(UUID id) {
+            this.id = id;
+        }
+
+        public String getFirstName() {
+            return firstName;
+        }
+
+        public void setFirstName(String firstName) {
+            this.firstName = firstName;
+        }
+
+        public String getLastName() {
+            return lastName;
+        }
+
+        public void setLastName(String lastName) {
+            this.lastName = lastName;
+        }
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
+        }
+
+        public String getRegistrationNumber() {
+            return registrationNumber;
+        }
+
+        public void setRegistrationNumber(String registrationNumber) {
+            this.registrationNumber = registrationNumber;
         }
     }
 

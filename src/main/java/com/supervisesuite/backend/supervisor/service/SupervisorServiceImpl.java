@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -189,6 +190,10 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setSemester(request.getSemester().trim());
         project.setStatus(lifecycleStatus);
         project.setHealthNote(trimToNull(request.getHealthNote()));
+        if (request.getLeaderStudentId() != null) {
+            validateLeaderAssignment(project.getId(), request.getLeaderStudentId());
+            project.setLeaderUserId(request.getLeaderStudentId());
+        }
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
 
@@ -396,6 +401,7 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setStatus(DEFAULT_LIFECYCLE_STATUS);
         project.setProgressPercent(0);
         project.setHealthNote(null);
+        project.setLeaderUserId(resolveLeaderForCreate(request.getLeaderStudentId(), students));
         project.setMilestoneDate(earliestMilestoneDate);
         project.setLastActivityAt(now);
         project.setSupervisor(supervisor);
@@ -437,6 +443,7 @@ class SupervisorServiceImpl implements SupervisorService {
             updatedProject.getProgressPercent(),
             updatedProject.getMilestoneDate(),
             students.stream().map(this::toStudentAssignment).toList(),
+            toCreateLeaderAssignment(updatedProject.getLeaderUserId()),
             milestones
         );
     }
@@ -454,6 +461,7 @@ class SupervisorServiceImpl implements SupervisorService {
             project.getHealthNote(),
             project.getRepositoryUrl(),
             project.getLastActivityAt(),
+            toDetailLeader(project.getLeaderUserId()),
             getProjectMembers(project.getId()),
             getProjectMilestones(project.getId())
         );
@@ -553,6 +561,15 @@ class SupervisorServiceImpl implements SupervisorService {
         );
     }
 
+    private CreateSupervisorProjectResponse.StudentAssignment toCreateLeaderAssignment(UUID leaderUserId) {
+        if (leaderUserId == null) {
+            return null;
+        }
+        return userRepository.findById(leaderUserId)
+            .map(this::toStudentAssignment)
+            .orElse(null);
+    }
+
     private CreateSupervisorProjectResponse.Milestone toCreateMilestone(ProjectMilestone milestone) {
         return new CreateSupervisorProjectResponse.Milestone(
             milestone.getId(),
@@ -607,6 +624,25 @@ class SupervisorServiceImpl implements SupervisorService {
         );
     }
 
+    private SupervisorProjectDetailDto.Leader toDetailLeader(UUID leaderUserId) {
+        if (leaderUserId == null) {
+            return null;
+        }
+        return userRepository.findById(leaderUserId)
+            .map(this::toDetailLeader)
+            .orElse(null);
+    }
+
+    private SupervisorProjectDetailDto.Leader toDetailLeader(User user) {
+        return new SupervisorProjectDetailDto.Leader(
+            user.getId(),
+            user.getFirstName(),
+            user.getLastName(),
+            user.getEmail(),
+            user.getRegistrationNumber()
+        );
+    }
+
     private SupervisorProjectDetailDto.Milestone toDetailMilestone(ProjectMilestone milestone) {
         return new SupervisorProjectDetailDto.Milestone(
             milestone.getId(),
@@ -640,6 +676,38 @@ class SupervisorServiceImpl implements SupervisorService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private UUID resolveLeaderForCreate(UUID leaderStudentId, List<User> students) {
+        if (leaderStudentId == null) {
+            return null;
+        }
+
+        boolean leaderIncluded = students.stream()
+            .map(User::getId)
+            .anyMatch(id -> Objects.equals(id, leaderStudentId));
+        if (!leaderIncluded) {
+            throw new ValidationException(
+                "leaderStudentId",
+                "Leader must be one of the selected student members."
+            );
+        }
+
+        return leaderStudentId;
+    }
+
+    private void validateLeaderAssignment(UUID projectId, UUID leaderStudentId) {
+        boolean isStudentMember = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
+            leaderStudentId,
+            projectId,
+            Roles.STUDENT
+        );
+        if (!isStudentMember) {
+            throw new ValidationException(
+                "leaderStudentId",
+                "Leader must be an assigned student of this project."
+            );
+        }
     }
 
     private void refreshProjectProgressPercent(Project project) {
