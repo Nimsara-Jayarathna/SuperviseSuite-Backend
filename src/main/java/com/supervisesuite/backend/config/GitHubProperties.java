@@ -21,8 +21,4 @@ public class GitHubProperties {
      */
     private String token;
 
-    /**
-     * Max commits to retrieve per request.
-     */
-    private int commitLimit = 20;
 }

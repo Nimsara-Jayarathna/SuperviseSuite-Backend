@@ -47,6 +47,11 @@ class ProjectServiceImpl implements ProjectService {
             LOGGER.warn("Failed to fetch recent commits for {}", repositoryUrl, exception);
         }
 
-        return dashboardMapper.toDashboard(repositoryUrl, metadata, commits, Instant.now());
+        try {
+            return dashboardMapper.toDashboard(repositoryUrl, metadata, commits, Instant.now());
+        } catch (RuntimeException exception) {
+            LOGGER.error("Failed to build GitHub dashboard payload for {}", repositoryUrl, exception);
+            return dashboardMapper.toDashboard(repositoryUrl, metadata, List.of(), Instant.now());
+        }
     }
 }

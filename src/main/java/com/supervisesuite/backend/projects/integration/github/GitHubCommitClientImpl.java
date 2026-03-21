@@ -27,6 +27,7 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
     private static final String GITHUB_HOST_WWW = "www.github.com";
     private static final String GIT_SSH_PREFIX = "git@github.com:";
     private static final String USER_AGENT = "SuperviseSuite-Backend";
+    private static final int COMMITS_PAGE_SIZE = 100;
 
     private final RestClient restClient;
     private final GitHubProperties gitHubProperties;
@@ -43,30 +44,43 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
         RepositoryRef ref = parseRepositoryRef(repositoryUrl);
 
         try {
-            List<JsonNode> response = restClient
-                .get()
-                .uri(uriBuilder -> uriBuilder
-                    .path("/repos/{owner}/{repo}/commits")
-                    .queryParam("per_page", Math.max(1, gitHubProperties.getCommitLimit()))
-                    .build(ref.owner(), ref.repo()))
-                .headers(headers -> {
-                    headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-                    headers.add(HttpHeaders.USER_AGENT, USER_AGENT);
-                    if (hasText(gitHubProperties.getToken())) {
-                        headers.setBearerAuth(gitHubProperties.getToken().trim());
-                    }
-                })
-                .retrieve()
-                .body(new ParameterizedTypeReference<List<JsonNode>>() {});
-
-            if (response == null || response.isEmpty()) {
-                return List.of();
-            }
-
             List<ProjectCommitDto> commits = new ArrayList<>();
-            for (JsonNode node : response) {
-                commits.add(mapCommit(node));
+            int page = 1;
+
+            while (true) {
+                final int currentPage = page;
+                List<JsonNode> response = restClient
+                    .get()
+                    .uri(uriBuilder -> uriBuilder
+                        .path("/repos/{owner}/{repo}/commits")
+                        .queryParam("per_page", COMMITS_PAGE_SIZE)
+                        .queryParam("page", currentPage)
+                        .build(ref.owner(), ref.repo()))
+                    .headers(headers -> {
+                        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+                        headers.add(HttpHeaders.USER_AGENT, USER_AGENT);
+                        if (hasText(gitHubProperties.getToken())) {
+                            headers.setBearerAuth(gitHubProperties.getToken().trim());
+                        }
+                    })
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<JsonNode>>() {});
+
+                if (response == null || response.isEmpty()) {
+                    break;
+                }
+
+                for (JsonNode node : response) {
+                    commits.add(mapCommit(node));
+                }
+
+                if (response.size() < COMMITS_PAGE_SIZE) {
+                    break;
+                }
+
+                page++;
             }
+
             return commits;
         } catch (RestClientResponseException | ResourceAccessException exception) {
             throw new ServiceUnavailableException(

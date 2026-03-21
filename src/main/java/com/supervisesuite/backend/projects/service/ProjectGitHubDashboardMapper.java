@@ -39,7 +39,9 @@ class ProjectGitHubDashboardMapper {
         List<ProjectCommitDto> commits,
         Instant now
     ) {
-        List<ProjectCommitDto> safeCommits = commits == null ? List.of() : commits;
+        List<ProjectCommitDto> safeCommits = commits == null
+            ? List.of()
+            : commits.stream().filter(commit -> commit != null).toList();
         List<ProjectCommitDto> newestFirstCommits = safeCommits.stream()
             .sorted(Comparator.comparing(ProjectCommitDto::getCommittedAt, Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
