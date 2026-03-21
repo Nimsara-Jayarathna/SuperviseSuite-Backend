@@ -134,6 +134,16 @@ public class SupervisorController {
         return apiResponseFactory.ok("GitHub contributors page loaded.", data, request);
     }
 
+    @PostMapping("/projects/{projectId}/github/refresh")
+    public ResponseEntity<ApiResponse<Void>> refreshProjectGitHub(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        supervisorService.refreshProjectGitHubData(authentication.getName(), projectId);
+        return apiResponseFactory.ok("GitHub data refreshed successfully.", null, request);
+    }
+
     @PostMapping("/projects")
     public ResponseEntity<ApiResponse<CreateSupervisorProjectResponse>> createProject(
         Authentication authentication,

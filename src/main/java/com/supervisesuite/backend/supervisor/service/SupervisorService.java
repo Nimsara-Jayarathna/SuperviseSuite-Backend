@@ -39,6 +39,8 @@ public interface SupervisorService {
         int size
     );
 
+    void refreshProjectGitHubData(String authenticatedUserId, String projectId);
+
     SupervisorProjectDetailDto updateProject(
         String authenticatedUserId,
         String projectId,

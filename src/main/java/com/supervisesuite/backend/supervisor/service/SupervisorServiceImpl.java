@@ -455,7 +455,7 @@ SupervisorServiceImpl(
 
     @Override
 @Transactional(readOnly = true)
-public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedUserId, String projectId) {
+    public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedUserId, String projectId) {
     User supervisor = resolveSupervisor(authenticatedUserId);
     UUID parsedProjectId = parseProjectId(projectId);
 
@@ -481,7 +481,7 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedU
             .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
             .orElseThrow(EntityNotFoundException::new);
 
-        return projectService.getGitHubActivityPage(project.getRepositoryUrl(), page, size);
+        return projectService.getGitHubActivityPage(project.getId(), project.getRepositoryUrl(), page, size);
     }
 
     @Override
@@ -499,7 +499,20 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedU
             .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
             .orElseThrow(EntityNotFoundException::new);
 
-        return projectService.getGitHubContributorsPage(project.getRepositoryUrl(), page, size);
+        return projectService.getGitHubContributorsPage(project.getId(), project.getRepositoryUrl(), page, size);
+    }
+
+    @Override
+    @Transactional
+    public void refreshProjectGitHubData(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        projectService.refreshGitHubData(project.getId(), project.getRepositoryUrl());
     }
 
     private SupervisorProjectDetailDto toProjectDetail(Project project) {
@@ -514,6 +527,7 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedU
             project.getProgressPercent(),
             project.getHealthNote(),
             project.getRepositoryUrl(),
+            projectService.getGitHubPreview(project.getId(), project.getRepositoryUrl()),
             project.getLastActivityAt(),
             toDetailLeader(project.getLeaderUserId()),
             getProjectMembers(project.getId()),

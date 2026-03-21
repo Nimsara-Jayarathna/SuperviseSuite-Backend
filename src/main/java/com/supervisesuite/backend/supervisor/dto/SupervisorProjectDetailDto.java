@@ -1,5 +1,6 @@
 package com.supervisesuite.backend.supervisor.dto;
 
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -16,6 +17,7 @@ public class SupervisorProjectDetailDto {
     private Integer progressPercent;
     private String healthNote;
     private String repositoryUrl;
+    private ProjectGitHubPreviewDto github;
     private Instant lastActivityAt;
     private Leader leader;
     private List<Member> members;
@@ -35,6 +37,7 @@ public class SupervisorProjectDetailDto {
         Integer progressPercent,
         String healthNote,
         String repositoryUrl,
+        ProjectGitHubPreviewDto github,
         Instant lastActivityAt,
         Leader leader,
         List<Member> members,
@@ -50,6 +53,7 @@ public class SupervisorProjectDetailDto {
         this.progressPercent = progressPercent;
         this.healthNote = healthNote;
         this.repositoryUrl = repositoryUrl;
+        this.github = github;
         this.lastActivityAt = lastActivityAt;
         this.leader = leader;
         this.members = members;
@@ -142,6 +146,14 @@ public class SupervisorProjectDetailDto {
 
     public void setLastActivityAt(Instant lastActivityAt) {
         this.lastActivityAt = lastActivityAt;
+    }
+
+    public ProjectGitHubPreviewDto getGithub() {
+        return github;
+    }
+
+    public void setGithub(ProjectGitHubPreviewDto github) {
+        this.github = github;
     }
 
     public Leader getLeader() {

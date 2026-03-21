@@ -6,15 +6,17 @@ public class ProjectGitHubPageDto<T> {
     private List<T> items;
     private int page;
     private int size;
+    private long total;
     private boolean hasMore;
 
     public ProjectGitHubPageDto() {
     }
 
-    public ProjectGitHubPageDto(List<T> items, int page, int size, boolean hasMore) {
+    public ProjectGitHubPageDto(List<T> items, int page, int size, long total, boolean hasMore) {
         this.items = items;
         this.page = page;
         this.size = size;
+        this.total = total;
         this.hasMore = hasMore;
     }
 
@@ -40,6 +42,14 @@ public class ProjectGitHubPageDto<T> {
 
     public void setSize(int size) {
         this.size = size;
+    }
+
+    public long getTotal() {
+        return total;
+    }
+
+    public void setTotal(long total) {
+        this.total = total;
     }
 
     public boolean isHasMore() {

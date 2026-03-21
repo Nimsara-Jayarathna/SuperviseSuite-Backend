@@ -116,6 +116,7 @@ class StudentServiceImpl implements StudentService {
             project.getProgressPercent(),
             project.getHealthNote(),
             project.getRepositoryUrl(),
+            projectService.getGitHubPreview(project.getId(), project.getRepositoryUrl()),
             members,
             milestones
         );
@@ -165,7 +166,7 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedU
         Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
             .orElseThrow(EntityNotFoundException::new);
 
-        return projectService.getGitHubActivityPage(project.getRepositoryUrl(), page, size);
+        return projectService.getGitHubActivityPage(project.getId(), project.getRepositoryUrl(), page, size);
     }
 
     @Override
@@ -191,7 +192,7 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedU
         Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
             .orElseThrow(EntityNotFoundException::new);
 
-        return projectService.getGitHubContributorsPage(project.getRepositoryUrl(), page, size);
+        return projectService.getGitHubContributorsPage(project.getId(), project.getRepositoryUrl(), page, size);
     }
 
     private User resolveStudent(String authenticatedUserId) {
