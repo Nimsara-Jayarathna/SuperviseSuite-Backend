@@ -11,6 +11,11 @@ Current API references:
 - `docs/api/student.md`
 - `docs/api-response-contract.md`
 
+Backend fix documents:
+
+- `docs/backend/major-fixes-scrum-97-supervisor-workflow.md`
+- `docs/backend/recent-changes-2026-03-05.md`
+
 ## Recent API Contract Update (March 2026)
 
 Backend API responses are standardized for all normal JSON endpoints:
