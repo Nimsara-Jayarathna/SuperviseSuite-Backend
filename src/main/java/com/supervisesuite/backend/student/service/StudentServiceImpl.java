@@ -7,6 +7,7 @@ import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
@@ -140,6 +141,58 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedU
 
     return projectService.getGitHubDashboard(project.getRepositoryUrl());
 }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getProjectGitHubActivityPage(
+        String authenticatedUserId,
+        String projectId,
+        int page,
+        int size
+    ) {
+        User student = resolveStudent(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
+            student.getId(),
+            parsedProjectId,
+            Roles.STUDENT
+        );
+        if (!hasAccess) {
+            throw new EntityNotFoundException();
+        }
+
+        Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
+            .orElseThrow(EntityNotFoundException::new);
+
+        return projectService.getGitHubActivityPage(project.getRepositoryUrl(), page, size);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getProjectGitHubContributorsPage(
+        String authenticatedUserId,
+        String projectId,
+        int page,
+        int size
+    ) {
+        User student = resolveStudent(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
+            student.getId(),
+            parsedProjectId,
+            Roles.STUDENT
+        );
+        if (!hasAccess) {
+            throw new EntityNotFoundException();
+        }
+
+        Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
+            .orElseThrow(EntityNotFoundException::new);
+
+        return projectService.getGitHubContributorsPage(project.getRepositoryUrl(), page, size);
+    }
 
     private User resolveStudent(String authenticatedUserId) {
         UUID studentId;

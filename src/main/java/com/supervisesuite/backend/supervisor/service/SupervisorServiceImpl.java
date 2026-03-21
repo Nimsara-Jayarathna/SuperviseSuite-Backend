@@ -9,6 +9,7 @@ import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
@@ -464,6 +465,42 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedU
 
     return projectService.getGitHubDashboard(project.getRepositoryUrl());
 }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getProjectGitHubActivityPage(
+        String authenticatedUserId,
+        String projectId,
+        int page,
+        int size
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        return projectService.getGitHubActivityPage(project.getRepositoryUrl(), page, size);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getProjectGitHubContributorsPage(
+        String authenticatedUserId,
+        String projectId,
+        int page,
+        int size
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        return projectService.getGitHubContributorsPage(project.getRepositoryUrl(), page, size);
+    }
 
     private SupervisorProjectDetailDto toProjectDetail(Project project) {
         return new SupervisorProjectDetailDto(

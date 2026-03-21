@@ -13,6 +13,7 @@ import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import java.util.List;
 
 public interface SupervisorService {
@@ -23,6 +24,20 @@ public interface SupervisorService {
     SupervisorProjectDetailDto getProjectById(String authenticatedUserId, String projectId);
 
     ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedUserId, String projectId);
+
+    ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getProjectGitHubActivityPage(
+        String authenticatedUserId,
+        String projectId,
+        int page,
+        int size
+    );
+
+    ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getProjectGitHubContributorsPage(
+        String authenticatedUserId,
+        String projectId,
+        int page,
+        int size
+    );
 
     SupervisorProjectDetailDto updateProject(
         String authenticatedUserId,

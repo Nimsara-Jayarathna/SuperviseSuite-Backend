@@ -16,6 +16,7 @@ import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
 import com.supervisesuite.backend.supervisor.service.SupervisorService;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -97,6 +98,40 @@ public class SupervisorController {
         );
         String message = data.isRepositoryLinked() ? "GitHub dashboard loaded." : "No repository connected.";
         return apiResponseFactory.ok(message, data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/github/activity")
+    public ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit>>> getProjectGitHubActivity(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @RequestParam(name = "page", defaultValue = "1") int page,
+        @RequestParam(name = "size", defaultValue = "10") int size
+    ) {
+        ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> data = supervisorService.getProjectGitHubActivityPage(
+            authentication.getName(),
+            projectId,
+            page,
+            size
+        );
+        return apiResponseFactory.ok("GitHub activity page loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/github/contributors")
+    public ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor>>> getProjectGitHubContributors(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @RequestParam(name = "page", defaultValue = "1") int page,
+        @RequestParam(name = "size", defaultValue = "10") int size
+    ) {
+        ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> data = supervisorService.getProjectGitHubContributorsPage(
+            authentication.getName(),
+            projectId,
+            page,
+            size
+        );
+        return apiResponseFactory.ok("GitHub contributors page loaded.", data, request);
     }
 
     @PostMapping("/projects")
