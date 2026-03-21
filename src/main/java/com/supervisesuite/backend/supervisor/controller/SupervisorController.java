@@ -15,6 +15,7 @@ import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMileston
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
 import com.supervisesuite.backend.supervisor.service.SupervisorService;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -29,7 +30,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
 
 @RestController
 @RequestMapping("/api/supervisor")
@@ -85,17 +85,17 @@ public class SupervisorController {
         );
     }
 
-    @GetMapping("/projects/{projectId}/commits")
-    public ResponseEntity<ApiResponse<ProjectCommitActivityDto>> getProjectCommits(
+    @GetMapping("/projects/{projectId}/github")
+    public ResponseEntity<ApiResponse<ProjectGitHubDashboardDto>> getProjectGitHubDashboard(
         Authentication authentication,
         HttpServletRequest request,
         @PathVariable String projectId
     ) {
-        ProjectCommitActivityDto data = supervisorService.getProjectCommitActivity(
+        ProjectGitHubDashboardDto data = supervisorService.getProjectGitHubDashboard(
             authentication.getName(),
             projectId
         );
-        String message = data.isRepositoryLinked() ? "Commit activity loaded." : "No repository connected.";
+        String message = data.isRepositoryLinked() ? "GitHub dashboard loaded." : "No repository connected.";
         return apiResponseFactory.ok(message, data, request);
     }
 

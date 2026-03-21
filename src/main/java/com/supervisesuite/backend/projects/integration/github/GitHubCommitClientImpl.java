@@ -5,6 +5,7 @@ import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.config.GitHubProperties;
 import com.supervisesuite.backend.projects.dto.ProjectCommitDto;
+import com.supervisesuite.backend.projects.dto.ProjectRepositoryMetadataDto;
 import java.net.URI;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
@@ -70,6 +71,47 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
         } catch (RestClientResponseException | ResourceAccessException exception) {
             throw new ServiceUnavailableException(
                 "Unable to retrieve commit activity from GitHub right now.",
+                exception
+            );
+        }
+    }
+
+    @Override
+    public ProjectRepositoryMetadataDto fetchRepositoryMetadata(String repositoryUrl) {
+        RepositoryRef ref = parseRepositoryRef(repositoryUrl);
+
+        try {
+            JsonNode response = restClient
+                .get()
+                .uri(uriBuilder -> uriBuilder
+                    .path("/repos/{owner}/{repo}")
+                    .build(ref.owner(), ref.repo()))
+                .headers(headers -> {
+                    headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+                    headers.add(HttpHeaders.USER_AGENT, USER_AGENT);
+                    if (hasText(gitHubProperties.getToken())) {
+                        headers.setBearerAuth(gitHubProperties.getToken().trim());
+                    }
+                })
+                .retrieve()
+                .body(JsonNode.class);
+
+            if (response == null) {
+                return new ProjectRepositoryMetadataDto(ref.repo(), repositoryUrl, "main");
+            }
+
+            String name = textOrNull(response.path("name"));
+            String url = textOrNull(response.path("html_url"));
+            String defaultBranch = textOrNull(response.path("default_branch"));
+
+            return new ProjectRepositoryMetadataDto(
+                hasText(name) ? name.trim() : ref.repo(),
+                hasText(url) ? url.trim() : repositoryUrl,
+                hasText(defaultBranch) ? defaultBranch.trim() : "main"
+            );
+        } catch (RestClientResponseException | ResourceAccessException exception) {
+            throw new ServiceUnavailableException(
+                "Unable to retrieve repository metadata from GitHub right now.",
                 exception
             );
         }

@@ -8,6 +8,7 @@ import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
@@ -38,7 +39,6 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
 import com.supervisesuite.backend.projects.service.ProjectService;
 @Service
 class SupervisorServiceImpl implements SupervisorService {
@@ -454,7 +454,7 @@ SupervisorServiceImpl(
 
     @Override
 @Transactional(readOnly = true)
-public ProjectCommitActivityDto getProjectCommitActivity(String authenticatedUserId, String projectId) {
+public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedUserId, String projectId) {
     User supervisor = resolveSupervisor(authenticatedUserId);
     UUID parsedProjectId = parseProjectId(projectId);
 
@@ -462,7 +462,7 @@ public ProjectCommitActivityDto getProjectCommitActivity(String authenticatedUse
         .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
         .orElseThrow(EntityNotFoundException::new);
 
-    return projectService.getCommitActivity(project.getRepositoryUrl());
+    return projectService.getGitHubDashboard(project.getRepositoryUrl());
 }
 
     private SupervisorProjectDetailDto toProjectDetail(Project project) {

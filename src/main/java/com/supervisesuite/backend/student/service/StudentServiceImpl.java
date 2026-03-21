@@ -6,13 +6,13 @@ import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
-import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashMap;
@@ -122,7 +122,7 @@ class StudentServiceImpl implements StudentService {
 
     @Override
 @Transactional(readOnly = true)
-public ProjectCommitActivityDto getProjectCommits(String authenticatedUserId, String projectId) {
+public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedUserId, String projectId) {
     User student = resolveStudent(authenticatedUserId);
     UUID parsedProjectId = parseProjectId(projectId);
 
@@ -138,7 +138,7 @@ public ProjectCommitActivityDto getProjectCommits(String authenticatedUserId, St
     Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
         .orElseThrow(EntityNotFoundException::new);
 
-    return projectService.getCommitActivity(project.getRepositoryUrl());
+    return projectService.getGitHubDashboard(project.getRepositoryUrl());
 }
 
     private User resolveStudent(String authenticatedUserId) {

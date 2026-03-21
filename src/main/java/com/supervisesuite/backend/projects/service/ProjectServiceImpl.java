@@ -1,25 +1,52 @@
 package com.supervisesuite.backend.projects.service;
 
-import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
+import com.supervisesuite.backend.projects.dto.ProjectCommitDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
+import com.supervisesuite.backend.projects.dto.ProjectRepositoryMetadataDto;
 import com.supervisesuite.backend.projects.integration.github.GitHubCommitClient;
+import java.time.Instant;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 class ProjectServiceImpl implements ProjectService {
 
-    private final GitHubCommitClient gitHubCommitClient;
+    private static final Logger LOGGER = LoggerFactory.getLogger(ProjectServiceImpl.class);
 
-    ProjectServiceImpl(GitHubCommitClient gitHubCommitClient) {
+    private final GitHubCommitClient gitHubCommitClient;
+    private final ProjectGitHubDashboardMapper dashboardMapper;
+
+    ProjectServiceImpl(
+        GitHubCommitClient gitHubCommitClient,
+        ProjectGitHubDashboardMapper dashboardMapper
+    ) {
         this.gitHubCommitClient = gitHubCommitClient;
+        this.dashboardMapper = dashboardMapper;
     }
 
     @Override
-    public ProjectCommitActivityDto getCommitActivity(String repositoryUrl) {
+    public ProjectGitHubDashboardDto getGitHubDashboard(String repositoryUrl) {
         if (repositoryUrl == null || repositoryUrl.isBlank()) {
-            return new ProjectCommitActivityDto(false, List.of());
+            return dashboardMapper.noRepository();
         }
 
-        return new ProjectCommitActivityDto(true, gitHubCommitClient.fetchRecentCommits(repositoryUrl));
+        ProjectRepositoryMetadataDto metadata = null;
+        List<ProjectCommitDto> commits = List.of();
+
+        try {
+            metadata = gitHubCommitClient.fetchRepositoryMetadata(repositoryUrl);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Failed to fetch repository metadata for {}", repositoryUrl, exception);
+        }
+
+        try {
+            commits = gitHubCommitClient.fetchRecentCommits(repositoryUrl);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Failed to fetch recent commits for {}", repositoryUrl, exception);
+        }
+
+        return dashboardMapper.toDashboard(repositoryUrl, metadata, commits, Instant.now());
     }
 }
