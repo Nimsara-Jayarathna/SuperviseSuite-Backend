@@ -49,18 +49,13 @@ public class StudentController {
     }
 
     @GetMapping("/projects/{projectId}/commits")
-public ResponseEntity<ApiResponse<ProjectCommitActivityDto>> getProjectCommits(
-    Authentication authentication,
-    @PathVariable String projectId
-) {
-    ProjectCommitActivityDto data = studentService.getProjectCommits(authentication.getName(), projectId);
-    String message = data.isRepositoryLinked() ? "Commit activity loaded." : "No repository connected.";
-
-    return ResponseEntity.ok(new ApiResponse<>(
-        true,
-        message,
-        data,
-        null
-    ));
-}
+    public ResponseEntity<ApiResponse<ProjectCommitActivityDto>> getProjectCommits(
+        Authentication authentication,
+        @PathVariable String projectId,
+        HttpServletRequest request
+    ) {
+        ProjectCommitActivityDto data = studentService.getProjectCommits(authentication.getName(), projectId);
+        String message = data.isRepositoryLinked() ? "Commit activity loaded." : "No repository connected.";
+        return apiResponseFactory.ok(message, data, request);
+    }
 }
