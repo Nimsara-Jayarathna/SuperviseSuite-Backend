@@ -21,4 +21,14 @@ public class GitHubProperties {
      */
     private String token;
 
+    /**
+     * Default page size for GitHub-related paginated API responses.
+     */
+    private int defaultPageSize = 10;
+
+    /**
+     * Upper bound for allowed page size in GitHub-related paginated APIs.
+     */
+    private int maxPageSize = 100;
+
 }

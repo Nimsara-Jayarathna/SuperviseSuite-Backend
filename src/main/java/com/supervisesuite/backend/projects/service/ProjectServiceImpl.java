@@ -2,6 +2,7 @@ package com.supervisesuite.backend.projects.service;
 
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
+import com.supervisesuite.backend.config.GitHubProperties;
 import com.supervisesuite.backend.projects.dto.ProjectCommitDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
@@ -37,8 +38,6 @@ class ProjectServiceImpl implements ProjectService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ProjectServiceImpl.class);
     private static final int DEFAULT_PAGE = 1;
-    private static final int DEFAULT_PAGE_SIZE = 10;
-    private static final int MAX_PAGE_SIZE = 100;
     private static final Duration ACTIVE_WINDOW = Duration.ofHours(48);
     private static final String STATUS_ACTIVE = "active";
     private static final String STATUS_IDLE = "idle";
@@ -50,19 +49,22 @@ class ProjectServiceImpl implements ProjectService {
     private final ProjectRepositoryCacheRepository projectRepositoryCacheRepository;
     private final ProjectRepositoryCommitRepository projectRepositoryCommitRepository;
     private final ProjectRepositoryContributorRepository projectRepositoryContributorRepository;
+    private final GitHubProperties gitHubProperties;
 
     ProjectServiceImpl(
         GitHubCommitClient gitHubCommitClient,
         ProjectGitHubDashboardMapper dashboardMapper,
         ProjectRepositoryCacheRepository projectRepositoryCacheRepository,
         ProjectRepositoryCommitRepository projectRepositoryCommitRepository,
-        ProjectRepositoryContributorRepository projectRepositoryContributorRepository
+        ProjectRepositoryContributorRepository projectRepositoryContributorRepository,
+        GitHubProperties gitHubProperties
     ) {
         this.gitHubCommitClient = gitHubCommitClient;
         this.dashboardMapper = dashboardMapper;
         this.projectRepositoryCacheRepository = projectRepositoryCacheRepository;
         this.projectRepositoryCommitRepository = projectRepositoryCommitRepository;
         this.projectRepositoryContributorRepository = projectRepositoryContributorRepository;
+        this.gitHubProperties = gitHubProperties;
     }
 
     @Override
@@ -474,9 +476,16 @@ class ProjectServiceImpl implements ProjectService {
     }
 
     private int normalizePageSize(int size) {
+        int configuredDefault = gitHubProperties.getDefaultPageSize() > 0
+            ? gitHubProperties.getDefaultPageSize()
+            : 10;
+        int configuredMax = gitHubProperties.getMaxPageSize() > 0
+            ? gitHubProperties.getMaxPageSize()
+            : 100;
+
         if (size < 1) {
-            return DEFAULT_PAGE_SIZE;
+            return configuredDefault;
         }
-        return Math.min(size, MAX_PAGE_SIZE);
+        return Math.min(size, configuredMax);
     }
 }

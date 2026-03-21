@@ -53,6 +53,9 @@ The backend reads DB and auth config from environment variables:
 - `CORS_ALLOWED_ORIGINS`
 - `COOKIE_SECURE` — set to `false` for local HTTP development (default: `true`)
 - `JWT_SECRET` — base64-encoded secret used to sign and verify access token JWTs
+- `GITHUB_TOKEN` — optional GitHub token (recommended for higher rate limits)
+- `GITHUB_DEFAULT_PAGE_SIZE` — default page size for GitHub paginated APIs (default: `10`)
+- `GITHUB_MAX_PAGE_SIZE` — max allowed page size for GitHub paginated APIs (default: `100`)
 
 Setup for local development:
 
@@ -63,6 +66,8 @@ Setup for local development:
 APP_PORT=8081
 CORS_ALLOWED_ORIGINS=http://localhost:5173
 COOKIE_SECURE=false
+GITHUB_DEFAULT_PAGE_SIZE=10
+GITHUB_MAX_PAGE_SIZE=100
 ```
 
 3. Keep hostnames consistent across FE/BE in local dev:
