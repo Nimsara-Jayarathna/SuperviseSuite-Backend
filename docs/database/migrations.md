@@ -80,6 +80,118 @@
   - Added indexes:
     - `idx_projects_leader_user_id`
 
+## 2026-03-21 — GitHub cache persistence
+
+### V5__project_github_cache.sql
+
+- Added **`project_repositories`** table:
+  - `id` (UUID PK)
+  - `project_id` (FK -> `projects.id`, ON DELETE CASCADE)
+  - `provider` (`github`)
+  - `repository_external_id` (nullable)
+  - `repository_name`
+  - `repository_url`
+  - `owner_login` (nullable)
+  - `default_branch` (nullable)
+  - `installation_id` (nullable)
+  - `is_primary` (default `true`)
+  - `sync_status` / `last_sync_error` (nullable sync state)
+  - `last_synced_at` (nullable)
+  - `created_at`, `updated_at`
+- Added constraints/indexes:
+  - unique primary repository per project scope
+  - indexes for `project_id`, `installation_id`
+
+- Added **`project_repository_commits`** table:
+  - `id` (UUID PK)
+  - `repository_id` (FK -> `project_repositories.id`, ON DELETE CASCADE)
+  - `sha`
+  - `message`
+  - `author`
+  - `committed_at`
+  - `commit_type` (nullable)
+  - `created_at`
+- Added constraints/indexes:
+  - unique `(repository_id, sha)` to prevent duplicates
+  - index for commit timeline queries by repository
+
+- Added **`project_repository_contributors`** table:
+  - `id` (UUID PK)
+  - `repository_id` (FK -> `project_repositories.id`, ON DELETE CASCADE)
+  - `contributor_name`
+  - `commit_count`
+  - `last_contribution_at` (nullable)
+  - `updated_at`
+- Added constraints/indexes:
+  - unique `(repository_id, contributor_name)`
+  - index for ranking queries (`commit_count DESC`)
+
+## 2026-03-21 — GitHub App installation tracking
+
+### V6__github_app_installations.sql
+
+- Added **`github_app_installations`** table:
+  - `id` (UUID PK)
+  - `installation_id` (GitHub installation id, unique)
+  - `account_id` (nullable)
+  - `account_login` (nullable)
+  - `account_type` (nullable)
+  - `status` (ACTIVE/PENDING/SUSPENDED/DELETED style lifecycle)
+  - `installed_at` (nullable)
+  - `last_event_at` (nullable)
+  - `created_at`, `updated_at`
+- Added indexes:
+  - unique index on `installation_id`
+  - status/query support indexes for installation lookups
+
+## 2026-03-22 — Project-scoped GitHub installation authorization
+
+### V7__project_github_authorization_scope.sql
+
+- Added **`project_github_installation_authorizations`** table:
+  - `id` (UUID PK)
+  - `project_id` (UUID, FK -> `projects.id`, ON DELETE CASCADE)
+  - `installation_id` (BIGINT)
+  - `authorized_by_supervisor_user_id` (UUID, FK -> `users.id`, ON DELETE RESTRICT)
+  - `authorized_at` (timestamp)
+  - `created_at`, `updated_at`
+- Added constraints/indexes:
+  - unique `(project_id, installation_id)` to prevent duplicate authorization rows
+  - index on `project_id`
+  - index on `installation_id`
+
+## 2026-03-22 — Project-scoped GitHub access request tokens
+
+### V8__project_github_access_requests.sql
+
+- Added **`project_github_access_requests`** table:
+  - `id` (UUID PK)
+  - `project_id` (UUID, FK -> `projects.id`, ON DELETE CASCADE)
+  - `requested_by_supervisor_user_id` (UUID, FK -> `users.id`, ON DELETE RESTRICT)
+  - `token_hash` (unique, SHA-256/base64 hash of opaque token)
+  - `github_state_hash` (nullable, unique when present)
+  - `status` (`PENDING`, `COMPLETED`, `EXPIRED`)
+  - `expires_at`
+  - `used_at` (nullable)
+  - `installation_id` (nullable)
+  - `created_at`, `updated_at`
+- Added indexes:
+  - `project_id`
+  - `requested_by_supervisor_user_id`
+  - `(status, expires_at)` for cleanup queries
+
+## 2026-03-22 — Access request result token support
+
+### V9__project_github_access_request_result_tokens.sql
+
+- Extended **`project_github_access_requests`** with callback result-token fields:
+  - `result_token_hash` (nullable, unique when present)
+  - `result_expires_at` (nullable)
+  - `result_acknowledged_at` (nullable)
+- Added indexes:
+  - unique index on `result_token_hash` (partial where not null)
+  - index on `result_expires_at`
+
 ## Rules for Next Migrations
 
 - Use versioned files: `V{number}__{description}.sql`

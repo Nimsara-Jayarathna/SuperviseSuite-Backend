@@ -12,7 +12,14 @@ import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
-import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
+import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
+import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import java.util.List;
 
 public interface SupervisorService {
@@ -22,7 +29,64 @@ public interface SupervisorService {
 
     SupervisorProjectDetailDto getProjectById(String authenticatedUserId, String projectId);
 
-    ProjectCommitActivityDto getProjectCommitActivity(String authenticatedUserId, String projectId);
+    ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedUserId, String projectId);
+
+    ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getProjectGitHubActivityPage(
+        String authenticatedUserId,
+        String projectId,
+        int page,
+        int size
+    );
+
+    ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getProjectGitHubContributorsPage(
+        String authenticatedUserId,
+        String projectId,
+        int page,
+        int size
+    );
+
+    GitHubInstallationRepositoryPageDto getGitHubInstallationRepositories(
+        String authenticatedUserId,
+        String projectId,
+        Long installationId,
+        int page,
+        Integer size
+    );
+
+    GitHubAccessRequestCreateDto createGitHubRepositoryAccessRequest(
+        String authenticatedUserId,
+        String projectId
+    );
+
+    GitHubAccessRequestValidationDto validateGitHubRepositoryAccessRequest(
+        String authenticatedUserId,
+        String projectId,
+        String requestToken
+    );
+
+    GitHubAccessRequestContinueDto continueGitHubRepositoryAccessRequest(
+        String authenticatedUserId,
+        String projectId,
+        String requestToken
+    );
+
+    String buildGitHubSetupStartUrl(
+        String authenticatedUserId,
+        String projectId
+    );
+
+    ProjectGitHubRepositoryLinkDto linkProjectGitHubRepository(
+        String authenticatedUserId,
+        String projectId,
+        LinkProjectGitHubRepositoryRequest request
+    );
+
+    SupervisorProjectDetailDto removeProjectGitHubAccessAuthorization(
+        String authenticatedUserId,
+        String projectId
+    );
+
+    void refreshProjectGitHubData(String authenticatedUserId, String projectId);
 
     SupervisorProjectDetailDto updateProject(
         String authenticatedUserId,

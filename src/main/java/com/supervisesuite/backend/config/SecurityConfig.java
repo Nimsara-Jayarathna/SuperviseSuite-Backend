@@ -35,6 +35,12 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/github/setup").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/github/access-requests/validate").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/github/access-requests/continue").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/github/access-updated/summary").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/github/access-updated/acknowledge").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/github/webhooks").permitAll()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex

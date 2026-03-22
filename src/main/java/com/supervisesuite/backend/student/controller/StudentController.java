@@ -2,6 +2,8 @@ package com.supervisesuite.backend.student.controller;
 
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.student.service.StudentService;
@@ -12,9 +14,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
 
 @RestController
 @RequestMapping("/api/student")
@@ -48,14 +50,51 @@ public class StudentController {
         return apiResponseFactory.ok("Project loaded.", data, request);
     }
 
-    @GetMapping("/projects/{projectId}/commits")
-    public ResponseEntity<ApiResponse<ProjectCommitActivityDto>> getProjectCommits(
+    @GetMapping("/projects/{projectId}/github")
+    public ResponseEntity<ApiResponse<ProjectGitHubDashboardDto>> getProjectGitHubDashboard(
         Authentication authentication,
         @PathVariable String projectId,
         HttpServletRequest request
     ) {
-        ProjectCommitActivityDto data = studentService.getProjectCommits(authentication.getName(), projectId);
-        String message = data.isRepositoryLinked() ? "Commit activity loaded." : "No repository connected.";
+        ProjectGitHubDashboardDto data = studentService.getProjectGitHubDashboard(
+            authentication.getName(),
+            projectId
+        );
+        String message = data.isRepositoryLinked() ? "GitHub dashboard loaded." : "No repository connected.";
         return apiResponseFactory.ok(message, data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/github/activity")
+    public ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit>>> getProjectGitHubActivity(
+        Authentication authentication,
+        @PathVariable String projectId,
+        @RequestParam(name = "page", defaultValue = "1") int page,
+        @RequestParam(name = "size", required = false) Integer size,
+        HttpServletRequest request
+    ) {
+        ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> data = studentService.getProjectGitHubActivityPage(
+            authentication.getName(),
+            projectId,
+            page,
+            size == null ? 0 : size
+        );
+        return apiResponseFactory.ok("GitHub activity page loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/github/contributors")
+    public ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor>>> getProjectGitHubContributors(
+        Authentication authentication,
+        @PathVariable String projectId,
+        @RequestParam(name = "page", defaultValue = "1") int page,
+        @RequestParam(name = "size", required = false) Integer size,
+        HttpServletRequest request
+    ) {
+        ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> data = studentService.getProjectGitHubContributorsPage(
+            authentication.getName(),
+            projectId,
+            page,
+            size == null ? 0 : size
+        );
+        return apiResponseFactory.ok("GitHub contributors page loaded.", data, request);
     }
 }

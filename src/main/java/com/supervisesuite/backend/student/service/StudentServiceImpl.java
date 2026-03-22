@@ -6,13 +6,14 @@ import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
-import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashMap;
@@ -103,6 +104,17 @@ class StudentServiceImpl implements StudentService {
             .map(this::toDetailMilestone)
             .toList();
 
+        StudentProjectDetailDto.Leader leader = null;
+        if (project.getLeaderUserId() != null) {
+            User leaderUser = userById.get(project.getLeaderUserId());
+            if (leaderUser == null) {
+                leaderUser = userRepository.findById(project.getLeaderUserId()).orElse(null);
+            }
+            if (leaderUser != null) {
+                leader = toDetailLeader(leaderUser);
+            }
+        }
+
         return new StudentProjectDetailDto(
             project.getId(),
             project.getName(),
@@ -115,6 +127,8 @@ class StudentServiceImpl implements StudentService {
             project.getProgressPercent(),
             project.getHealthNote(),
             project.getRepositoryUrl(),
+            projectService.getGitHubPreview(project.getId(), project.getRepositoryUrl()),
+            leader,
             members,
             milestones
         );
@@ -122,7 +136,7 @@ class StudentServiceImpl implements StudentService {
 
     @Override
 @Transactional(readOnly = true)
-public ProjectCommitActivityDto getProjectCommits(String authenticatedUserId, String projectId) {
+public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedUserId, String projectId) {
     User student = resolveStudent(authenticatedUserId);
     UUID parsedProjectId = parseProjectId(projectId);
 
@@ -138,8 +152,60 @@ public ProjectCommitActivityDto getProjectCommits(String authenticatedUserId, St
     Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
         .orElseThrow(EntityNotFoundException::new);
 
-    return projectService.getCommitActivity(project.getRepositoryUrl());
+    return projectService.getGitHubDashboard(project.getId(), project.getRepositoryUrl());
 }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getProjectGitHubActivityPage(
+        String authenticatedUserId,
+        String projectId,
+        int page,
+        int size
+    ) {
+        User student = resolveStudent(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
+            student.getId(),
+            parsedProjectId,
+            Roles.STUDENT
+        );
+        if (!hasAccess) {
+            throw new EntityNotFoundException();
+        }
+
+        Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
+            .orElseThrow(EntityNotFoundException::new);
+
+        return projectService.getGitHubActivityPage(project.getId(), project.getRepositoryUrl(), page, size);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getProjectGitHubContributorsPage(
+        String authenticatedUserId,
+        String projectId,
+        int page,
+        int size
+    ) {
+        User student = resolveStudent(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
+            student.getId(),
+            parsedProjectId,
+            Roles.STUDENT
+        );
+        if (!hasAccess) {
+            throw new EntityNotFoundException();
+        }
+
+        Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
+            .orElseThrow(EntityNotFoundException::new);
+
+        return projectService.getGitHubContributorsPage(project.getId(), project.getRepositoryUrl(), page, size);
+    }
 
     private User resolveStudent(String authenticatedUserId) {
         UUID studentId;
@@ -205,6 +271,16 @@ public ProjectCommitActivityDto getProjectCommits(String authenticatedUserId, St
             milestone.getDueDate(),
             milestone.getStatus(),
             milestone.getSequenceNo()
+        );
+    }
+
+    private StudentProjectDetailDto.Leader toDetailLeader(User user) {
+        return new StudentProjectDetailDto.Leader(
+            user.getId(),
+            user.getFirstName(),
+            user.getLastName(),
+            user.getEmail(),
+            user.getRegistrationNumber()
         );
     }
 

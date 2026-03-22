@@ -2,6 +2,15 @@ package com.supervisesuite.backend.supervisor.controller;
 
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
+import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
+import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
+import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
@@ -10,14 +19,15 @@ import com.supervisesuite.backend.supervisor.dto.SupervisorDashboardDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
-import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
 import com.supervisesuite.backend.supervisor.service.SupervisorService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.net.URI;
 import java.util.List;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -29,7 +39,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
 
 @RestController
 @RequestMapping("/api/supervisor")
@@ -85,18 +94,161 @@ public class SupervisorController {
         );
     }
 
-    @GetMapping("/projects/{projectId}/commits")
-    public ResponseEntity<ApiResponse<ProjectCommitActivityDto>> getProjectCommits(
+    @GetMapping("/projects/{projectId}/github")
+    public ResponseEntity<ApiResponse<ProjectGitHubDashboardDto>> getProjectGitHubDashboard(
         Authentication authentication,
         HttpServletRequest request,
         @PathVariable String projectId
     ) {
-        ProjectCommitActivityDto data = supervisorService.getProjectCommitActivity(
+        ProjectGitHubDashboardDto data = supervisorService.getProjectGitHubDashboard(
             authentication.getName(),
             projectId
         );
-        String message = data.isRepositoryLinked() ? "Commit activity loaded." : "No repository connected.";
+        String message = data.isRepositoryLinked() ? "GitHub dashboard loaded." : "No repository connected.";
         return apiResponseFactory.ok(message, data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/github/activity")
+    public ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit>>> getProjectGitHubActivity(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @RequestParam(name = "page", defaultValue = "1") int page,
+        @RequestParam(name = "size", required = false) Integer size
+    ) {
+        ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> data = supervisorService.getProjectGitHubActivityPage(
+            authentication.getName(),
+            projectId,
+            page,
+            size == null ? 0 : size
+        );
+        return apiResponseFactory.ok("GitHub activity page loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/github/contributors")
+    public ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor>>> getProjectGitHubContributors(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @RequestParam(name = "page", defaultValue = "1") int page,
+        @RequestParam(name = "size", required = false) Integer size
+    ) {
+        ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> data = supervisorService.getProjectGitHubContributorsPage(
+            authentication.getName(),
+            projectId,
+            page,
+            size == null ? 0 : size
+        );
+        return apiResponseFactory.ok("GitHub contributors page loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/github/installations/{installationId}/repositories")
+    public ResponseEntity<ApiResponse<GitHubInstallationRepositoryPageDto>> getGitHubInstallationRepositories(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @PathVariable Long installationId,
+        @RequestParam(name = "page", defaultValue = "1") int page,
+        @RequestParam(name = "size", required = false) Integer size
+    ) {
+        GitHubInstallationRepositoryPageDto data = supervisorService.getGitHubInstallationRepositories(
+            authentication.getName(),
+            projectId,
+            installationId,
+            page,
+            size
+        );
+        return apiResponseFactory.ok("GitHub installation repositories loaded.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/github/access-requests")
+    public ResponseEntity<ApiResponse<GitHubAccessRequestCreateDto>> createGitHubRepositoryAccessRequest(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        GitHubAccessRequestCreateDto data = supervisorService.createGitHubRepositoryAccessRequest(
+            authentication.getName(),
+            projectId
+        );
+        return apiResponseFactory.ok("GitHub repository access request created.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/github/access-requests/validate")
+    public ResponseEntity<ApiResponse<GitHubAccessRequestValidationDto>> validateGitHubRepositoryAccessRequest(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @RequestParam(name = "token") String token
+    ) {
+        GitHubAccessRequestValidationDto data = supervisorService.validateGitHubRepositoryAccessRequest(
+            authentication.getName(),
+            projectId,
+            token
+        );
+        return apiResponseFactory.ok("GitHub repository access request is valid.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/github/access-requests/continue")
+    public ResponseEntity<ApiResponse<GitHubAccessRequestContinueDto>> continueGitHubRepositoryAccessRequest(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @RequestParam(name = "token") String token
+    ) {
+        GitHubAccessRequestContinueDto data = supervisorService.continueGitHubRepositoryAccessRequest(
+            authentication.getName(),
+            projectId,
+            token
+        );
+        return apiResponseFactory.ok("GitHub repository access request continuation prepared.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/github/setup/start")
+    public ResponseEntity<Void> startGitHubSetup(
+        Authentication authentication,
+        @PathVariable String projectId
+    ) {
+        String authorizeUrl = supervisorService.buildGitHubSetupStartUrl(authentication.getName(), projectId);
+        return ResponseEntity.status(HttpStatus.SEE_OTHER).location(URI.create(authorizeUrl)).build();
+    }
+
+    @PostMapping("/projects/{projectId}/github/link")
+    public ResponseEntity<ApiResponse<ProjectGitHubRepositoryLinkDto>> linkProjectGitHubRepository(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @Valid @RequestBody LinkProjectGitHubRepositoryRequest body
+    ) {
+        ProjectGitHubRepositoryLinkDto data = supervisorService.linkProjectGitHubRepository(
+            authentication.getName(),
+            projectId,
+            body
+        );
+        return apiResponseFactory.ok("GitHub repository linked successfully.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/github/access/remove")
+    public ResponseEntity<ApiResponse<SupervisorProjectDetailDto>> removeProjectGitHubAccessAuthorization(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        SupervisorProjectDetailDto data = supervisorService.removeProjectGitHubAccessAuthorization(
+            authentication.getName(),
+            projectId
+        );
+        return apiResponseFactory.ok("GitHub access authorization removed for this project.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/github/refresh")
+    public ResponseEntity<ApiResponse<Void>> refreshProjectGitHub(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        supervisorService.refreshProjectGitHubData(authentication.getName(), projectId);
+        return apiResponseFactory.ok("GitHub data refreshed successfully.", null, request);
     }
 
     @PostMapping("/projects")

@@ -9,11 +9,13 @@ Current API references:
 - `docs/api/auth.md`
 - `docs/api/supervisor.md`
 - `docs/api/student.md`
+- `docs/api/github-app.md`
 - `docs/api-response-contract.md`
 
 Backend fix documents:
 
 - `docs/backend/major-fixes-scrum-97-supervisor-workflow.md`
+- `docs/backend/major-fixes-scrum-80-github-app-dashboard.md`
 - `docs/backend/recent-changes-2026-03-05.md`
 
 ## Recent API Contract Update (March 2026)
@@ -51,8 +53,34 @@ The backend reads DB and auth config from environment variables:
 - `DB_PASSWORD`
 - `APP_PORT`
 - `CORS_ALLOWED_ORIGINS`
+- `FRONTEND_BASE_URL` — frontend base URL used by backend redirects (for example GitHub setup callback)
 - `COOKIE_SECURE` — set to `false` for local HTTP development (default: `true`)
 - `JWT_SECRET` — base64-encoded secret used to sign and verify access token JWTs
+- `GITHUB_TOKEN` — optional GitHub token (recommended for higher rate limits)
+- `GITHUB_APP_ID` — GitHub App id used for app JWT generation
+- `GITHUB_APP_CLIENT_ID` — GitHub App client id for setup/install flow
+- `GITHUB_APP_CLIENT_SECRET` — GitHub App client secret (if used by your callback flow)
+- `GITHUB_APP_INSTALL_URL` — GitHub App installation URL used by backend for setup-start redirects (`GET /api/supervisor/projects/{projectId}/github/setup/start`) and access-request continuation flows
+- `GITHUB_APP_PRIVATE_KEY` — GitHub App PEM private key (escaped newlines supported in `.env`)
+- `GITHUB_APP_WEBHOOK_SECRET` — webhook signature secret for `/api/github/webhooks`
+- `GITHUB_DEFAULT_BRANCH` — fallback default branch when metadata is missing (default: `main`)
+- `GITHUB_ACTIVITY_ACTIVE_WINDOW_HOURS` — active/idle threshold window in hours (default: `48`)
+- `GITHUB_PREVIEW_COMMITS_LIMIT` — preview commits count in project detail GitHub block (default: `6`)
+- `GITHUB_PREVIEW_CONTRIBUTORS_LIMIT` — preview contributors count in project detail GitHub block (default: `4`)
+- `GITHUB_DASHBOARD_CONTRIBUTORS_LIMIT` — contributors count for non-paginated `/github` dashboard endpoint (default: `5`)
+- `GITHUB_COMMITS_PAGE_SIZE` — per-page size used while syncing commits from GitHub API (default: `100`)
+- `GITHUB_DEFAULT_PAGE_SIZE` — default page size for GitHub paginated APIs (default: `10`)
+- `GITHUB_MAX_PAGE_SIZE` — max allowed page size for GitHub paginated APIs (default: `100`)
+- `GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE` — default page size for installation repositories listing (`GET /api/supervisor/projects/{projectId}/github/installations/{installationId}/repositories`) when client does not provide `size` (default: `100`)
+- `GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE` — max allowed `size` for installation repositories listing; request values above this are capped (default: `100`)
+- `GITHUB_ACCESS_REQUEST_EXPIRES_IN_MINUTES` — expiry for project-scoped GitHub access-request tokens used by `/api/supervisor/projects/{projectId}/github/access-requests*` flow (default: `15`)
+- `GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED` — enables repeating cleanup job for expired access-request tokens (default: `true`)
+- `GITHUB_ACCESS_REQUEST_CLEANUP_INITIAL_DELAY_MS` — delay before first cleanup run in milliseconds (default: `120000`)
+- `GITHUB_ACCESS_REQUEST_CLEANUP_FIXED_DELAY_MS` — fixed delay between cleanup runs in milliseconds (default: `900000`)
+- `GITHUB_REPOSITORY_REFRESH_JOB_ENABLED` — enables cron-based scheduled refresh for linked GitHub repositories (default: `true`)
+- `GITHUB_REPOSITORY_REFRESH_CRON` — cron expression for scheduled refresh time (default: `0 0 0 * * *`; set `0 0 12 * * *` for daily 12:00)
+- `GITHUB_REPOSITORY_REFRESH_ZONE` — timezone for refresh cron evaluation (default: `UTC`)
+- `GITHUB_REPOSITORY_REFRESH_BATCH_SIZE` — max linked repositories refreshed per cron run (default: `50`)
 
 Setup for local development:
 
@@ -63,6 +91,25 @@ Setup for local development:
 APP_PORT=8081
 CORS_ALLOWED_ORIGINS=http://localhost:5173
 COOKIE_SECURE=false
+GITHUB_DEFAULT_BRANCH=main
+GITHUB_ACTIVITY_ACTIVE_WINDOW_HOURS=48
+GITHUB_PREVIEW_COMMITS_LIMIT=6
+GITHUB_PREVIEW_CONTRIBUTORS_LIMIT=4
+GITHUB_DASHBOARD_CONTRIBUTORS_LIMIT=5
+GITHUB_COMMITS_PAGE_SIZE=100
+GITHUB_DEFAULT_PAGE_SIZE=10
+GITHUB_MAX_PAGE_SIZE=100
+GITHUB_APP_INSTALL_URL=https://github.com/apps/<your-app-slug>/installations/new
+GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE=100
+GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE=100
+GITHUB_ACCESS_REQUEST_EXPIRES_IN_MINUTES=15
+GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED=true
+GITHUB_ACCESS_REQUEST_CLEANUP_INITIAL_DELAY_MS=120000
+GITHUB_ACCESS_REQUEST_CLEANUP_FIXED_DELAY_MS=900000
+GITHUB_REPOSITORY_REFRESH_JOB_ENABLED=true
+GITHUB_REPOSITORY_REFRESH_CRON=0 0 0 * * *
+GITHUB_REPOSITORY_REFRESH_ZONE=UTC
+GITHUB_REPOSITORY_REFRESH_BATCH_SIZE=50
 ```
 
 3. Keep hostnames consistent across FE/BE in local dev:

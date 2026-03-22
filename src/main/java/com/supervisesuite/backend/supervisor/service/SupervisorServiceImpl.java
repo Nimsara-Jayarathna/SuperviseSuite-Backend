@@ -8,7 +8,16 @@ import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
+import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
+import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
+import com.supervisesuite.backend.projects.integration.github.GitHubInstallationDisconnectedException;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
@@ -38,8 +47,8 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.supervisesuite.backend.projects.dto.ProjectCommitActivityDto;
 import com.supervisesuite.backend.projects.service.ProjectService;
+import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
 @Service
 class SupervisorServiceImpl implements SupervisorService {
 
@@ -67,19 +76,22 @@ class SupervisorServiceImpl implements SupervisorService {
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectMilestoneRepository projectMilestoneRepository;
     private final ProjectService projectService;
+    private final GitHubAppIntegrationService gitHubAppIntegrationService;
 
 SupervisorServiceImpl(
     UserRepository userRepository,
     ProjectRepository projectRepository,
     ProjectMemberRepository projectMemberRepository,
     ProjectMilestoneRepository projectMilestoneRepository,
-    ProjectService projectService
+    ProjectService projectService,
+    GitHubAppIntegrationService gitHubAppIntegrationService
 ) {
     this.userRepository = userRepository;
     this.projectRepository = projectRepository;
     this.projectMemberRepository = projectMemberRepository;
     this.projectMilestoneRepository = projectMilestoneRepository;
     this.projectService = projectService;
+    this.gitHubAppIntegrationService = gitHubAppIntegrationService;
 }
 
     @Override
@@ -245,11 +257,17 @@ SupervisorServiceImpl(
             .orElseThrow(EntityNotFoundException::new);
 
         Instant now = Instant.now();
-        project.setRepositoryUrl(trimToNull(request.getRepositoryUrl()));
+        String normalizedRepositoryUrl = trimToNull(request.getRepositoryUrl());
+        project.setRepositoryUrl(normalizedRepositoryUrl);
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
 
         Project savedProject = projectRepository.save(project);
+        if (normalizedRepositoryUrl == null) {
+            projectService.clearGitHubLinkage(savedProject.getId());
+        } else {
+            projectService.switchToManualRepository(savedProject.getId(), normalizedRepositoryUrl);
+        }
         return toProjectDetail(savedProject);
     }
 
@@ -454,7 +472,7 @@ SupervisorServiceImpl(
 
     @Override
 @Transactional(readOnly = true)
-public ProjectCommitActivityDto getProjectCommitActivity(String authenticatedUserId, String projectId) {
+    public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedUserId, String projectId) {
     User supervisor = resolveSupervisor(authenticatedUserId);
     UUID parsedProjectId = parseProjectId(projectId);
 
@@ -462,8 +480,193 @@ public ProjectCommitActivityDto getProjectCommitActivity(String authenticatedUse
         .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
         .orElseThrow(EntityNotFoundException::new);
 
-    return projectService.getCommitActivity(project.getRepositoryUrl());
+    return projectService.getGitHubDashboard(project.getId(), project.getRepositoryUrl());
 }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getProjectGitHubActivityPage(
+        String authenticatedUserId,
+        String projectId,
+        int page,
+        int size
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        return projectService.getGitHubActivityPage(project.getId(), project.getRepositoryUrl(), page, size);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getProjectGitHubContributorsPage(
+        String authenticatedUserId,
+        String projectId,
+        int page,
+        int size
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        return projectService.getGitHubContributorsPage(project.getId(), project.getRepositoryUrl(), page, size);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public GitHubInstallationRepositoryPageDto getGitHubInstallationRepositories(
+        String authenticatedUserId,
+        String projectId,
+        Long installationId,
+        int page,
+        Integer size
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+        return projectService.getInstallationRepositories(project.getId(), installationId, supervisor.getId(), page, size);
+    }
+
+    @Override
+    @Transactional
+    public GitHubAccessRequestCreateDto createGitHubRepositoryAccessRequest(
+        String authenticatedUserId,
+        String projectId
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+        return gitHubAppIntegrationService.createProjectAccessRequest(parsedProjectId, supervisor.getId());
+    }
+
+    @Override
+    @Transactional
+    public GitHubAccessRequestValidationDto validateGitHubRepositoryAccessRequest(
+        String authenticatedUserId,
+        String projectId,
+        String requestToken
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+        return gitHubAppIntegrationService.validateProjectAccessRequest(
+            parsedProjectId,
+            supervisor.getId(),
+            requestToken
+        );
+    }
+
+    @Override
+    @Transactional
+    public GitHubAccessRequestContinueDto continueGitHubRepositoryAccessRequest(
+        String authenticatedUserId,
+        String projectId,
+        String requestToken
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+        return gitHubAppIntegrationService.continueProjectAccessRequest(
+            parsedProjectId,
+            supervisor.getId(),
+            requestToken
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String buildGitHubSetupStartUrl(
+        String authenticatedUserId,
+        String projectId
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+        return gitHubAppIntegrationService.buildProjectSetupAuthorizeUrl(parsedProjectId);
+    }
+
+    @Override
+    @Transactional
+    public ProjectGitHubRepositoryLinkDto linkProjectGitHubRepository(
+        String authenticatedUserId,
+        String projectId,
+        LinkProjectGitHubRepositoryRequest request
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        ProjectGitHubRepositoryLinkDto linkedRepository = projectService.linkProjectToInstallationRepository(
+            project.getId(),
+            request.getInstallationId(),
+            request.getRepositoryId(),
+            supervisor.getId()
+        );
+
+        Instant now = Instant.now();
+        project.setRepositoryUrl(linkedRepository.getUrl());
+        project.setUpdatedAt(now);
+        project.setLastActivityAt(now);
+        projectRepository.save(project);
+
+        return linkedRepository;
+    }
+
+    @Override
+    @Transactional
+    public SupervisorProjectDetailDto removeProjectGitHubAccessAuthorization(
+        String authenticatedUserId,
+        String projectId
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        Instant now = Instant.now();
+        projectService.clearGitHubLinkage(project.getId());
+        project.setRepositoryUrl(null);
+        project.setUpdatedAt(now);
+        project.setLastActivityAt(now);
+        Project savedProject = projectRepository.save(project);
+
+        return toProjectDetail(savedProject);
+    }
+
+    @Override
+    @Transactional(noRollbackFor = GitHubInstallationDisconnectedException.class)
+    public void refreshProjectGitHubData(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        projectService.refreshGitHubData(project.getId(), project.getRepositoryUrl());
+    }
 
     private SupervisorProjectDetailDto toProjectDetail(Project project) {
         return new SupervisorProjectDetailDto(
@@ -477,6 +680,7 @@ public ProjectCommitActivityDto getProjectCommitActivity(String authenticatedUse
             project.getProgressPercent(),
             project.getHealthNote(),
             project.getRepositoryUrl(),
+            projectService.getGitHubPreview(project.getId(), project.getRepositoryUrl()),
             project.getLastActivityAt(),
             toDetailLeader(project.getLeaderUserId()),
             getProjectMembers(project.getId()),

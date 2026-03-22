@@ -8,11 +8,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.supervisesuite.backend.auth.dto.LoginRequest;
+import com.supervisesuite.backend.auth.dto.LoginResponse;
 import com.supervisesuite.backend.auth.dto.RegisterRequest;
 import com.supervisesuite.backend.auth.dto.RegisterResponse;
 import com.supervisesuite.backend.auth.security.TokenService;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.ConflictException;
+import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import java.util.UUID;
@@ -49,6 +52,7 @@ class AuthServiceImplTest {
     private AuthServiceImpl authService;
 
     private RegisterRequest validRequest;
+    private LoginRequest validLoginRequest;
 
     @BeforeEach
     void setUp() {
@@ -58,6 +62,10 @@ class AuthServiceImplTest {
         validRequest.setEmail("amal.perera@university.ac.lk");
         validRequest.setRegistrationNumber("CS/2021/001");
         validRequest.setPassword("Secure@123");
+
+        validLoginRequest = new LoginRequest();
+        validLoginRequest.setEmail("amal.perera@university.ac.lk");
+        validLoginRequest.setPassword("Secure@123");
     }
 
     // -------------------------------------------------------------------------
@@ -207,5 +215,72 @@ class AuthServiceImplTest {
             .isInstanceOf(ConflictException.class);
 
         verify(userRepository, never()).save(any());
+    }
+
+    // -------------------------------------------------------------------------
+    // Login
+    // -------------------------------------------------------------------------
+
+    @Test
+    void login_validCredentials_returnsTokensAndUserInfo() {
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        user.setEmail("amal.perera@university.ac.lk");
+        user.setFirstName("Amal");
+        user.setLastName("Perera");
+        user.setRole(Roles.STUDENT);
+        user.setPasswordHash("hashed-password");
+
+        when(userRepository.findByEmail("amal.perera@university.ac.lk")).thenReturn(java.util.Optional.of(user));
+        when(passwordEncoder.matches(validLoginRequest.getPassword(), "hashed-password")).thenReturn(true);
+        when(tokenService.generateAccessToken(user)).thenReturn("access-token");
+        when(refreshTokenService.issue(user)).thenReturn("refresh-token");
+
+        LoginResponse response = authService.login(validLoginRequest);
+
+        assertThat(response.getAccessToken()).isEqualTo("access-token");
+        assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
+        assertThat(response.getUser().getId()).isEqualTo(user.getId());
+        assertThat(response.getUser().getEmail()).isEqualTo(user.getEmail());
+        assertThat(response.getUser().getRole()).isEqualTo(user.getRole());
+    }
+
+    @Test
+    void login_unknownEmail_throwsUnauthorizedWithGenericMessage() {
+        when(userRepository.findByEmail("amal.perera@university.ac.lk")).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> authService.login(validLoginRequest))
+            .isInstanceOf(UnauthorizedException.class)
+            .hasMessage("Invalid email or password.");
+    }
+
+    @Test
+    void login_missingPasswordHash_throwsUnauthorizedWithGenericMessage() {
+        User user = new User();
+        user.setEmail("amal.perera@university.ac.lk");
+        user.setPasswordHash(null);
+
+        when(userRepository.findByEmail("amal.perera@university.ac.lk")).thenReturn(java.util.Optional.of(user));
+
+        assertThatThrownBy(() -> authService.login(validLoginRequest))
+            .isInstanceOf(UnauthorizedException.class)
+            .hasMessage("Invalid email or password.");
+    }
+
+    @Test
+    void login_wrongPassword_throwsUnauthorizedAndDoesNotIssueTokens() {
+        User user = new User();
+        user.setEmail("amal.perera@university.ac.lk");
+        user.setPasswordHash("hashed-password");
+
+        when(userRepository.findByEmail("amal.perera@university.ac.lk")).thenReturn(java.util.Optional.of(user));
+        when(passwordEncoder.matches(validLoginRequest.getPassword(), "hashed-password")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.login(validLoginRequest))
+            .isInstanceOf(UnauthorizedException.class)
+            .hasMessage("Invalid email or password.");
+
+        verify(tokenService, never()).generateAccessToken(any(User.class));
+        verify(refreshTokenService, never()).issue(any(User.class));
     }
 }

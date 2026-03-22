@@ -5,12 +5,14 @@ import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.config.GitHubProperties;
 import com.supervisesuite.backend.projects.dto.ProjectCommitDto;
+import com.supervisesuite.backend.projects.dto.ProjectRepositoryMetadataDto;
 import java.net.URI;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -29,50 +31,166 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
 
     private final RestClient restClient;
     private final GitHubProperties gitHubProperties;
+    private final GitHubAppAuthService gitHubAppAuthService;
 
-    GitHubCommitClientImpl(RestClient.Builder restClientBuilder, GitHubProperties gitHubProperties) {
+    GitHubCommitClientImpl(
+        RestClient.Builder restClientBuilder,
+        GitHubProperties gitHubProperties,
+        ObjectProvider<GitHubAppAuthService> gitHubAppAuthServiceProvider
+    ) {
         this.gitHubProperties = gitHubProperties;
+        this.gitHubAppAuthService = gitHubAppAuthServiceProvider.getIfAvailable();
         this.restClient = restClientBuilder
             .baseUrl(normalizeBaseUrl(gitHubProperties.getApiBaseUrl()))
             .build();
     }
 
     @Override
-    public List<ProjectCommitDto> fetchRecentCommits(String repositoryUrl) {
+    public List<ProjectCommitDto> fetchRecentCommits(String repositoryUrl, Long installationId) {
         RepositoryRef ref = parseRepositoryRef(repositoryUrl);
+        String authToken = resolveAuthToken(installationId);
 
         try {
-            List<JsonNode> response = restClient
+            List<ProjectCommitDto> commits = new ArrayList<>();
+            int page = 1;
+
+            while (true) {
+                final int currentPage = page;
+                int commitsPageSize = commitsPageSize();
+                List<JsonNode> response = restClient
+                    .get()
+                    .uri(uriBuilder -> uriBuilder
+                        .path("/repos/{owner}/{repo}/commits")
+                        .queryParam("per_page", commitsPageSize)
+                        .queryParam("page", currentPage)
+                        .build(ref.owner(), ref.repo()))
+                    .headers(headers -> {
+                        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+                        headers.add(HttpHeaders.USER_AGENT, USER_AGENT);
+                        if (hasText(authToken)) {
+                            headers.setBearerAuth(authToken);
+                        }
+                    })
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<JsonNode>>() {});
+
+                if (response == null || response.isEmpty()) {
+                    break;
+                }
+
+                for (JsonNode node : response) {
+                    commits.add(mapCommit(node));
+                }
+
+                if (response.size() < commitsPageSize) {
+                    break;
+                }
+
+                page++;
+            }
+
+            return commits;
+        } catch (RestClientResponseException | ResourceAccessException exception) {
+            throw new ServiceUnavailableException(buildGitHubFailureMessage("commit activity", exception), exception);
+        }
+    }
+
+    @Override
+    public ProjectRepositoryMetadataDto fetchRepositoryMetadata(String repositoryUrl, Long installationId) {
+        RepositoryRef ref = parseRepositoryRef(repositoryUrl);
+        String authToken = resolveAuthToken(installationId);
+
+        try {
+            JsonNode response = restClient
                 .get()
                 .uri(uriBuilder -> uriBuilder
-                    .path("/repos/{owner}/{repo}/commits")
-                    .queryParam("per_page", Math.max(1, gitHubProperties.getCommitLimit()))
+                    .path("/repos/{owner}/{repo}")
                     .build(ref.owner(), ref.repo()))
                 .headers(headers -> {
                     headers.setAccept(List.of(MediaType.APPLICATION_JSON));
                     headers.add(HttpHeaders.USER_AGENT, USER_AGENT);
-                    if (hasText(gitHubProperties.getToken())) {
-                        headers.setBearerAuth(gitHubProperties.getToken().trim());
+                    if (hasText(authToken)) {
+                        headers.setBearerAuth(authToken);
                     }
                 })
                 .retrieve()
-                .body(new ParameterizedTypeReference<List<JsonNode>>() {});
+                .body(JsonNode.class);
 
-            if (response == null || response.isEmpty()) {
-                return List.of();
+            if (response == null) {
+                return new ProjectRepositoryMetadataDto(
+                    null,
+                    ref.owner(),
+                    ref.repo(),
+                    repositoryUrl,
+                    defaultBranch()
+                );
             }
 
-            List<ProjectCommitDto> commits = new ArrayList<>();
-            for (JsonNode node : response) {
-                commits.add(mapCommit(node));
-            }
-            return commits;
+            Long repositoryExternalId = response.path("id").isIntegralNumber() ? response.path("id").asLong() : null;
+            String ownerLogin = textOrNull(response.path("owner").path("login"));
+            String name = textOrNull(response.path("name"));
+            String url = textOrNull(response.path("html_url"));
+            String defaultBranch = textOrNull(response.path("default_branch"));
+
+            return new ProjectRepositoryMetadataDto(
+                repositoryExternalId,
+                hasText(ownerLogin) ? ownerLogin.trim() : ref.owner(),
+                hasText(name) ? name.trim() : ref.repo(),
+                hasText(url) ? url.trim() : repositoryUrl,
+                hasText(defaultBranch) ? defaultBranch.trim() : defaultBranch()
+            );
         } catch (RestClientResponseException | ResourceAccessException exception) {
             throw new ServiceUnavailableException(
-                "Unable to retrieve commit activity from GitHub right now.",
+                buildGitHubFailureMessage("repository metadata", exception),
                 exception
             );
         }
+    }
+
+    private String buildGitHubFailureMessage(String operation, Exception exception) {
+        if (exception instanceof ResourceAccessException) {
+            return "GitHub is currently unreachable. Please check network access and try again.";
+        }
+
+        if (exception instanceof RestClientResponseException responseException) {
+            int status = responseException.getStatusCode().value();
+            String providerMessage = extractProviderMessage(responseException.getResponseBodyAsString());
+
+            if (status == 404) {
+                return "GitHub repository not found or inaccessible. Verify owner/repo URL and access.";
+            }
+            if (status == 401 || status == 403) {
+                String base =
+                    "GitHub access denied or rate-limited. Verify GitHub App installation access or fallback token configuration.";
+                return hasText(providerMessage) ? base + " " + providerMessage : base;
+            }
+
+            String base = "GitHub " + operation + " request failed with status " + status + ".";
+            return hasText(providerMessage) ? base + " " + providerMessage : base;
+        }
+
+        return "GitHub request failed. Please try again.";
+    }
+
+    private String extractProviderMessage(String body) {
+        if (!hasText(body)) {
+            return null;
+        }
+
+        try {
+            JsonNode root = com.fasterxml.jackson.databind.json.JsonMapper.builder().build().readTree(body);
+            String message = textOrNull(root.path("message"));
+            return hasText(message) ? message.trim() : null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String resolveAuthToken(Long installationId) {
+        if (installationId != null && installationId > 0 && gitHubAppAuthService != null) {
+            return gitHubAppAuthService.createInstallationAccessToken(installationId).token();
+        }
+        return hasText(gitHubProperties.getToken()) ? gitHubProperties.getToken().trim() : null;
     }
 
     private ProjectCommitDto mapCommit(JsonNode node) {
@@ -197,9 +315,21 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
 
     private String normalizeBaseUrl(String value) {
         if (!hasText(value)) {
-            return "https://api.github.com";
+            throw new ValidationException("GITHUB_API_BASE_URL", "GITHUB_API_BASE_URL is not configured.");
         }
         return value.trim();
+    }
+
+    private int commitsPageSize() {
+        return Math.max(1, gitHubProperties.getCommitsPageSize());
+    }
+
+    private String defaultBranch() {
+        String configured = gitHubProperties.getDefaultBranch();
+        if (!hasText(configured)) {
+            throw new ValidationException("GITHUB_DEFAULT_BRANCH", "GITHUB_DEFAULT_BRANCH is not configured.");
+        }
+        return configured.trim();
     }
 
     private record RepositoryRef(String owner, String repo) {
