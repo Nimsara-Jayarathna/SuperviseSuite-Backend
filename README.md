@@ -60,6 +60,7 @@ The backend reads DB and auth config from environment variables:
 - `GITHUB_APP_ID` — GitHub App id used for app JWT generation
 - `GITHUB_APP_CLIENT_ID` — GitHub App client id for setup/install flow
 - `GITHUB_APP_CLIENT_SECRET` — GitHub App client secret (if used by your callback flow)
+- `GITHUB_APP_INSTALL_URL` — GitHub App installation URL used by backend to continue project-scoped access requests
 - `GITHUB_APP_PRIVATE_KEY` — GitHub App PEM private key (escaped newlines supported in `.env`)
 - `GITHUB_APP_WEBHOOK_SECRET` — webhook signature secret for `/api/github/webhooks`
 - `GITHUB_DEFAULT_BRANCH` — fallback default branch when metadata is missing (default: `main`)
@@ -72,6 +73,7 @@ The backend reads DB and auth config from environment variables:
 - `GITHUB_MAX_PAGE_SIZE` — max allowed page size for GitHub paginated APIs (default: `100`)
 - `GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE` — default page size for installation repositories listing (`GET /api/supervisor/projects/{projectId}/github/installations/{installationId}/repositories`) when client does not provide `size` (default: `100`)
 - `GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE` — max allowed `size` for installation repositories listing; request values above this are capped (default: `100`)
+- `GITHUB_ACCESS_REQUEST_EXPIRES_IN_MINUTES` — expiry for project-scoped GitHub access-request tokens used by `/api/supervisor/projects/{projectId}/github/access-requests*` flow (default: `15`)
 
 Setup for local development:
 
@@ -90,8 +92,10 @@ GITHUB_DASHBOARD_CONTRIBUTORS_LIMIT=5
 GITHUB_COMMITS_PAGE_SIZE=100
 GITHUB_DEFAULT_PAGE_SIZE=10
 GITHUB_MAX_PAGE_SIZE=100
+GITHUB_APP_INSTALL_URL=https://github.com/apps/<your-app-slug>/installations/new
 GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE=100
 GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE=100
+GITHUB_ACCESS_REQUEST_EXPIRES_IN_MINUTES=15
 ```
 
 3. Keep hostnames consistent across FE/BE in local dev:

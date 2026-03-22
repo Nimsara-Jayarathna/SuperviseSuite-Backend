@@ -5,13 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.config.FrontendProperties;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
 import com.supervisesuite.backend.projects.dto.GitHubWebhookResultDto;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -53,14 +54,20 @@ public class GitHubAppController {
         @RequestParam(name = "installation_id") Long installationId,
         @RequestParam(name = "state", required = false) String state
     ) {
-        SetupState setupState = parseStateSafely(state);
-        String projectId = setupState.projectId();
+        SetupState legacyState = parseStateSafely(state);
         try {
-            gitHubAppIntegrationService.handleSetupCallback(installationId, parseProjectId(projectId));
-            return redirectTo(buildProjectRedirect(projectId, "overview", "success", installationId));
+            GitHubAppIntegrationService.SetupCallbackResult result =
+                gitHubAppIntegrationService.handleSetupCallback(installationId, state);
+            return redirectTo(buildProjectRedirect(
+                result.projectId() == null ? null : result.projectId().toString(),
+                "overview",
+                "success",
+                result.installationId(),
+                result.requestFlowCompleted()
+            ));
         } catch (Exception exception) {
             LOGGER.warn("GitHub setup callback failed: {}", exception.getMessage(), exception);
-            return redirectTo(buildProjectRedirect(projectId, "overview", "failed", null));
+            return redirectTo(buildProjectRedirect(legacyState.projectId(), "overview", "failed", null, false));
         }
     }
 
@@ -73,6 +80,24 @@ public class GitHubAppController {
     ) {
         GitHubWebhookResultDto data = gitHubAppIntegrationService.handleWebhook(event, signature256, payload);
         return apiResponseFactory.ok("GitHub webhook processed.", data, request);
+    }
+
+    @GetMapping("/access-requests/validate")
+    public ResponseEntity<ApiResponse<GitHubAccessRequestValidationDto>> validateAccessRequest(
+        @RequestParam(name = "token") String token,
+        HttpServletRequest request
+    ) {
+        GitHubAccessRequestValidationDto data = gitHubAppIntegrationService.validateProjectAccessRequest(token);
+        return apiResponseFactory.ok("GitHub access request is valid.", data, request);
+    }
+
+    @PostMapping("/access-requests/continue")
+    public ResponseEntity<ApiResponse<GitHubAccessRequestContinueDto>> continueAccessRequest(
+        @RequestParam(name = "token") String token,
+        HttpServletRequest request
+    ) {
+        GitHubAccessRequestContinueDto data = gitHubAppIntegrationService.continueProjectAccessRequest(token);
+        return apiResponseFactory.ok("GitHub access request continuation prepared.", data, request);
     }
 
     private SetupState parseStateSafely(String state) {
@@ -103,7 +128,13 @@ public class GitHubAppController {
         }
     }
 
-    private URI buildProjectRedirect(String projectId, String tab, String setupStatus, Long installationId) {
+    private URI buildProjectRedirect(
+        String projectId,
+        String tab,
+        String setupStatus,
+        Long installationId,
+        boolean githubAccessUpdated
+    ) {
         String baseUrl = frontendProperties.getBaseUrl();
         if (baseUrl == null || baseUrl.isBlank()) {
             throw new IllegalStateException("FRONTEND_BASE_URL is not configured.");
@@ -120,6 +151,9 @@ public class GitHubAppController {
         if (installationId != null && installationId > 0) {
             builder.queryParam("installationId", installationId);
         }
+        if (githubAccessUpdated) {
+            builder.queryParam("githubAccessUpdated", "true");
+        }
         return builder.build(true).toUri();
     }
 
@@ -133,17 +167,6 @@ public class GitHubAppController {
         }
         String value = node.asText();
         return value == null || value.trim().isEmpty() ? null : value.trim();
-    }
-
-    private UUID parseProjectId(String rawProjectId) {
-        if (rawProjectId == null || rawProjectId.isBlank()) {
-            return null;
-        }
-        try {
-            return UUID.fromString(rawProjectId.trim());
-        } catch (IllegalArgumentException exception) {
-            return null;
-        }
     }
 
     private record SetupState(String projectId) {

@@ -37,6 +37,11 @@ public class GitHubProperties {
     private String appClientSecret;
 
     /**
+     * GitHub App install URL used to redirect users into GitHub authorization/setup.
+     */
+    private String appInstallUrl;
+
+    /**
      * GitHub App private key content in PEM format.
      * Supports escaped new lines (\\n) from env files.
      */
@@ -92,6 +97,11 @@ public class GitHubProperties {
      */
     private InstallationRepositories installationRepositories = new InstallationRepositories();
 
+    /**
+     * Settings for project-scoped access-request flow before GitHub redirect.
+     */
+    private AccessRequests accessRequests = new AccessRequests();
+
     @Getter
     @Setter
     public static class InstallationRepositories {
@@ -104,6 +114,15 @@ public class GitHubProperties {
          * Maximum allowed page size used when listing repositories under an installation.
          */
         private int maxPageSize = 100;
+    }
+
+    @Getter
+    @Setter
+    public static class AccessRequests {
+        /**
+         * Access request token lifetime in minutes.
+         */
+        private int expiresInMinutes = 15;
     }
 
 }

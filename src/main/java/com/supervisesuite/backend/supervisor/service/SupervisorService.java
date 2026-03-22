@@ -13,6 +13,9 @@ import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
 import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
@@ -48,6 +51,23 @@ public interface SupervisorService {
         Long installationId,
         int page,
         Integer size
+    );
+
+    GitHubAccessRequestCreateDto createGitHubRepositoryAccessRequest(
+        String authenticatedUserId,
+        String projectId
+    );
+
+    GitHubAccessRequestValidationDto validateGitHubRepositoryAccessRequest(
+        String authenticatedUserId,
+        String projectId,
+        String requestToken
+    );
+
+    GitHubAccessRequestContinueDto continueGitHubRepositoryAccessRequest(
+        String authenticatedUserId,
+        String projectId,
+        String requestToken
     );
 
     ProjectGitHubRepositoryLinkDto linkProjectGitHubRepository(

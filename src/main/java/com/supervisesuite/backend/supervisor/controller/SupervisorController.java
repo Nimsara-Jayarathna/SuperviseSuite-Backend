@@ -2,6 +2,9 @@ package com.supervisesuite.backend.supervisor.controller;
 
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
 import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
@@ -154,6 +157,49 @@ public class SupervisorController {
             size
         );
         return apiResponseFactory.ok("GitHub installation repositories loaded.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/github/access-requests")
+    public ResponseEntity<ApiResponse<GitHubAccessRequestCreateDto>> createGitHubRepositoryAccessRequest(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        GitHubAccessRequestCreateDto data = supervisorService.createGitHubRepositoryAccessRequest(
+            authentication.getName(),
+            projectId
+        );
+        return apiResponseFactory.ok("GitHub repository access request created.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/github/access-requests/validate")
+    public ResponseEntity<ApiResponse<GitHubAccessRequestValidationDto>> validateGitHubRepositoryAccessRequest(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @RequestParam(name = "token") String token
+    ) {
+        GitHubAccessRequestValidationDto data = supervisorService.validateGitHubRepositoryAccessRequest(
+            authentication.getName(),
+            projectId,
+            token
+        );
+        return apiResponseFactory.ok("GitHub repository access request is valid.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/github/access-requests/continue")
+    public ResponseEntity<ApiResponse<GitHubAccessRequestContinueDto>> continueGitHubRepositoryAccessRequest(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @RequestParam(name = "token") String token
+    ) {
+        GitHubAccessRequestContinueDto data = supervisorService.continueGitHubRepositoryAccessRequest(
+            authentication.getName(),
+            projectId,
+            token
+        );
+        return apiResponseFactory.ok("GitHub repository access request continuation prepared.", data, request);
     }
 
     @PostMapping("/projects/{projectId}/github/link")

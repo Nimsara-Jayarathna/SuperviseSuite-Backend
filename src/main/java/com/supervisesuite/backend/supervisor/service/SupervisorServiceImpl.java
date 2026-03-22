@@ -8,6 +8,9 @@ import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
 import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
@@ -45,6 +48,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.supervisesuite.backend.projects.service.ProjectService;
+import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
 @Service
 class SupervisorServiceImpl implements SupervisorService {
 
@@ -72,19 +76,22 @@ class SupervisorServiceImpl implements SupervisorService {
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectMilestoneRepository projectMilestoneRepository;
     private final ProjectService projectService;
+    private final GitHubAppIntegrationService gitHubAppIntegrationService;
 
 SupervisorServiceImpl(
     UserRepository userRepository,
     ProjectRepository projectRepository,
     ProjectMemberRepository projectMemberRepository,
     ProjectMilestoneRepository projectMilestoneRepository,
-    ProjectService projectService
+    ProjectService projectService,
+    GitHubAppIntegrationService gitHubAppIntegrationService
 ) {
     this.userRepository = userRepository;
     this.projectRepository = projectRepository;
     this.projectMemberRepository = projectMemberRepository;
     this.projectMilestoneRepository = projectMilestoneRepository;
     this.projectService = projectService;
+    this.gitHubAppIntegrationService = gitHubAppIntegrationService;
 }
 
     @Override
@@ -527,6 +534,58 @@ SupervisorServiceImpl(
             .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
             .orElseThrow(EntityNotFoundException::new);
         return projectService.getInstallationRepositories(project.getId(), installationId, supervisor.getId(), page, size);
+    }
+
+    @Override
+    @Transactional
+    public GitHubAccessRequestCreateDto createGitHubRepositoryAccessRequest(
+        String authenticatedUserId,
+        String projectId
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+        return gitHubAppIntegrationService.createProjectAccessRequest(parsedProjectId, supervisor.getId());
+    }
+
+    @Override
+    @Transactional
+    public GitHubAccessRequestValidationDto validateGitHubRepositoryAccessRequest(
+        String authenticatedUserId,
+        String projectId,
+        String requestToken
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+        return gitHubAppIntegrationService.validateProjectAccessRequest(
+            parsedProjectId,
+            supervisor.getId(),
+            requestToken
+        );
+    }
+
+    @Override
+    @Transactional
+    public GitHubAccessRequestContinueDto continueGitHubRepositoryAccessRequest(
+        String authenticatedUserId,
+        String projectId,
+        String requestToken
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+        return gitHubAppIntegrationService.continueProjectAccessRequest(
+            parsedProjectId,
+            supervisor.getId(),
+            requestToken
+        );
     }
 
     @Override
