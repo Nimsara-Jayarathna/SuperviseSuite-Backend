@@ -1,5 +1,6 @@
 package com.supervisesuite.backend.projects.service;
 
+import com.supervisesuite.backend.common.error.DomainException;
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.config.GitHubProperties;
@@ -16,6 +17,7 @@ import com.supervisesuite.backend.projects.entity.ProjectRepositoryCommit;
 import com.supervisesuite.backend.projects.entity.ProjectRepositoryContributor;
 import com.supervisesuite.backend.projects.integration.github.GitHubAppAuthService;
 import com.supervisesuite.backend.projects.integration.github.GitHubCommitClient;
+import com.supervisesuite.backend.projects.integration.github.GitHubInstallationDisconnectedException;
 import com.supervisesuite.backend.projects.repository.GitHubAppInstallationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryCacheRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryCommitRepository;
@@ -55,6 +57,7 @@ class ProjectServiceImpl implements ProjectService {
     private final ProjectRepositoryContributorRepository projectRepositoryContributorRepository;
     private final GitHubAppAuthService gitHubAppAuthService;
     private final GitHubAppInstallationRepository gitHubAppInstallationRepository;
+    private final com.supervisesuite.backend.projects.repository.ProjectRepository projectRepository;
     private final GitHubProperties gitHubProperties;
 
     ProjectServiceImpl(
@@ -65,6 +68,7 @@ class ProjectServiceImpl implements ProjectService {
         ProjectRepositoryContributorRepository projectRepositoryContributorRepository,
         GitHubAppAuthService gitHubAppAuthService,
         GitHubAppInstallationRepository gitHubAppInstallationRepository,
+        com.supervisesuite.backend.projects.repository.ProjectRepository projectRepository,
         GitHubProperties gitHubProperties
     ) {
         this.gitHubCommitClient = gitHubCommitClient;
@@ -74,6 +78,7 @@ class ProjectServiceImpl implements ProjectService {
         this.projectRepositoryContributorRepository = projectRepositoryContributorRepository;
         this.gitHubAppAuthService = gitHubAppAuthService;
         this.gitHubAppInstallationRepository = gitHubAppInstallationRepository;
+        this.projectRepository = projectRepository;
         this.gitHubProperties = gitHubProperties;
     }
 
@@ -306,7 +311,7 @@ class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = GitHubInstallationDisconnectedException.class)
     public void refreshGitHubData(UUID projectId, String repositoryUrl) {
         ProjectRepository linkedRepository = resolveLinkedRepository(projectId, repositoryUrl);
         if (linkedRepository == null || linkedRepository.getRepositoryUrl() == null || linkedRepository.getRepositoryUrl().isBlank()) {
@@ -338,6 +343,36 @@ class ProjectServiceImpl implements ProjectService {
 
             syncCommits(repository.getId(), commits, now);
             syncContributors(repository.getId(), commits, now);
+        } catch (DomainException exception) {
+            String failureMessage = nullable(exception.getMessage(), "GitHub refresh failed.");
+            if (exception instanceof GitHubInstallationDisconnectedException) {
+                unlinkProjectAfterInstallationDisconnect(projectId, now);
+                LOGGER.warn(
+                    "GitHub installation access removed for projectId={} repositoryUrl={}. Cleared linked repository and cached GitHub data.",
+                    projectId,
+                    targetRepositoryUrl
+                );
+                throw new GitHubInstallationDisconnectedException(
+                    failureMessage + " Linked repository and cached GitHub data were removed for this project.",
+                    exception
+                );
+            }
+
+            repository.setLastSyncedAt(now);
+            repository.setSyncStatus("FAILED");
+            repository.setLastSyncError(failureMessage);
+            repository.setUpdatedAt(now);
+            projectRepositoryCacheRepository.save(repository);
+
+            LOGGER.warn(
+                "GitHub refresh failed for projectId={} repositoryUrl={}: {} (code={} status={})",
+                projectId,
+                targetRepositoryUrl,
+                failureMessage,
+                exception.getCode(),
+                exception.getStatus()
+            );
+            throw exception;
         } catch (RuntimeException exception) {
             String failureMessage = nullable(exception.getMessage(), "GitHub refresh failed.");
             repository.setLastSyncedAt(now);
@@ -345,14 +380,28 @@ class ProjectServiceImpl implements ProjectService {
             repository.setLastSyncError(failureMessage);
             repository.setUpdatedAt(now);
             projectRepositoryCacheRepository.save(repository);
+
+            Throwable rootCause = rootCause(exception);
             LOGGER.warn(
-                "GitHub refresh failed for projectId={} repositoryUrl={}: {}",
+                "GitHub refresh failed for projectId={} repositoryUrl={}: {} (cause={} message={})",
                 projectId,
                 targetRepositoryUrl,
-                failureMessage
+                failureMessage,
+                rootCause == null ? "n/a" : rootCause.getClass().getSimpleName(),
+                rootCause == null ? "n/a" : nullable(rootCause.getMessage(), "n/a")
             );
             throw new ServiceUnavailableException(failureMessage, exception);
         }
+    }
+
+    private void unlinkProjectAfterInstallationDisconnect(UUID projectId, Instant now) {
+        clearGitHubLinkage(projectId);
+        projectRepository.findByIdAndDeletedAtIsNull(projectId).ifPresent(project -> {
+            project.setRepositoryUrl(null);
+            project.setUpdatedAt(now);
+            project.setLastActivityAt(now);
+            projectRepository.save(project);
+        });
     }
 
     @Override
@@ -907,6 +956,17 @@ class ProjectServiceImpl implements ProjectService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private Throwable rootCause(Throwable throwable) {
+        if (throwable == null) {
+            return null;
+        }
+        Throwable current = throwable;
+        while (current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     private int normalizePageSize(int size) {

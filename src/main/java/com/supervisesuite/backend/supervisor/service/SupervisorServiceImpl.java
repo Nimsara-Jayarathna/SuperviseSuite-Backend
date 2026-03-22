@@ -14,6 +14,7 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
+import com.supervisesuite.backend.projects.integration.github.GitHubInstallationDisconnectedException;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
@@ -551,7 +552,7 @@ SupervisorServiceImpl(
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = GitHubInstallationDisconnectedException.class)
     public void refreshProjectGitHubData(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);

@@ -1,6 +1,8 @@
 package com.supervisesuite.backend.projects.integration.github;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.config.GitHubProperties;
@@ -29,6 +31,7 @@ import org.springframework.web.client.RestClientResponseException;
 public class GitHubAppAuthServiceImpl implements GitHubAppAuthService {
 
     private static final String USER_AGENT = "SuperviseSuite-Backend";
+    private static final ObjectMapper JSON_MAPPER = JsonMapper.builder().build();
 
     private final GitHubProperties gitHubProperties;
     private final RestClient restClient;
@@ -98,8 +101,13 @@ public class GitHubAppAuthServiceImpl implements GitHubAppAuthService {
             return new GitHubInstallationToken(token, expiresAt);
         } catch (ValidationException exception) {
             throw exception;
-        } catch (RestClientResponseException | ResourceAccessException exception) {
-            throw new ServiceUnavailableException("Unable to create GitHub installation token.", exception);
+        } catch (RestClientResponseException exception) {
+            throw buildInstallationTokenException(exception);
+        } catch (ResourceAccessException exception) {
+            throw new ServiceUnavailableException(
+                "GitHub is currently unreachable. Check network connectivity and try again.",
+                exception
+            );
         }
     }
 
@@ -309,6 +317,75 @@ public class GitHubAppAuthServiceImpl implements GitHubAppAuthService {
         return value;
     }
 
+    private RuntimeException buildInstallationTokenException(RestClientResponseException exception) {
+        int status = exception.getStatusCode().value();
+        String message = buildInstallationTokenFailureMessage(exception);
+
+        if (status == 401 || status == 403 || status == 404 || status == 422) {
+            return new GitHubInstallationDisconnectedException(message, exception);
+        }
+
+        return new ServiceUnavailableException(message, exception);
+    }
+
+    private String buildInstallationTokenFailureMessage(RestClientResponseException responseException) {
+        int status = responseException.getStatusCode().value();
+        String providerMessage = extractProviderMessage(responseException.getResponseBodyAsString());
+
+        if (status == 401 || status == 403) {
+            String base =
+                "GitHub App installation authorization is no longer valid. Reconnect the GitHub App in Overview and try again.";
+            return withProviderMessage(base, providerMessage);
+        }
+        if (status == 404) {
+            String base =
+                "GitHub App installation was not found. It may have been removed from GitHub. Reconnect the GitHub App and relink the repository.";
+            return withProviderMessage(base, providerMessage);
+        }
+        if (status == 422) {
+            String base =
+                "GitHub rejected the installation token request. Reconnect the GitHub App and verify installation permissions.";
+            return withProviderMessage(base, providerMessage);
+        }
+
+        String base = "Unable to create GitHub installation token (status " + status + ").";
+        return withProviderMessage(base, providerMessage);
+    }
+
+    private String extractProviderMessage(String body) {
+        if (!hasText(body)) {
+            return null;
+        }
+
+        try {
+            JsonNode root = JSON_MAPPER.readTree(body);
+            String message = textOrNull(root.path("message"));
+            if (hasText(message)) {
+                return message.trim();
+            }
+
+            JsonNode errors = root.path("errors");
+            if (errors.isArray()) {
+                for (JsonNode error : errors) {
+                    String errorMessage = textOrNull(error.path("message"));
+                    if (hasText(errorMessage)) {
+                        return errorMessage.trim();
+                    }
+                }
+            }
+            return null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String withProviderMessage(String base, String providerMessage) {
+        if (!hasText(providerMessage)) {
+            return base;
+        }
+        return base + " GitHub: " + providerMessage;
+    }
+
     private Instant parseInstantOrNull(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
@@ -333,5 +410,9 @@ public class GitHubAppAuthServiceImpl implements GitHubAppAuthService {
             throw new ValidationException("GITHUB_API_BASE_URL", "GITHUB_API_BASE_URL is not configured.");
         }
         return value.trim();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 }
