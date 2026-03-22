@@ -104,6 +104,17 @@ class StudentServiceImpl implements StudentService {
             .map(this::toDetailMilestone)
             .toList();
 
+        StudentProjectDetailDto.Leader leader = null;
+        if (project.getLeaderUserId() != null) {
+            User leaderUser = userById.get(project.getLeaderUserId());
+            if (leaderUser == null) {
+                leaderUser = userRepository.findById(project.getLeaderUserId()).orElse(null);
+            }
+            if (leaderUser != null) {
+                leader = toDetailLeader(leaderUser);
+            }
+        }
+
         return new StudentProjectDetailDto(
             project.getId(),
             project.getName(),
@@ -117,6 +128,7 @@ class StudentServiceImpl implements StudentService {
             project.getHealthNote(),
             project.getRepositoryUrl(),
             projectService.getGitHubPreview(project.getId(), project.getRepositoryUrl()),
+            leader,
             members,
             milestones
         );
@@ -259,6 +271,16 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedU
             milestone.getDueDate(),
             milestone.getStatus(),
             milestone.getSequenceNo()
+        );
+    }
+
+    private StudentProjectDetailDto.Leader toDetailLeader(User user) {
+        return new StudentProjectDetailDto.Leader(
+            user.getId(),
+            user.getFirstName(),
+            user.getLastName(),
+            user.getEmail(),
+            user.getRegistrationNumber()
         );
     }
 

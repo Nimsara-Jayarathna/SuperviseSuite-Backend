@@ -28,7 +28,6 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
     private static final String GITHUB_HOST_WWW = "www.github.com";
     private static final String GIT_SSH_PREFIX = "git@github.com:";
     private static final String USER_AGENT = "SuperviseSuite-Backend";
-    private static final int COMMITS_PAGE_SIZE = 100;
 
     private final RestClient restClient;
     private final GitHubProperties gitHubProperties;
@@ -57,11 +56,12 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
 
             while (true) {
                 final int currentPage = page;
+                int commitsPageSize = commitsPageSize();
                 List<JsonNode> response = restClient
                     .get()
                     .uri(uriBuilder -> uriBuilder
                         .path("/repos/{owner}/{repo}/commits")
-                        .queryParam("per_page", COMMITS_PAGE_SIZE)
+                        .queryParam("per_page", commitsPageSize)
                         .queryParam("page", currentPage)
                         .build(ref.owner(), ref.repo()))
                     .headers(headers -> {
@@ -82,7 +82,7 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
                     commits.add(mapCommit(node));
                 }
 
-                if (response.size() < COMMITS_PAGE_SIZE) {
+                if (response.size() < commitsPageSize) {
                     break;
                 }
 
@@ -122,7 +122,7 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
                     ref.owner(),
                     ref.repo(),
                     repositoryUrl,
-                    "main"
+                    defaultBranch()
                 );
             }
 
@@ -137,7 +137,7 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
                 hasText(ownerLogin) ? ownerLogin.trim() : ref.owner(),
                 hasText(name) ? name.trim() : ref.repo(),
                 hasText(url) ? url.trim() : repositoryUrl,
-                hasText(defaultBranch) ? defaultBranch.trim() : "main"
+                hasText(defaultBranch) ? defaultBranch.trim() : defaultBranch()
             );
         } catch (RestClientResponseException | ResourceAccessException exception) {
             throw new ServiceUnavailableException(
@@ -315,9 +315,21 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
 
     private String normalizeBaseUrl(String value) {
         if (!hasText(value)) {
-            return "https://api.github.com";
+            throw new ValidationException("GITHUB_API_BASE_URL", "GITHUB_API_BASE_URL is not configured.");
         }
         return value.trim();
+    }
+
+    private int commitsPageSize() {
+        return Math.max(1, gitHubProperties.getCommitsPageSize());
+    }
+
+    private String defaultBranch() {
+        String configured = gitHubProperties.getDefaultBranch();
+        if (!hasText(configured)) {
+            throw new ValidationException("GITHUB_DEFAULT_BRANCH", "GITHUB_DEFAULT_BRANCH is not configured.");
+        }
+        return configured.trim();
     }
 
     private record RepositoryRef(String owner, String repo) {

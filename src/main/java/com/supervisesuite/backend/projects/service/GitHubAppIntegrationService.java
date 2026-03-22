@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.config.GitHubProperties;
-import com.supervisesuite.backend.projects.dto.GitHubSetupResultDto;
 import com.supervisesuite.backend.projects.dto.GitHubWebhookResultDto;
 import com.supervisesuite.backend.projects.entity.GitHubAppInstallation;
 import com.supervisesuite.backend.projects.entity.Project;
@@ -60,9 +59,8 @@ public class GitHubAppIntegrationService {
     }
 
     @Transactional
-    public GitHubSetupResultDto handleSetupCallback(
+    public void handleSetupCallback(
         Long installationId,
-        String setupAction,
         String projectId,
         String repositoryUrl
     ) {
@@ -94,7 +92,6 @@ public class GitHubAppIntegrationService {
         installation.setUpdatedAt(now);
         installationRepository.save(installation);
 
-        String linkedProjectId = null;
         UUID parsedProjectId = parseUuidOrNull(projectId);
         if (parsedProjectId != null) {
             Project project = projectRepository
@@ -117,17 +114,7 @@ public class GitHubAppIntegrationService {
             );
             assertInstallationLinked(project.getId(), targetRepositoryUrl, installationId);
             projectService.refreshGitHubData(project.getId(), targetRepositoryUrl);
-            linkedProjectId = project.getId().toString();
         }
-
-        return new GitHubSetupResultDto(
-            installationId,
-            installationContext.accountLogin(),
-            installationContext.accountType(),
-            hasText(setupAction) ? setupAction.trim() : null,
-            linkedProjectId,
-            hasText(gitHubProperties.getSetupRedirectUrl()) ? gitHubProperties.getSetupRedirectUrl().trim() : null
-        );
     }
 
     @Transactional

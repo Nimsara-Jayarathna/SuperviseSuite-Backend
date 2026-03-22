@@ -62,7 +62,12 @@ The backend reads DB and auth config from environment variables:
 - `GITHUB_APP_CLIENT_SECRET` — GitHub App client secret (if used by your callback flow)
 - `GITHUB_APP_PRIVATE_KEY` — GitHub App PEM private key (escaped newlines supported in `.env`)
 - `GITHUB_APP_WEBHOOK_SECRET` — webhook signature secret for `/api/github/webhooks`
-- `GITHUB_APP_SETUP_REDIRECT_URL` — optional frontend redirect target after `/api/github/setup`
+- `GITHUB_DEFAULT_BRANCH` — fallback default branch when metadata is missing (default: `main`)
+- `GITHUB_ACTIVITY_ACTIVE_WINDOW_HOURS` — active/idle threshold window in hours (default: `48`)
+- `GITHUB_PREVIEW_COMMITS_LIMIT` — preview commits count in project detail GitHub block (default: `6`)
+- `GITHUB_PREVIEW_CONTRIBUTORS_LIMIT` — preview contributors count in project detail GitHub block (default: `4`)
+- `GITHUB_DASHBOARD_CONTRIBUTORS_LIMIT` — contributors count for non-paginated `/github` dashboard endpoint (default: `5`)
+- `GITHUB_COMMITS_PAGE_SIZE` — per-page size used while syncing commits from GitHub API (default: `100`)
 - `GITHUB_DEFAULT_PAGE_SIZE` — default page size for GitHub paginated APIs (default: `10`)
 - `GITHUB_MAX_PAGE_SIZE` — max allowed page size for GitHub paginated APIs (default: `100`)
 
@@ -75,6 +80,12 @@ Setup for local development:
 APP_PORT=8081
 CORS_ALLOWED_ORIGINS=http://localhost:5173
 COOKIE_SECURE=false
+GITHUB_DEFAULT_BRANCH=main
+GITHUB_ACTIVITY_ACTIVE_WINDOW_HOURS=48
+GITHUB_PREVIEW_COMMITS_LIMIT=6
+GITHUB_PREVIEW_CONTRIBUTORS_LIMIT=4
+GITHUB_DASHBOARD_CONTRIBUTORS_LIMIT=5
+GITHUB_COMMITS_PAGE_SIZE=100
 GITHUB_DEFAULT_PAGE_SIZE=10
 GITHUB_MAX_PAGE_SIZE=100
 ```

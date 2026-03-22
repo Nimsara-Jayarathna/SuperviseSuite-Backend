@@ -3,6 +3,8 @@ package com.supervisesuite.backend.projects.service;
 import com.supervisesuite.backend.projects.dto.ProjectCommitDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectRepositoryMetadataDto;
+import com.supervisesuite.backend.common.error.ValidationException;
+import com.supervisesuite.backend.config.GitHubProperties;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
@@ -16,12 +18,14 @@ import org.springframework.stereotype.Component;
 @Component
 class ProjectGitHubDashboardMapper {
 
-    private static final Duration ACTIVE_WINDOW = Duration.ofHours(48);
-    private static final String DEFAULT_BRANCH = "main";
     private static final String STATUS_ACTIVE = "active";
     private static final String STATUS_IDLE = "idle";
     private static final String UNKNOWN_AUTHOR = "Unknown";
-    private static final int TOP_CONTRIBUTORS_LIMIT = 5;
+    private final GitHubProperties gitHubProperties;
+
+    ProjectGitHubDashboardMapper(GitHubProperties gitHubProperties) {
+        this.gitHubProperties = gitHubProperties;
+    }
 
     ProjectGitHubDashboardDto noRepository() {
         return new ProjectGitHubDashboardDto(
@@ -84,7 +88,7 @@ class ProjectGitHubDashboardMapper {
 
         String defaultBranch = trimToNull(metadata == null ? null : metadata.getDefaultBranch());
         if (defaultBranch == null) {
-            defaultBranch = DEFAULT_BRANCH;
+            defaultBranch = defaultBranch();
         }
 
         return new ProjectGitHubDashboardDto.Repository(name, url, defaultBranch);
@@ -106,7 +110,7 @@ class ProjectGitHubDashboardMapper {
                 }
                 return left.getKey().compareToIgnoreCase(right.getKey());
             })
-            .limit(TOP_CONTRIBUTORS_LIMIT)
+            .limit(dashboardContributorsLimit())
             .map(entry -> new ProjectGitHubDashboardDto.Contributor(entry.getKey(), entry.getValue()))
             .toList();
     }
@@ -126,7 +130,23 @@ class ProjectGitHubDashboardMapper {
         if (lastActivityAt == null || now == null) {
             return STATUS_IDLE;
         }
-        return lastActivityAt.isAfter(now.minus(ACTIVE_WINDOW)) ? STATUS_ACTIVE : STATUS_IDLE;
+        return lastActivityAt.isAfter(now.minus(activeWindowDuration())) ? STATUS_ACTIVE : STATUS_IDLE;
+    }
+
+    private Duration activeWindowDuration() {
+        return Duration.ofHours(Math.max(1, gitHubProperties.getActivityActiveWindowHours()));
+    }
+
+    private int dashboardContributorsLimit() {
+        return Math.max(1, gitHubProperties.getDashboardContributorsLimit());
+    }
+
+    private String defaultBranch() {
+        String configured = gitHubProperties.getDefaultBranch();
+        if (configured == null || configured.isBlank()) {
+            throw new ValidationException("GITHUB_DEFAULT_BRANCH", "GITHUB_DEFAULT_BRANCH is not configured.");
+        }
+        return configured.trim();
     }
 
     private String deriveRepositoryName(String repositoryUrl) {

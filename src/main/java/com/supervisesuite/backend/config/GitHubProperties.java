@@ -48,9 +48,34 @@ public class GitHubProperties {
     private String appWebhookSecret;
 
     /**
-     * Optional frontend URL to redirect after setup callback.
+     * Default branch fallback used when provider metadata is missing.
      */
-    private String setupRedirectUrl;
+    private String defaultBranch = "main";
+
+    /**
+     * Activity recency window (hours) for deriving active vs idle status.
+     */
+    private int activityActiveWindowHours = 48;
+
+    /**
+     * Preview commit list size embedded in project details response.
+     */
+    private int previewCommitsLimit = 6;
+
+    /**
+     * Preview contributor list size embedded in project details response.
+     */
+    private int previewContributorsLimit = 4;
+
+    /**
+     * Contributor limit for non-paginated dashboard endpoint.
+     */
+    private int dashboardContributorsLimit = 5;
+
+    /**
+     * GitHub API per-page size used while fetching commit history.
+     */
+    private int commitsPageSize = 100;
 
     /**
      * Default page size for GitHub-related paginated API responses.

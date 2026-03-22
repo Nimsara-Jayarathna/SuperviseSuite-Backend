@@ -48,6 +48,11 @@ app:
     app-client-secret: ${GITHUB_APP_CLIENT_SECRET:}
     app-private-key: ${GITHUB_APP_PRIVATE_KEY:}
     app-webhook-secret: ${GITHUB_APP_WEBHOOK_SECRET:}
-    setup-redirect-url: ${GITHUB_APP_SETUP_REDIRECT_URL:}
+    default-branch: ${GITHUB_DEFAULT_BRANCH:main}
+    activity-active-window-hours: ${GITHUB_ACTIVITY_ACTIVE_WINDOW_HOURS:48}
+    preview-commits-limit: ${GITHUB_PREVIEW_COMMITS_LIMIT:6}
+    preview-contributors-limit: ${GITHUB_PREVIEW_CONTRIBUTORS_LIMIT:4}
+    dashboard-contributors-limit: ${GITHUB_DASHBOARD_CONTRIBUTORS_LIMIT:5}
+    commits-page-size: ${GITHUB_COMMITS_PAGE_SIZE:100}
     default-page-size: ${GITHUB_DEFAULT_PAGE_SIZE:10}
     max-page-size: ${GITHUB_MAX_PAGE_SIZE:100}

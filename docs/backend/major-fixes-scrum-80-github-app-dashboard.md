@@ -119,7 +119,6 @@ Commit range: `43ff515` -> `5952bec`
 - `src/main/java/com/supervisesuite/backend/config/GitHubProperties.java`
 - `src/main/java/com/supervisesuite/backend/config/SecurityConfig.java`
 - `src/main/java/com/supervisesuite/backend/projects/controller/GitHubAppController.java`
-- `src/main/java/com/supervisesuite/backend/projects/dto/GitHubSetupResultDto.java`
 - `src/main/java/com/supervisesuite/backend/projects/dto/GitHubWebhookResultDto.java`
 - `src/main/java/com/supervisesuite/backend/projects/dto/ProjectGitHubDashboardDto.java`
 - `src/main/java/com/supervisesuite/backend/projects/dto/ProjectGitHubPageDto.java`

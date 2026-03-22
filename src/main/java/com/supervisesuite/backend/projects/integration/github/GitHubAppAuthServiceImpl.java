@@ -330,7 +330,7 @@ public class GitHubAppAuthServiceImpl implements GitHubAppAuthService {
 
     private String normalizeBaseUrl(String value) {
         if (value == null || value.isBlank()) {
-            return "https://api.github.com";
+            throw new ValidationException("GITHUB_API_BASE_URL", "GITHUB_API_BASE_URL is not configured.");
         }
         return value.trim();
     }

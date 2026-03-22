@@ -53,7 +53,6 @@ public class GitHubAppController {
     @GetMapping("/setup")
     public ResponseEntity<Void> handleSetup(
         @RequestParam(name = "installation_id") Long installationId,
-        @RequestParam(name = "setup_action", required = false) String setupAction,
         @RequestParam(name = "state") String state
     ) {
         String projectId = null;
@@ -66,7 +65,6 @@ public class GitHubAppController {
 
             gitHubAppIntegrationService.handleSetupCallback(
                 installationId,
-                setupAction,
                 setupState.projectId(),
                 setupState.repositoryUrl()
             );
@@ -126,11 +124,12 @@ public class GitHubAppController {
     }
 
     private URI buildProjectRedirect(String projectId, String tab, String setupStatus) {
-        String baseUrl = frontendProperties.getBaseUrl() == null || frontendProperties.getBaseUrl().isBlank()
-            ? "http://localhost:5173"
-            : frontendProperties.getBaseUrl().trim();
+        String baseUrl = frontendProperties.getBaseUrl();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            throw new ValidationException("FRONTEND_BASE_URL", "FRONTEND_BASE_URL is not configured.");
+        }
 
-        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(baseUrl);
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(baseUrl.trim());
         if (projectId != null && !projectId.isBlank()) {
             builder.pathSegment("supervisor", "projects", projectId.trim());
         } else {

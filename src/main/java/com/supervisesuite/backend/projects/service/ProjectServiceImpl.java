@@ -40,11 +40,9 @@ class ProjectServiceImpl implements ProjectService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ProjectServiceImpl.class);
     private static final int DEFAULT_PAGE = 1;
-    private static final Duration ACTIVE_WINDOW = Duration.ofHours(48);
     private static final String STATUS_ACTIVE = "active";
     private static final String STATUS_IDLE = "idle";
     private static final String PROVIDER_GITHUB = "github";
-    private static final int PREVIEW_COMMITS_LIMIT = 6;
 
     private final GitHubCommitClient gitHubCommitClient;
     private final ProjectGitHubDashboardMapper dashboardMapper;
@@ -113,7 +111,7 @@ class ProjectServiceImpl implements ProjectService {
         ProjectGitHubDashboardDto.Repository repository = new ProjectGitHubDashboardDto.Repository(
             nullable(repositoryItem.getName(), deriveRepositoryName(repositoryItem.getUrl())),
             repositoryItem.getUrl(),
-            nullable(repositoryItem.getDefaultBranch(), "main")
+            nullable(repositoryItem.getDefaultBranch(), defaultBranch())
         );
 
         List<ProjectGitHubDashboardDto.Contributor> contributors = preview.getContributorsPreview().stream()
@@ -172,7 +170,11 @@ class ProjectServiceImpl implements ProjectService {
         List<ProjectGitHubPreviewDto.ContributorPreviewItem> contributorsPreview = repository.getId() == null
             ? List.of()
             : projectRepositoryContributorRepository
-                .findTop4ByRepositoryIdOrderByCommitCountDescContributorNameAsc(repository.getId())
+                .findByRepositoryIdOrderByCommitCountDescContributorNameAsc(
+                    repository.getId(),
+                    PageRequest.of(0, previewContributorsLimit())
+                )
+                .getContent()
                 .stream()
                 .map(contributor -> new ProjectGitHubPreviewDto.ContributorPreviewItem(
                     contributor.getContributorName(),
@@ -185,7 +187,7 @@ class ProjectServiceImpl implements ProjectService {
             : projectRepositoryCommitRepository
                 .findTop10ByRepositoryIdOrderByCommittedAtDesc(repository.getId())
                 .stream()
-                .limit(PREVIEW_COMMITS_LIMIT)
+                .limit(previewCommitsLimit())
                 .map(commit -> new ProjectGitHubPreviewDto.RecentCommitPreviewItem(
                     commit.getSha(),
                     commit.getMessage(),
@@ -199,7 +201,7 @@ class ProjectServiceImpl implements ProjectService {
             repository.getId() == null ? null : repository.getId().toString(),
             nullable(repository.getRepositoryName(), deriveRepositoryName(repository.getRepositoryUrl())),
             repository.getRepositoryUrl(),
-            nullable(repository.getDefaultBranch(), "main"),
+            nullable(repository.getDefaultBranch(), defaultBranch()),
             repository.getLastSyncedAt()
         );
 
@@ -320,7 +322,7 @@ class ProjectServiceImpl implements ProjectService {
             repository.setRepositoryUrl(nullable(metadata.getUrl(), targetRepositoryUrl));
             repository.setRepositoryExternalId(metadata.getExternalRepositoryId());
             repository.setOwnerLogin(nullable(metadata.getOwnerLogin(), repository.getOwnerLogin()));
-            repository.setDefaultBranch(nullable(metadata.getDefaultBranch(), "main"));
+            repository.setDefaultBranch(nullable(metadata.getDefaultBranch(), defaultBranch()));
             repository.setLastSyncedAt(now);
             repository.setSyncStatus("SUCCESS");
             repository.setLastSyncError(null);
@@ -579,7 +581,7 @@ class ProjectServiceImpl implements ProjectService {
                 created.setProvider(PROVIDER_GITHUB);
                 created.setRepositoryUrl(normalizedUrl);
                 created.setRepositoryName(deriveRepositoryName(normalizedUrl));
-                created.setDefaultBranch("main");
+                created.setDefaultBranch(defaultBranch());
                 created.setIsPrimary(true);
                 created.setCreatedAt(now);
                 return created;
@@ -618,7 +620,7 @@ class ProjectServiceImpl implements ProjectService {
         repository.setProvider(PROVIDER_GITHUB);
         repository.setRepositoryUrl(repositoryUrl);
         repository.setRepositoryName(deriveRepositoryName(repositoryUrl));
-        repository.setDefaultBranch("main");
+        repository.setDefaultBranch(defaultBranch());
         repository.setIsPrimary(true);
         return repository;
     }
@@ -627,7 +629,7 @@ class ProjectServiceImpl implements ProjectService {
         if (lastActivityAt == null || now == null) {
             return STATUS_IDLE;
         }
-        return lastActivityAt.isAfter(now.minus(ACTIVE_WINDOW)) ? STATUS_ACTIVE : STATUS_IDLE;
+        return lastActivityAt.isAfter(now.minus(activeWindowDuration())) ? STATUS_ACTIVE : STATUS_IDLE;
     }
 
     private String resolveCommitType(String message) {
@@ -706,16 +708,32 @@ class ProjectServiceImpl implements ProjectService {
     }
 
     private int normalizePageSize(int size) {
-        int configuredDefault = gitHubProperties.getDefaultPageSize() > 0
-            ? gitHubProperties.getDefaultPageSize()
-            : 10;
-        int configuredMax = gitHubProperties.getMaxPageSize() > 0
-            ? gitHubProperties.getMaxPageSize()
-            : 100;
+        int configuredDefault = Math.max(1, gitHubProperties.getDefaultPageSize());
+        int configuredMax = Math.max(configuredDefault, gitHubProperties.getMaxPageSize());
 
         if (size < 1) {
             return configuredDefault;
         }
         return Math.min(size, configuredMax);
+    }
+
+    private Duration activeWindowDuration() {
+        return Duration.ofHours(Math.max(1, gitHubProperties.getActivityActiveWindowHours()));
+    }
+
+    private int previewCommitsLimit() {
+        return Math.max(1, gitHubProperties.getPreviewCommitsLimit());
+    }
+
+    private int previewContributorsLimit() {
+        return Math.max(1, gitHubProperties.getPreviewContributorsLimit());
+    }
+
+    private String defaultBranch() {
+        String configured = gitHubProperties.getDefaultBranch();
+        if (configured == null || configured.isBlank()) {
+            throw new ValidationException("GITHUB_DEFAULT_BRANCH", "GITHUB_DEFAULT_BRANCH is not configured.");
+        }
+        return configured.trim();
     }
 }
