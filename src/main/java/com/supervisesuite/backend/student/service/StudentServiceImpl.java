@@ -140,7 +140,7 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedU
     Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
         .orElseThrow(EntityNotFoundException::new);
 
-    return projectService.getGitHubDashboard(project.getRepositoryUrl());
+    return projectService.getGitHubDashboard(project.getId(), project.getRepositoryUrl());
 }
 
     @Override

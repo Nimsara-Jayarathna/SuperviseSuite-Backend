@@ -54,7 +54,7 @@ public class GitHubAppController {
     public ResponseEntity<Void> handleSetup(
         @RequestParam(name = "installation_id") Long installationId,
         @RequestParam(name = "setup_action", required = false) String setupAction,
-        @RequestParam(name = "state", required = false) String state
+        @RequestParam(name = "state") String state
     ) {
         String projectId = null;
         try {

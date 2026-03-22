@@ -103,6 +103,53 @@ class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional(readOnly = true)
+    public ProjectGitHubDashboardDto getGitHubDashboard(UUID projectId, String repositoryUrl) {
+        ProjectGitHubPreviewDto preview = getGitHubPreview(projectId, repositoryUrl);
+        if (!preview.isRepositoryLinked() || preview.getRepositories() == null || preview.getRepositories().isEmpty()) {
+            return dashboardMapper.noRepository();
+        }
+
+        ProjectGitHubPreviewDto.RepositoryItem repositoryItem = preview.getRepositories().get(0);
+        ProjectGitHubDashboardDto.Repository repository = new ProjectGitHubDashboardDto.Repository(
+            nullable(repositoryItem.getName(), deriveRepositoryName(repositoryItem.getUrl())),
+            repositoryItem.getUrl(),
+            nullable(repositoryItem.getDefaultBranch(), "main")
+        );
+
+        List<ProjectGitHubDashboardDto.Contributor> contributors = preview.getContributorsPreview().stream()
+            .map(contributor -> new ProjectGitHubDashboardDto.Contributor(
+                contributor.getName(),
+                contributor.getCommitCount()
+            ))
+            .toList();
+
+        List<ProjectGitHubDashboardDto.RecentCommit> recentCommits = preview.getRecentCommitsPreview().stream()
+            .map(commit -> new ProjectGitHubDashboardDto.RecentCommit(
+                commit.getSha(),
+                commit.getMessage(),
+                commit.getAuthor(),
+                commit.getCommittedAt()
+            ))
+            .toList();
+
+        ProjectGitHubPreviewDto.ActivitySummary summary = preview.getActivitySummary();
+        ProjectGitHubDashboardDto.ActivitySummary activitySummary = new ProjectGitHubDashboardDto.ActivitySummary(
+            summary == null ? 0 : summary.getTotalCommits(),
+            summary == null ? null : summary.getLastActivityAt(),
+            summary == null ? STATUS_IDLE : nullable(summary.getStatus(), STATUS_IDLE)
+        );
+
+        return new ProjectGitHubDashboardDto(
+            true,
+            repository,
+            activitySummary,
+            contributors,
+            recentCommits
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ProjectGitHubPreviewDto getGitHubPreview(UUID projectId, String repositoryUrl) {
         ProjectRepository repository = resolveLinkedRepository(projectId, repositoryUrl);
         if (repository == null || repository.getRepositoryUrl() == null || repository.getRepositoryUrl().isBlank()) {
@@ -324,65 +371,6 @@ class ProjectServiceImpl implements ProjectService {
         repository.setOwnerLogin(nullable(ownerLogin, repository.getOwnerLogin()));
         repository.setUpdatedAt(now);
         projectRepositoryCacheRepository.save(repository);
-    }
-
-    @Override
-    @Transactional
-    public void onRepositoryUrlUpdated(UUID projectId, String repositoryUrl) {
-        Instant now = Instant.now();
-        String normalizedUrl = normalizeRepositoryUrl(repositoryUrl);
-        List<ProjectRepository> repositories = projectRepositoryCacheRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
-
-        if (normalizedUrl == null) {
-            for (ProjectRepository repository : repositories) {
-                if (Boolean.TRUE.equals(repository.getIsPrimary())) {
-                    repository.setIsPrimary(false);
-                    repository.setUpdatedAt(now);
-                }
-            }
-            if (!repositories.isEmpty()) {
-                projectRepositoryCacheRepository.saveAll(repositories);
-            }
-            return;
-        }
-
-        ProjectRepository target = projectRepositoryCacheRepository
-            .findByProjectIdAndProviderAndRepositoryUrl(projectId, PROVIDER_GITHUB, normalizedUrl)
-            .orElseGet(() -> {
-                ProjectRepository created = new ProjectRepository();
-                created.setProjectId(projectId);
-                created.setProvider(PROVIDER_GITHUB);
-                created.setRepositoryUrl(normalizedUrl);
-                created.setRepositoryName(deriveRepositoryName(normalizedUrl));
-                created.setDefaultBranch("main");
-                created.setCreatedAt(now);
-                return created;
-            });
-
-        for (ProjectRepository repository : repositories) {
-            if (repository.getId() != null && !repository.getId().equals(target.getId())) {
-                repository.setIsPrimary(false);
-                repository.setUpdatedAt(now);
-            }
-        }
-
-        target.setProjectId(projectId);
-        target.setProvider(PROVIDER_GITHUB);
-        target.setRepositoryUrl(normalizedUrl);
-        target.setIsPrimary(true);
-        if (target.getCreatedAt() == null) {
-            target.setCreatedAt(now);
-        }
-        target.setUpdatedAt(now);
-
-        projectRepositoryCacheRepository.save(target);
-        if (!repositories.isEmpty()) {
-            projectRepositoryCacheRepository.saveAll(
-                repositories.stream()
-                    .filter(repository -> repository.getId() != null && !repository.getId().equals(target.getId()))
-                    .toList()
-            );
-        }
     }
 
     @Override

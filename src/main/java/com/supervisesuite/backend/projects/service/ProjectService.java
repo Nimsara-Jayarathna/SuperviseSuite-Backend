@@ -7,6 +7,7 @@ import java.util.UUID;
 
 public interface ProjectService {
     ProjectGitHubDashboardDto getGitHubDashboard(String repositoryUrl);
+    ProjectGitHubDashboardDto getGitHubDashboard(UUID projectId, String repositoryUrl);
 
     ProjectGitHubPreviewDto getGitHubPreview(UUID projectId, String repositoryUrl);
 
@@ -23,8 +24,6 @@ public interface ProjectService {
         int page,
         int size
     );
-
-    void onRepositoryUrlUpdated(UUID projectId, String repositoryUrl);
 
     void switchToManualRepository(UUID projectId, String repositoryUrl);
 

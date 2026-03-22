@@ -469,7 +469,7 @@ SupervisorServiceImpl(
         .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
         .orElseThrow(EntityNotFoundException::new);
 
-    return projectService.getGitHubDashboard(project.getRepositoryUrl());
+    return projectService.getGitHubDashboard(project.getId(), project.getRepositoryUrl());
 }
 
     @Override
