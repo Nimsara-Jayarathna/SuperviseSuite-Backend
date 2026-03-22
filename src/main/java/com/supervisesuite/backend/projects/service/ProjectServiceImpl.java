@@ -11,14 +11,16 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.ProjectRepositoryMetadataDto;
-import com.supervisesuite.backend.projects.entity.ProjectRepository;
 import com.supervisesuite.backend.projects.entity.GitHubAppInstallation;
+import com.supervisesuite.backend.projects.entity.ProjectGitHubInstallationAuthorization;
+import com.supervisesuite.backend.projects.entity.ProjectRepository;
 import com.supervisesuite.backend.projects.entity.ProjectRepositoryCommit;
 import com.supervisesuite.backend.projects.entity.ProjectRepositoryContributor;
 import com.supervisesuite.backend.projects.integration.github.GitHubAppAuthService;
 import com.supervisesuite.backend.projects.integration.github.GitHubCommitClient;
 import com.supervisesuite.backend.projects.integration.github.GitHubInstallationDisconnectedException;
 import com.supervisesuite.backend.projects.repository.GitHubAppInstallationRepository;
+import com.supervisesuite.backend.projects.repository.ProjectGitHubInstallationAuthorizationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryCacheRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryCommitRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryContributorRepository;
@@ -57,6 +59,7 @@ class ProjectServiceImpl implements ProjectService {
     private final ProjectRepositoryContributorRepository projectRepositoryContributorRepository;
     private final GitHubAppAuthService gitHubAppAuthService;
     private final GitHubAppInstallationRepository gitHubAppInstallationRepository;
+    private final ProjectGitHubInstallationAuthorizationRepository projectGitHubInstallationAuthorizationRepository;
     private final com.supervisesuite.backend.projects.repository.ProjectRepository projectRepository;
     private final GitHubProperties gitHubProperties;
 
@@ -68,6 +71,7 @@ class ProjectServiceImpl implements ProjectService {
         ProjectRepositoryContributorRepository projectRepositoryContributorRepository,
         GitHubAppAuthService gitHubAppAuthService,
         GitHubAppInstallationRepository gitHubAppInstallationRepository,
+        ProjectGitHubInstallationAuthorizationRepository projectGitHubInstallationAuthorizationRepository,
         com.supervisesuite.backend.projects.repository.ProjectRepository projectRepository,
         GitHubProperties gitHubProperties
     ) {
@@ -78,6 +82,7 @@ class ProjectServiceImpl implements ProjectService {
         this.projectRepositoryContributorRepository = projectRepositoryContributorRepository;
         this.gitHubAppAuthService = gitHubAppAuthService;
         this.gitHubAppInstallationRepository = gitHubAppInstallationRepository;
+        this.projectGitHubInstallationAuthorizationRepository = projectGitHubInstallationAuthorizationRepository;
         this.projectRepository = projectRepository;
         this.gitHubProperties = gitHubProperties;
     }
@@ -427,14 +432,24 @@ class ProjectServiceImpl implements ProjectService {
         ProjectRepository repository = ensurePrimaryRepository(projectId, normalizedUrl, now);
         repository.setInstallationId(installationId);
         repository.setOwnerLogin(nullable(ownerLogin, repository.getOwnerLogin()));
+        repository.setLinkedBySupervisorUserId(null);
+        repository.setLinkedAt(null);
         repository.setUpdatedAt(now);
         projectRepositoryCacheRepository.save(repository);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<GitHubInstallationRepositoryDto> getInstallationRepositories(Long installationId) {
+    public List<GitHubInstallationRepositoryDto> getInstallationRepositories(
+        UUID projectId,
+        Long installationId,
+        UUID supervisorUserId
+    ) {
+        if (projectId == null) {
+            throw new ValidationException("projectId", "Project id is required.");
+        }
         requireUsableInstallation(installationId);
+        requireProjectInstallationAuthorization(projectId, installationId, supervisorUserId);
 
         List<GitHubAppAuthService.GitHubInstallationRepositoryContext> repositories =
             gitHubAppAuthService.fetchInstallationRepositories(installationId);
@@ -464,13 +479,15 @@ class ProjectServiceImpl implements ProjectService {
     public ProjectGitHubRepositoryLinkDto linkProjectToInstallationRepository(
         UUID projectId,
         Long installationId,
-        Long repositoryId
+        Long repositoryId,
+        UUID supervisorUserId
     ) {
         if (projectId == null) {
             throw new ValidationException("projectId", "Project id is required.");
         }
 
         requireUsableInstallation(installationId);
+        requireProjectInstallationAuthorization(projectId, installationId, supervisorUserId);
         if (repositoryId == null || repositoryId < 1) {
             throw new ValidationException("repositoryId", "GitHub repository id is required.");
         }
@@ -495,6 +512,8 @@ class ProjectServiceImpl implements ProjectService {
         repository.setRepositoryName(nullable(selectedRepository.repositoryName(), deriveRepositoryName(repositoryUrl)));
         repository.setOwnerLogin(nullable(selectedRepository.ownerLogin(), deriveOwnerFromFullName(fullName)));
         repository.setDefaultBranch(nullable(selectedRepository.defaultBranch(), defaultBranch()));
+        repository.setLinkedBySupervisorUserId(supervisorUserId);
+        repository.setLinkedAt(now);
         repository.setSyncStatus(null);
         repository.setLastSyncError(null);
         repository.setUpdatedAt(now);
@@ -567,10 +586,17 @@ class ProjectServiceImpl implements ProjectService {
             removedInstallationIds.add(target.getInstallationId());
         }
         target.setInstallationId(null);
+        target.setRepositoryExternalId(null);
+        target.setOwnerLogin(null);
+        target.setRepositoryName(nullable(target.getRepositoryName(), deriveRepositoryName(normalizedUrl)));
+        target.setDefaultBranch(null);
+        target.setLinkedBySupervisorUserId(null);
+        target.setLinkedAt(null);
         target.setSyncStatus(null);
         target.setLastSyncError(null);
         target.setUpdatedAt(now);
         projectRepositoryCacheRepository.save(target);
+        projectGitHubInstallationAuthorizationRepository.deleteByProjectId(projectId);
 
         cleanupOrphanInstallations(removedInstallationIds);
     }
@@ -594,6 +620,7 @@ class ProjectServiceImpl implements ProjectService {
         }
 
         projectRepositoryCacheRepository.deleteAll(repositories);
+        projectGitHubInstallationAuthorizationRepository.deleteByProjectId(projectId);
         cleanupOrphanInstallations(removedInstallationIds);
     }
 
@@ -688,6 +715,28 @@ class ProjectServiceImpl implements ProjectService {
                     .ifPresent(gitHubAppInstallationRepository::delete);
             }
         }
+    }
+
+    private ProjectGitHubInstallationAuthorization requireProjectInstallationAuthorization(
+        UUID projectId,
+        Long installationId,
+        UUID supervisorUserId
+    ) {
+        ProjectGitHubInstallationAuthorization authorization = projectGitHubInstallationAuthorizationRepository
+            .findByProjectIdAndInstallationId(projectId, installationId)
+            .orElseThrow(() -> new ValidationException(
+                "installationId",
+                "This installation is not authorized for this project. Connect GitHub App from this project first."
+            ));
+
+        if (supervisorUserId != null && !supervisorUserId.equals(authorization.getAuthorizedBySupervisorUserId())) {
+            throw new ValidationException(
+                "installationId",
+                "This installation authorization was created by a different supervisor."
+            );
+        }
+
+        return authorization;
     }
 
     private GitHubAppInstallation requireUsableInstallation(Long installationId) {

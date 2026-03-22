@@ -15,8 +15,8 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "project_repositories")
-public class ProjectRepository {
+@Table(name = "project_github_installation_authorizations")
+public class ProjectGitHubInstallationAuthorization {
 
     @Id
     @GeneratedValue
@@ -26,34 +26,13 @@ public class ProjectRepository {
     private UUID projectId;
 
     @Column(nullable = false)
-    private String provider;
-
-    @Column(columnDefinition = "TEXT", nullable = false)
-    private String repositoryUrl;
-
     private Long installationId;
 
-    private Long repositoryExternalId;
-
-    private String ownerLogin;
-
-    private String repositoryName;
-
-    private String defaultBranch;
-
-    private UUID linkedBySupervisorUserId;
-
-    private Instant linkedAt;
+    @Column(nullable = false)
+    private UUID authorizedBySupervisorUserId;
 
     @Column(nullable = false)
-    private Boolean isPrimary;
-
-    private Instant lastSyncedAt;
-
-    private String syncStatus;
-
-    @Column(columnDefinition = "TEXT")
-    private String lastSyncError;
+    private Instant authorizedAt;
 
     @Column(nullable = false)
     private Instant createdAt;

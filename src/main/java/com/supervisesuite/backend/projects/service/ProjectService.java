@@ -39,12 +39,17 @@ public interface ProjectService {
         String ownerLogin
     );
 
-    List<GitHubInstallationRepositoryDto> getInstallationRepositories(Long installationId);
+    List<GitHubInstallationRepositoryDto> getInstallationRepositories(
+        UUID projectId,
+        Long installationId,
+        UUID supervisorUserId
+    );
 
     ProjectGitHubRepositoryLinkDto linkProjectToInstallationRepository(
         UUID projectId,
         Long installationId,
-        Long repositoryId
+        Long repositoryId,
+        UUID supervisorUserId
     );
 
     void refreshGitHubData(UUID projectId, String repositoryUrl);

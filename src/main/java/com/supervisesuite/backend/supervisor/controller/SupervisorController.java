@@ -137,14 +137,16 @@ public class SupervisorController {
         return apiResponseFactory.ok("GitHub contributors page loaded.", data, request);
     }
 
-    @GetMapping("/github/installations/{installationId}/repositories")
+    @GetMapping("/projects/{projectId}/github/installations/{installationId}/repositories")
     public ResponseEntity<ApiResponse<List<GitHubInstallationRepositoryDto>>> getGitHubInstallationRepositories(
         Authentication authentication,
         HttpServletRequest request,
+        @PathVariable String projectId,
         @PathVariable Long installationId
     ) {
         List<GitHubInstallationRepositoryDto> data = supervisorService.getGitHubInstallationRepositories(
             authentication.getName(),
+            projectId,
             installationId
         );
         return apiResponseFactory.ok("GitHub installation repositories loaded.", data, request);

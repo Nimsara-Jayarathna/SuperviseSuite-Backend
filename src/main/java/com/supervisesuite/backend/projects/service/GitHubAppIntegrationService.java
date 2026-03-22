@@ -7,9 +7,13 @@ import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.config.GitHubProperties;
 import com.supervisesuite.backend.projects.dto.GitHubWebhookResultDto;
 import com.supervisesuite.backend.projects.entity.GitHubAppInstallation;
+import com.supervisesuite.backend.projects.entity.Project;
+import com.supervisesuite.backend.projects.entity.ProjectGitHubInstallationAuthorization;
 import com.supervisesuite.backend.projects.integration.github.GitHubAppAuthService;
 import com.supervisesuite.backend.projects.repository.GitHubAppInstallationRepository;
+import com.supervisesuite.backend.projects.repository.ProjectGitHubInstallationAuthorizationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryCacheRepository;
+import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HexFormat;
@@ -30,6 +34,8 @@ public class GitHubAppIntegrationService {
 
     private final GitHubAppAuthService gitHubAppAuthService;
     private final GitHubAppInstallationRepository installationRepository;
+    private final ProjectRepository projectRepository;
+    private final ProjectGitHubInstallationAuthorizationRepository projectGitHubInstallationAuthorizationRepository;
     private final ProjectRepositoryCacheRepository projectRepositoryCacheRepository;
     private final GitHubProperties gitHubProperties;
     private final ObjectMapper objectMapper;
@@ -37,21 +43,28 @@ public class GitHubAppIntegrationService {
     public GitHubAppIntegrationService(
         GitHubAppAuthService gitHubAppAuthService,
         GitHubAppInstallationRepository installationRepository,
+        ProjectRepository projectRepository,
+        ProjectGitHubInstallationAuthorizationRepository projectGitHubInstallationAuthorizationRepository,
         ProjectRepositoryCacheRepository projectRepositoryCacheRepository,
         GitHubProperties gitHubProperties,
         ObjectMapper objectMapper
     ) {
         this.gitHubAppAuthService = gitHubAppAuthService;
         this.installationRepository = installationRepository;
+        this.projectRepository = projectRepository;
+        this.projectGitHubInstallationAuthorizationRepository = projectGitHubInstallationAuthorizationRepository;
         this.projectRepositoryCacheRepository = projectRepositoryCacheRepository;
         this.gitHubProperties = gitHubProperties;
         this.objectMapper = objectMapper;
     }
 
     @Transactional
-    public void handleSetupCallback(Long installationId) {
+    public void handleSetupCallback(Long installationId, java.util.UUID projectId) {
         if (installationId == null || installationId < 1) {
             throw new ValidationException("installation_id", "GitHub installation_id is required.");
+        }
+        if (projectId == null) {
+            throw new ValidationException("state.projectId", "Project id is required to complete GitHub setup.");
         }
 
         GitHubAppAuthService.GitHubInstallationContext installationContext =
@@ -77,6 +90,7 @@ public class GitHubAppIntegrationService {
         installation.setLastEventAt(now);
         installation.setUpdatedAt(now);
         installationRepository.save(installation);
+        upsertProjectInstallationAuthorization(projectId, installationId, now);
     }
 
     @Transactional
@@ -168,9 +182,43 @@ public class GitHubAppIntegrationService {
         }
         for (com.supervisesuite.backend.projects.entity.ProjectRepository repository : repositories) {
             repository.setInstallationId(null);
+            repository.setRepositoryExternalId(null);
+            repository.setOwnerLogin(null);
+            repository.setLinkedBySupervisorUserId(null);
+            repository.setLinkedAt(null);
             repository.setUpdatedAt(now);
         }
         projectRepositoryCacheRepository.saveAll(repositories);
+        projectGitHubInstallationAuthorizationRepository.deleteByInstallationId(installationId);
+    }
+
+    private void upsertProjectInstallationAuthorization(java.util.UUID projectId, Long installationId, Instant now) {
+        Project project = projectRepository
+            .findByIdAndDeletedAtIsNull(projectId)
+            .orElseThrow(() -> new ValidationException("projectId", "Project not found for GitHub setup."));
+
+        java.util.UUID supervisorId = project.getSupervisor() == null ? null : project.getSupervisor().getId();
+        if (supervisorId == null) {
+            throw new ValidationException(
+                "projectId",
+                "Project does not have an assigned supervisor for GitHub authorization."
+            );
+        }
+
+        ProjectGitHubInstallationAuthorization authorization = projectGitHubInstallationAuthorizationRepository
+            .findByProjectIdAndInstallationId(projectId, installationId)
+            .orElseGet(() -> {
+                ProjectGitHubInstallationAuthorization created = new ProjectGitHubInstallationAuthorization();
+                created.setProjectId(projectId);
+                created.setInstallationId(installationId);
+                created.setCreatedAt(now);
+                return created;
+            });
+
+        authorization.setAuthorizedBySupervisorUserId(supervisorId);
+        authorization.setAuthorizedAt(now);
+        authorization.setUpdatedAt(now);
+        projectGitHubInstallationAuthorizationRepository.save(authorization);
     }
 
     private String mapInstallationStatus(String action) {

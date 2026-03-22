@@ -44,6 +44,7 @@ public interface SupervisorService {
 
     List<GitHubInstallationRepositoryDto> getGitHubInstallationRepositories(
         String authenticatedUserId,
+        String projectId,
         Long installationId
     );
 

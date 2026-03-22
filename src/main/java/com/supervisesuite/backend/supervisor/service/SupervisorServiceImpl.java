@@ -516,10 +516,15 @@ SupervisorServiceImpl(
     @Transactional(readOnly = true)
     public List<GitHubInstallationRepositoryDto> getGitHubInstallationRepositories(
         String authenticatedUserId,
+        String projectId,
         Long installationId
     ) {
-        resolveSupervisor(authenticatedUserId);
-        return projectService.getInstallationRepositories(installationId);
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+        return projectService.getInstallationRepositories(project.getId(), installationId, supervisor.getId());
     }
 
     @Override
@@ -539,7 +544,8 @@ SupervisorServiceImpl(
         ProjectGitHubRepositoryLinkDto linkedRepository = projectService.linkProjectToInstallationRepository(
             project.getId(),
             request.getInstallationId(),
-            request.getRepositoryId()
+            request.getRepositoryId(),
+            supervisor.getId()
         );
 
         Instant now = Instant.now();

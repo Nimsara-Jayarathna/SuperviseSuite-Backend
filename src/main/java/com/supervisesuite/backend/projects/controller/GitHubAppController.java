@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -55,7 +56,7 @@ public class GitHubAppController {
         SetupState setupState = parseStateSafely(state);
         String projectId = setupState.projectId();
         try {
-            gitHubAppIntegrationService.handleSetupCallback(installationId);
+            gitHubAppIntegrationService.handleSetupCallback(installationId, parseProjectId(projectId));
             return redirectTo(buildProjectRedirect(projectId, "overview", "success", installationId));
         } catch (Exception exception) {
             LOGGER.warn("GitHub setup callback failed: {}", exception.getMessage(), exception);
@@ -132,6 +133,17 @@ public class GitHubAppController {
         }
         String value = node.asText();
         return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
+    private UUID parseProjectId(String rawProjectId) {
+        if (rawProjectId == null || rawProjectId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(rawProjectId.trim());
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 
     private record SetupState(String projectId) {
