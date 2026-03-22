@@ -7,17 +7,14 @@ import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.config.GitHubProperties;
 import com.supervisesuite.backend.projects.dto.GitHubWebhookResultDto;
 import com.supervisesuite.backend.projects.entity.GitHubAppInstallation;
-import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.integration.github.GitHubAppAuthService;
 import com.supervisesuite.backend.projects.repository.GitHubAppInstallationRepository;
-import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryCacheRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.stereotype.Service;
@@ -30,40 +27,29 @@ public class GitHubAppIntegrationService {
     private static final String STATUS_DELETED = "DELETED";
     private static final String STATUS_SUSPENDED = "SUSPENDED";
     private static final String STATUS_PENDING = "PENDING";
-    private static final String PROVIDER_GITHUB = "github";
 
     private final GitHubAppAuthService gitHubAppAuthService;
     private final GitHubAppInstallationRepository installationRepository;
-    private final ProjectRepository projectRepository;
     private final ProjectRepositoryCacheRepository projectRepositoryCacheRepository;
-    private final ProjectService projectService;
     private final GitHubProperties gitHubProperties;
     private final ObjectMapper objectMapper;
 
     public GitHubAppIntegrationService(
         GitHubAppAuthService gitHubAppAuthService,
         GitHubAppInstallationRepository installationRepository,
-        ProjectRepository projectRepository,
         ProjectRepositoryCacheRepository projectRepositoryCacheRepository,
-        ProjectService projectService,
         GitHubProperties gitHubProperties,
         ObjectMapper objectMapper
     ) {
         this.gitHubAppAuthService = gitHubAppAuthService;
         this.installationRepository = installationRepository;
-        this.projectRepository = projectRepository;
         this.projectRepositoryCacheRepository = projectRepositoryCacheRepository;
-        this.projectService = projectService;
         this.gitHubProperties = gitHubProperties;
         this.objectMapper = objectMapper;
     }
 
     @Transactional
-    public void handleSetupCallback(
-        Long installationId,
-        String projectId,
-        String repositoryUrl
-    ) {
+    public void handleSetupCallback(Long installationId) {
         if (installationId == null || installationId < 1) {
             throw new ValidationException("installation_id", "GitHub installation_id is required.");
         }
@@ -91,30 +77,6 @@ public class GitHubAppIntegrationService {
         installation.setLastEventAt(now);
         installation.setUpdatedAt(now);
         installationRepository.save(installation);
-
-        UUID parsedProjectId = parseUuidOrNull(projectId);
-        if (parsedProjectId != null) {
-            Project project = projectRepository
-                .findByIdAndDeletedAtIsNull(parsedProjectId)
-                .orElseThrow(() -> new ValidationException("projectId", "Project not found for setup callback."));
-
-            String targetRepositoryUrl = resolveRepositoryUrlForProject(project, repositoryUrl, installationId);
-            if (!hasText(targetRepositoryUrl)) {
-                throw new ValidationException(
-                    "repositoryUrl",
-                    "Repository URL is required to complete GitHub App linking for this project."
-                );
-            }
-
-            projectService.linkGitHubInstallation(
-                project.getId(),
-                targetRepositoryUrl,
-                installationId,
-                installationContext.accountLogin()
-            );
-            assertInstallationLinked(project.getId(), targetRepositoryUrl, installationId);
-            projectService.refreshGitHubData(project.getId(), targetRepositoryUrl);
-        }
     }
 
     @Transactional
@@ -282,85 +244,6 @@ public class GitHubAppIntegrationService {
             return root.path("installation_id").asLong();
         }
         return null;
-    }
-
-    private UUID parseUuidOrNull(String raw) {
-        if (!hasText(raw)) {
-            return null;
-        }
-        try {
-            return UUID.fromString(raw.trim());
-        } catch (IllegalArgumentException exception) {
-            throw new ValidationException("projectId", "projectId must be a valid UUID.");
-        }
-    }
-
-    private String resolveRepositoryUrlForProject(Project project, String stateRepositoryUrl, Long installationId) {
-        if (hasText(stateRepositoryUrl)) {
-            return stateRepositoryUrl.trim();
-        }
-
-        if (hasText(project.getRepositoryUrl())) {
-            return project.getRepositoryUrl().trim();
-        }
-
-        List<com.supervisesuite.backend.projects.entity.ProjectRepository> repositories =
-            projectRepositoryCacheRepository.findByProjectIdOrderByCreatedAtAsc(project.getId());
-        com.supervisesuite.backend.projects.entity.ProjectRepository primary = repositories.stream()
-            .filter(repository -> Boolean.TRUE.equals(repository.getIsPrimary()))
-            .findFirst()
-            .orElse(null);
-        if (primary != null && hasText(primary.getRepositoryUrl())) {
-            return primary.getRepositoryUrl().trim();
-        }
-
-        String cachedRepositoryUrl = repositories.stream()
-            .map(com.supervisesuite.backend.projects.entity.ProjectRepository::getRepositoryUrl)
-            .filter(this::hasText)
-            .map(String::trim)
-            .findFirst()
-            .orElse(null);
-        if (hasText(cachedRepositoryUrl)) {
-            return cachedRepositoryUrl;
-        }
-
-        if (installationId != null && installationId > 0) {
-            List<GitHubAppAuthService.GitHubInstallationRepositoryContext> installationRepositories =
-                gitHubAppAuthService.fetchInstallationRepositories(installationId);
-            List<GitHubAppAuthService.GitHubInstallationRepositoryContext> repositoriesWithUrl = installationRepositories
-                .stream()
-                .filter(repository -> hasText(repository.htmlUrl()))
-                .toList();
-
-            if (repositoriesWithUrl.size() == 1) {
-                return repositoriesWithUrl.get(0).htmlUrl().trim();
-            }
-
-            if (repositoriesWithUrl.size() > 1) {
-                throw new ValidationException(
-                    "repositoryUrl",
-                    "Multiple repositories are available in this installation. Provide repositoryUrl in setup state or link a repository URL on the project first."
-                );
-            }
-        }
-
-        return null;
-    }
-
-    private void assertInstallationLinked(UUID projectId, String repositoryUrl, Long installationId) {
-        com.supervisesuite.backend.projects.entity.ProjectRepository repository = projectRepositoryCacheRepository
-            .findByProjectIdAndProviderAndRepositoryUrl(projectId, PROVIDER_GITHUB, repositoryUrl.trim())
-            .orElseThrow(() -> new ValidationException(
-                "repositoryUrl",
-                "Project repository record was not created for GitHub App linkage."
-            ));
-
-        if (repository.getInstallationId() == null || !installationId.equals(repository.getInstallationId())) {
-            throw new ValidationException(
-                "installationId",
-                "GitHub App installation was not linked to project repository."
-            );
-        }
     }
 
     private String textOrNull(JsonNode node) {

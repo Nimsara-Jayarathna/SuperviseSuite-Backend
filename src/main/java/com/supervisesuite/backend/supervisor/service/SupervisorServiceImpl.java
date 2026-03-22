@@ -8,8 +8,11 @@ import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
+import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryDto;
+import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
@@ -506,6 +509,45 @@ SupervisorServiceImpl(
             .orElseThrow(EntityNotFoundException::new);
 
         return projectService.getGitHubContributorsPage(project.getId(), project.getRepositoryUrl(), page, size);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GitHubInstallationRepositoryDto> getGitHubInstallationRepositories(
+        String authenticatedUserId,
+        Long installationId
+    ) {
+        resolveSupervisor(authenticatedUserId);
+        return projectService.getInstallationRepositories(installationId);
+    }
+
+    @Override
+    @Transactional
+    public ProjectGitHubRepositoryLinkDto linkProjectGitHubRepository(
+        String authenticatedUserId,
+        String projectId,
+        LinkProjectGitHubRepositoryRequest request
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        ProjectGitHubRepositoryLinkDto linkedRepository = projectService.linkProjectToInstallationRepository(
+            project.getId(),
+            request.getInstallationId(),
+            request.getRepositoryId()
+        );
+
+        Instant now = Instant.now();
+        project.setRepositoryUrl(linkedRepository.getUrl());
+        project.setUpdatedAt(now);
+        project.setLastActivityAt(now);
+        projectRepository.save(project);
+
+        return linkedRepository;
     }
 
     @Override

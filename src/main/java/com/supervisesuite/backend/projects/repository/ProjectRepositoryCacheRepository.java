@@ -2,6 +2,7 @@ package com.supervisesuite.backend.projects.repository;
 
 import com.supervisesuite.backend.projects.entity.ProjectRepository;
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,6 +21,23 @@ public interface ProjectRepositoryCacheRepository extends JpaRepository<ProjectR
     List<ProjectRepository> findByProjectIdOrderByCreatedAtAsc(UUID projectId);
 
     List<ProjectRepository> findByInstallationId(Long installationId);
+
+    List<ProjectRepository> findByProviderAndRepositoryExternalIdInAndIsPrimaryTrue(
+        String provider,
+        Collection<Long> repositoryExternalIds
+    );
+
+    Optional<ProjectRepository> findFirstByProviderAndRepositoryExternalIdAndIsPrimaryTrueAndProjectIdNot(
+        String provider,
+        Long repositoryExternalId,
+        UUID projectId
+    );
+
+    Optional<ProjectRepository> findFirstByProviderAndRepositoryUrlAndIsPrimaryTrueAndProjectIdNot(
+        String provider,
+        String repositoryUrl,
+        UUID projectId
+    );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<ProjectRepository> findById(UUID id);

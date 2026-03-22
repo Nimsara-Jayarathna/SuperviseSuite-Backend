@@ -4,8 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
-import com.supervisesuite.backend.common.error.ApiErrorDetail;
-import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.config.FrontendProperties;
 import com.supervisesuite.backend.projects.dto.GitHubWebhookResultDto;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
@@ -13,7 +11,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -53,35 +50,16 @@ public class GitHubAppController {
     @GetMapping("/setup")
     public ResponseEntity<Void> handleSetup(
         @RequestParam(name = "installation_id") Long installationId,
-        @RequestParam(name = "state") String state
+        @RequestParam(name = "state", required = false) String state
     ) {
-        String projectId = null;
+        SetupState setupState = parseStateSafely(state);
+        String projectId = setupState.projectId();
         try {
-            SetupState setupState = parseState(state);
-            projectId = setupState.projectId();
-            if (projectId == null || projectId.isBlank()) {
-                throw new ValidationException("state.projectId", "state.projectId is required.");
-            }
-
-            gitHubAppIntegrationService.handleSetupCallback(
-                installationId,
-                setupState.projectId(),
-                setupState.repositoryUrl()
-            );
-
-            return redirectTo(buildProjectRedirect(projectId, "github", "success"));
+            gitHubAppIntegrationService.handleSetupCallback(installationId);
+            return redirectTo(buildProjectRedirect(projectId, "overview", "success", installationId));
         } catch (Exception exception) {
-            if (exception instanceof ValidationException validationException) {
-                LOGGER.warn(
-                    "GitHub setup callback failed: {} details={} rootCause={}",
-                    validationException.getMessage(),
-                    formatValidationDetails(validationException.getDetails()),
-                    rootCauseMessage(validationException)
-                );
-            } else {
-                LOGGER.warn("GitHub setup callback failed: {}", exception.getMessage(), exception);
-            }
-            return redirectTo(buildProjectRedirect(projectId, "overview", "failed"));
+            LOGGER.warn("GitHub setup callback failed: {}", exception.getMessage(), exception);
+            return redirectTo(buildProjectRedirect(projectId, "overview", "failed", null));
         }
     }
 
@@ -96,9 +74,9 @@ public class GitHubAppController {
         return apiResponseFactory.ok("GitHub webhook processed.", data, request);
     }
 
-    private SetupState parseState(String state) {
+    private SetupState parseStateSafely(String state) {
         if (state == null || state.isBlank()) {
-            throw new ValidationException("state", "state query parameter is required.");
+            return new SetupState(null);
         }
 
         byte[] decoded;
@@ -108,7 +86,8 @@ public class GitHubAppController {
             try {
                 decoded = Base64.getDecoder().decode(state);
             } catch (IllegalArgumentException secondFailure) {
-                throw new ValidationException("state", "state must be valid base64 encoded JSON.");
+                LOGGER.warn("GitHub setup callback state could not be decoded as base64.");
+                return new SetupState(null);
             }
         }
 
@@ -116,17 +95,17 @@ public class GitHubAppController {
             String json = new String(decoded, StandardCharsets.UTF_8);
             JsonNode root = objectMapper.readTree(json);
             String projectId = textOrNull(root.path("projectId"));
-            String repositoryUrl = textOrNull(root.path("repositoryUrl"));
-            return new SetupState(projectId, repositoryUrl);
+            return new SetupState(projectId);
         } catch (Exception exception) {
-            throw new ValidationException("state", "state JSON payload is invalid.");
+            LOGGER.warn("GitHub setup callback state payload is not valid JSON.");
+            return new SetupState(null);
         }
     }
 
-    private URI buildProjectRedirect(String projectId, String tab, String setupStatus) {
+    private URI buildProjectRedirect(String projectId, String tab, String setupStatus, Long installationId) {
         String baseUrl = frontendProperties.getBaseUrl();
         if (baseUrl == null || baseUrl.isBlank()) {
-            throw new ValidationException("FRONTEND_BASE_URL", "FRONTEND_BASE_URL is not configured.");
+            throw new IllegalStateException("FRONTEND_BASE_URL is not configured.");
         }
 
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(baseUrl.trim());
@@ -137,6 +116,9 @@ public class GitHubAppController {
         }
         builder.queryParam("tab", tab);
         builder.queryParam("githubSetup", setupStatus);
+        if (installationId != null && installationId > 0) {
+            builder.queryParam("installationId", installationId);
+        }
         return builder.build(true).toUri();
     }
 
@@ -152,28 +134,6 @@ public class GitHubAppController {
         return value == null || value.trim().isEmpty() ? null : value.trim();
     }
 
-    private String formatValidationDetails(List<ApiErrorDetail> details) {
-        if (details == null || details.isEmpty()) {
-            return "[]";
-        }
-        return details.stream()
-            .map(detail -> {
-                String field = detail.getField() == null ? "unknown" : detail.getField();
-                String issue = detail.getIssue() == null ? "unknown issue" : detail.getIssue();
-                return field + ": " + issue;
-            })
-            .toList()
-            .toString();
-    }
-
-    private String rootCauseMessage(Throwable throwable) {
-        Throwable current = throwable;
-        while (current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current == null || current.getMessage() == null ? "n/a" : current.getMessage();
-    }
-
-    private record SetupState(String projectId, String repositoryUrl) {
+    private record SetupState(String projectId) {
     }
 }

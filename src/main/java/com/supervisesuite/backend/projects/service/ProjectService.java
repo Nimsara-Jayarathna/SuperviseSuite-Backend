@@ -1,8 +1,11 @@
 package com.supervisesuite.backend.projects.service;
 
+import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto;
+import java.util.List;
 import java.util.UUID;
 
 public interface ProjectService {
@@ -34,6 +37,14 @@ public interface ProjectService {
         String repositoryUrl,
         Long installationId,
         String ownerLogin
+    );
+
+    List<GitHubInstallationRepositoryDto> getInstallationRepositories(Long installationId);
+
+    ProjectGitHubRepositoryLinkDto linkProjectToInstallationRepository(
+        UUID projectId,
+        Long installationId,
+        Long repositoryId
     );
 
     void refreshGitHubData(UUID projectId, String repositoryUrl);

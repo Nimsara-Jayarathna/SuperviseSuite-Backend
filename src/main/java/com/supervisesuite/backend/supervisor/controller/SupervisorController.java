@@ -2,6 +2,12 @@ package com.supervisesuite.backend.supervisor.controller;
 
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
+import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryDto;
+import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
+import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
@@ -10,13 +16,10 @@ import com.supervisesuite.backend.supervisor.dto.SupervisorDashboardDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectSummaryDto;
 import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
-import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
 import com.supervisesuite.backend.supervisor.service.SupervisorService;
-import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
-import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -132,6 +135,34 @@ public class SupervisorController {
             size == null ? 0 : size
         );
         return apiResponseFactory.ok("GitHub contributors page loaded.", data, request);
+    }
+
+    @GetMapping("/github/installations/{installationId}/repositories")
+    public ResponseEntity<ApiResponse<List<GitHubInstallationRepositoryDto>>> getGitHubInstallationRepositories(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable Long installationId
+    ) {
+        List<GitHubInstallationRepositoryDto> data = supervisorService.getGitHubInstallationRepositories(
+            authentication.getName(),
+            installationId
+        );
+        return apiResponseFactory.ok("GitHub installation repositories loaded.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/github/link")
+    public ResponseEntity<ApiResponse<ProjectGitHubRepositoryLinkDto>> linkProjectGitHubRepository(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @Valid @RequestBody LinkProjectGitHubRepositoryRequest body
+    ) {
+        ProjectGitHubRepositoryLinkDto data = supervisorService.linkProjectGitHubRepository(
+            authentication.getName(),
+            projectId,
+            body
+        );
+        return apiResponseFactory.ok("GitHub repository linked successfully.", data, request);
     }
 
     @PostMapping("/projects/{projectId}/github/refresh")
