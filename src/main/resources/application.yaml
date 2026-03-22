@@ -62,3 +62,13 @@ app:
       max-page-size: ${GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE:100}
     access-requests:
       expires-in-minutes: ${GITHUB_ACCESS_REQUEST_EXPIRES_IN_MINUTES:15}
+    jobs:
+      access-request-cleanup:
+        enabled: ${GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED:true}
+        initial-delay-ms: ${GITHUB_ACCESS_REQUEST_CLEANUP_INITIAL_DELAY_MS:120000}
+        fixed-delay-ms: ${GITHUB_ACCESS_REQUEST_CLEANUP_FIXED_DELAY_MS:900000}
+      repository-refresh:
+        enabled: ${GITHUB_REPOSITORY_REFRESH_JOB_ENABLED:true}
+        cron: ${GITHUB_REPOSITORY_REFRESH_CRON:0 0 0 * * *}
+        zone: ${GITHUB_REPOSITORY_REFRESH_ZONE:UTC}
+        batch-size: ${GITHUB_REPOSITORY_REFRESH_BATCH_SIZE:50}

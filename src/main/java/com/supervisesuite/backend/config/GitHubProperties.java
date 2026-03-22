@@ -102,6 +102,11 @@ public class GitHubProperties {
      */
     private AccessRequests accessRequests = new AccessRequests();
 
+    /**
+     * Scheduled maintenance jobs for GitHub integration.
+     */
+    private Jobs jobs = new Jobs();
+
     @Getter
     @Setter
     public static class InstallationRepositories {
@@ -123,6 +128,63 @@ public class GitHubProperties {
          * Access request token lifetime in minutes.
          */
         private int expiresInMinutes = 15;
+    }
+
+    @Getter
+    @Setter
+    public static class Jobs {
+        /**
+         * Repeating cleanup job for expired access-request tokens.
+         */
+        private AccessRequestCleanup accessRequestCleanup = new AccessRequestCleanup();
+
+        /**
+         * Daily cron refresh job for linked GitHub repository state.
+         */
+        private RepositoryRefresh repositoryRefresh = new RepositoryRefresh();
+    }
+
+    @Getter
+    @Setter
+    public static class AccessRequestCleanup {
+        /**
+         * Enable/disable expired token cleanup scheduler.
+         */
+        private boolean enabled = true;
+
+        /**
+         * Initial delay before first cleanup run (milliseconds).
+         */
+        private long initialDelayMs = 120_000L;
+
+        /**
+         * Fixed delay between cleanup runs (milliseconds).
+         */
+        private long fixedDelayMs = 900_000L;
+    }
+
+    @Getter
+    @Setter
+    public static class RepositoryRefresh {
+        /**
+         * Enable/disable daily linked repository refresh scheduler.
+         */
+        private boolean enabled = true;
+
+        /**
+         * Cron expression for refresh time.
+         */
+        private String cron = "0 0 0 * * *";
+
+        /**
+         * Time zone for cron evaluation.
+         */
+        private String zone = "UTC";
+
+        /**
+         * Maximum number of linked repositories refreshed per run.
+         */
+        private int batchSize = 50;
     }
 
 }

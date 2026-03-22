@@ -74,6 +74,13 @@ The backend reads DB and auth config from environment variables:
 - `GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE` — default page size for installation repositories listing (`GET /api/supervisor/projects/{projectId}/github/installations/{installationId}/repositories`) when client does not provide `size` (default: `100`)
 - `GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE` — max allowed `size` for installation repositories listing; request values above this are capped (default: `100`)
 - `GITHUB_ACCESS_REQUEST_EXPIRES_IN_MINUTES` — expiry for project-scoped GitHub access-request tokens used by `/api/supervisor/projects/{projectId}/github/access-requests*` flow (default: `15`)
+- `GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED` — enables repeating cleanup job for expired access-request tokens (default: `true`)
+- `GITHUB_ACCESS_REQUEST_CLEANUP_INITIAL_DELAY_MS` — delay before first cleanup run in milliseconds (default: `120000`)
+- `GITHUB_ACCESS_REQUEST_CLEANUP_FIXED_DELAY_MS` — fixed delay between cleanup runs in milliseconds (default: `900000`)
+- `GITHUB_REPOSITORY_REFRESH_JOB_ENABLED` — enables cron-based scheduled refresh for linked GitHub repositories (default: `true`)
+- `GITHUB_REPOSITORY_REFRESH_CRON` — cron expression for scheduled refresh time (default: `0 0 0 * * *`; set `0 0 12 * * *` for daily 12:00)
+- `GITHUB_REPOSITORY_REFRESH_ZONE` — timezone for refresh cron evaluation (default: `UTC`)
+- `GITHUB_REPOSITORY_REFRESH_BATCH_SIZE` — max linked repositories refreshed per cron run (default: `50`)
 
 Setup for local development:
 
@@ -96,6 +103,13 @@ GITHUB_APP_INSTALL_URL=https://github.com/apps/<your-app-slug>/installations/new
 GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE=100
 GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE=100
 GITHUB_ACCESS_REQUEST_EXPIRES_IN_MINUTES=15
+GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED=true
+GITHUB_ACCESS_REQUEST_CLEANUP_INITIAL_DELAY_MS=120000
+GITHUB_ACCESS_REQUEST_CLEANUP_FIXED_DELAY_MS=900000
+GITHUB_REPOSITORY_REFRESH_JOB_ENABLED=true
+GITHUB_REPOSITORY_REFRESH_CRON=0 0 0 * * *
+GITHUB_REPOSITORY_REFRESH_ZONE=UTC
+GITHUB_REPOSITORY_REFRESH_BATCH_SIZE=50
 ```
 
 3. Keep hostnames consistent across FE/BE in local dev:
