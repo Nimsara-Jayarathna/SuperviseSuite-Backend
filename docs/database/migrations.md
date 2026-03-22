@@ -80,6 +80,70 @@
   - Added indexes:
     - `idx_projects_leader_user_id`
 
+## 2026-03-21 — GitHub cache persistence
+
+### V5__project_github_cache.sql
+
+- Added **`project_repositories`** table:
+  - `id` (UUID PK)
+  - `project_id` (FK -> `projects.id`, ON DELETE CASCADE)
+  - `provider` (`github`)
+  - `repository_external_id` (nullable)
+  - `repository_name`
+  - `repository_url`
+  - `owner_login` (nullable)
+  - `default_branch` (nullable)
+  - `installation_id` (nullable)
+  - `is_primary` (default `true`)
+  - `sync_status` / `last_sync_error` (nullable sync state)
+  - `last_synced_at` (nullable)
+  - `created_at`, `updated_at`
+- Added constraints/indexes:
+  - unique primary repository per project scope
+  - indexes for `project_id`, `installation_id`
+
+- Added **`project_repository_commits`** table:
+  - `id` (UUID PK)
+  - `repository_id` (FK -> `project_repositories.id`, ON DELETE CASCADE)
+  - `sha`
+  - `message`
+  - `author`
+  - `committed_at`
+  - `commit_type` (nullable)
+  - `created_at`
+- Added constraints/indexes:
+  - unique `(repository_id, sha)` to prevent duplicates
+  - index for commit timeline queries by repository
+
+- Added **`project_repository_contributors`** table:
+  - `id` (UUID PK)
+  - `repository_id` (FK -> `project_repositories.id`, ON DELETE CASCADE)
+  - `contributor_name`
+  - `commit_count`
+  - `last_contribution_at` (nullable)
+  - `updated_at`
+- Added constraints/indexes:
+  - unique `(repository_id, contributor_name)`
+  - index for ranking queries (`commit_count DESC`)
+
+## 2026-03-21 — GitHub App installation tracking
+
+### V6__github_app_installations.sql
+
+- Added **`github_app_installations`** table:
+  - `id` (UUID PK)
+  - `installation_id` (GitHub installation id, unique)
+  - `account_id` (nullable)
+  - `account_login` (nullable)
+  - `account_type` (nullable)
+  - `status` (ACTIVE/PENDING/SUSPENDED/DELETED style lifecycle)
+  - `installed_at` (nullable)
+  - `last_event_at` (nullable)
+  - `created_at`, `updated_at`
+- Added indexes:
+  - unique index on `installation_id`
+  - status/query support indexes for installation lookups
+
 ## Rules for Next Migrations
 
 - Use versioned files: `V{number}__{description}.sql`

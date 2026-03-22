@@ -19,6 +19,10 @@ All endpoints in this document:
 - `PATCH /api/supervisor/projects/{projectId}`
 - `PATCH /api/supervisor/projects/{projectId}/status`
 - `PATCH /api/supervisor/projects/{projectId}/repository`
+- `GET /api/supervisor/projects/{projectId}/github`
+- `GET /api/supervisor/projects/{projectId}/github/activity?page=...&size=...`
+- `GET /api/supervisor/projects/{projectId}/github/contributors?page=...&size=...`
+- `POST /api/supervisor/projects/{projectId}/github/refresh`
 - `POST /api/supervisor/projects/{projectId}/members`
 - `POST /api/supervisor/projects/{projectId}/milestones`
 - `PATCH /api/supervisor/projects/{projectId}/milestones/{milestoneId}`
@@ -83,6 +87,12 @@ Returns one supervisor-owned project detail record.
 
 - core fields:
   - `id`, `title`, `summary`, `lifecycleStatus`, `batch`, `semester`, `milestoneDate`, `progressPercent`, `healthNote`, `repositoryUrl`, `lastActivityAt`
+- GitHub preview block:
+  - `github.repositoryLinked`
+  - `github.repositories[]` (`id`, `name`, `url`, `defaultBranch`, `lastSyncedAt`)
+  - `github.activitySummary` (`totalCommits`, `lastActivityAt`, `status`)
+  - `github.contributorsPreview[]` (top 4)
+  - `github.recentCommitsPreview[]` (small preview list)
 - `leader` (nullable):
   - `id`, `firstName`, `lastName`, `email`, `registrationNumber`
 - `members[]`:
@@ -237,6 +247,78 @@ Content-Type: application/json
 - Not found, not owned, deleted, and malformed UUID all return `404 NOT_FOUND`.
 - Updates `updatedAt` and `lastActivityAt`.
 - Returns refreshed project detail payload, including `repositoryUrl`.
+- In SCRUM-80 flow, this endpoint is also the manual-link control path used by the Overview "Link repository" modal.
+
+---
+
+## GET /api/supervisor/projects/{projectId}/github
+
+Returns read-only GitHub dashboard data for the project.
+
+### Response fields
+
+- `repositoryLinked`
+- `repository`:
+  - `name`, `url`, `defaultBranch`
+- `activitySummary`:
+  - `totalCommits`, `lastActivityAt`, `status` (`active|idle`)
+- `contributors[]`:
+  - `name`, `commitCount`
+- `recentCommits[]`:
+  - `sha`, `message`, `author`, `committedAt`
+
+Notes:
+
+- Data is served from DB-backed cache, not direct passthrough GitHub payload.
+- If no repository is linked, `repositoryLinked = false` and lists are empty.
+
+---
+
+## GET /api/supervisor/projects/{projectId}/github/activity?page=...&size=...
+
+Returns paginated activity rows for the "View full activity" modal.
+
+### Query params
+
+- `page` (1-based, default `1`)
+- `size` (bounded by backend config defaults/max)
+
+### Response fields
+
+- `items[]`:
+  - `sha`, `message`, `author`, `committedAt`
+- `page`, `size`, `total`, `hasMore`
+
+---
+
+## GET /api/supervisor/projects/{projectId}/github/contributors?page=...&size=...
+
+Returns paginated contributors for the "View all contributors" modal.
+
+### Query params
+
+- `page` (1-based, default `1`)
+- `size` (bounded by backend config defaults/max)
+
+### Response fields
+
+- `items[]`:
+  - `name`, `commitCount`
+- `page`, `size`, `total`, `hasMore`
+
+---
+
+## POST /api/supervisor/projects/{projectId}/github/refresh
+
+Triggers backend GitHub sync and updates DB cache for the linked repository.
+
+### Behavior
+
+- Validates project ownership and repository linkage.
+- Fetches metadata/commits via backend GitHub integration (installation-aware when linked).
+- Rebuilds commit + contributor snapshots.
+- Updates repository sync fields (`lastSyncedAt`, `syncStatus`, `lastSyncError`).
+- Returns `200 OK` with success message on completion.
 
 ### Status codes
 

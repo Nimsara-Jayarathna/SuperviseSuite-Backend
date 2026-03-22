@@ -9,11 +9,13 @@ Current API references:
 - `docs/api/auth.md`
 - `docs/api/supervisor.md`
 - `docs/api/student.md`
+- `docs/api/github-app.md`
 - `docs/api-response-contract.md`
 
 Backend fix documents:
 
 - `docs/backend/major-fixes-scrum-97-supervisor-workflow.md`
+- `docs/backend/major-fixes-scrum-80-github-app-dashboard.md`
 - `docs/backend/recent-changes-2026-03-05.md`
 
 ## Recent API Contract Update (March 2026)

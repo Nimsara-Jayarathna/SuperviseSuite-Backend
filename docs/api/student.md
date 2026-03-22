@@ -13,6 +13,9 @@ All endpoints in this document:
 
 - [GET /api/student/projects](#get-apistudentprojects)
 - [GET /api/student/projects/{projectId}](#get-apistudentprojectsprojectid)
+- [GET /api/student/projects/{projectId}/github](#get-apistudentprojectsprojectidgithub)
+- [GET /api/student/projects/{projectId}/github/activity?page=...&size=...](#get-apistudentprojectsprojectidgithubactivitypagesize)
+- [GET /api/student/projects/{projectId}/github/contributors?page=...&size=...](#get-apistudentprojectsprojectidgithubcontributorspagesize)
 
 ---
 
@@ -89,6 +92,7 @@ The detail payload currently includes backend-backed fields only:
 - `lastActivityAt`
 - `progressPercent`
 - `healthNote`
+- `github`
 - `members[]`
 - `milestones[]`
 
@@ -109,6 +113,14 @@ The detail payload currently includes backend-backed fields only:
 - `dueDate`
 - `status`
 - `sequenceNo`
+
+`github` preview fields:
+
+- `repositoryLinked`
+- `repositories[]` (`id`, `name`, `url`, `defaultBranch`, `lastSyncedAt`)
+- `activitySummary` (`totalCommits`, `lastActivityAt`, `status`)
+- `contributorsPreview[]` (top 4)
+- `recentCommitsPreview[]` (preview list)
 
 ### 200 OK
 
@@ -160,3 +172,54 @@ Returns `NOT_FOUND` when:
 - the project does not exist
 - the project is soft-deleted
 - the authenticated student is not assigned to the project as `member_role = STUDENT`
+
+---
+
+## GET /api/student/projects/{projectId}/github
+
+Returns read-only GitHub dashboard data for the student project detail GitHub tab.
+
+### Response fields
+
+- `repositoryLinked`
+- `repository` (`name`, `url`, `defaultBranch`)
+- `activitySummary` (`totalCommits`, `lastActivityAt`, `status`)
+- `contributors[]` (`name`, `commitCount`)
+- `recentCommits[]` (`sha`, `message`, `author`, `committedAt`)
+
+Notes:
+
+- Served from backend DB cache.
+- No student-side mutation actions are exposed.
+
+---
+
+## GET /api/student/projects/{projectId}/github/activity?page=...&size=...
+
+Returns paginated activity rows for the activity modal.
+
+### Query params
+
+- `page` (1-based, default `1`)
+- `size` (bounded by backend config defaults/max)
+
+### Response fields
+
+- `items[]` (`sha`, `message`, `author`, `committedAt`)
+- `page`, `size`, `total`, `hasMore`
+
+---
+
+## GET /api/student/projects/{projectId}/github/contributors?page=...&size=...
+
+Returns paginated contributors for the contributors modal.
+
+### Query params
+
+- `page` (1-based, default `1`)
+- `size` (bounded by backend config defaults/max)
+
+### Response fields
+
+- `items[]` (`name`, `commitCount`)
+- `page`, `size`, `total`, `hasMore`
