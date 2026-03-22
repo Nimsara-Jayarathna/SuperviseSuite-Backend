@@ -56,3 +56,6 @@ app:
     commits-page-size: ${GITHUB_COMMITS_PAGE_SIZE:100}
     default-page-size: ${GITHUB_DEFAULT_PAGE_SIZE:10}
     max-page-size: ${GITHUB_MAX_PAGE_SIZE:100}
+    installation-repositories:
+      default-page-size: ${GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE:100}
+      max-page-size: ${GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE:100}

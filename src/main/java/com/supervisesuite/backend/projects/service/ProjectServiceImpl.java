@@ -5,6 +5,7 @@ import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.config.GitHubProperties;
 import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryDto;
+import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectCommitDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
@@ -440,21 +441,25 @@ class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<GitHubInstallationRepositoryDto> getInstallationRepositories(
+    public GitHubInstallationRepositoryPageDto getInstallationRepositories(
         UUID projectId,
         Long installationId,
-        UUID supervisorUserId
+        UUID supervisorUserId,
+        int page,
+        Integer size
     ) {
         if (projectId == null) {
             throw new ValidationException("projectId", "Project id is required.");
         }
+        int normalizedPage = normalizeInstallationRepositoriesPage(page);
+        int normalizedSize = normalizeInstallationRepositoriesPageSize(size);
         requireUsableInstallation(installationId);
         requireProjectInstallationAuthorization(projectId, installationId, supervisorUserId);
 
-        List<GitHubAppAuthService.GitHubInstallationRepositoryContext> repositories =
-            gitHubAppAuthService.fetchInstallationRepositories(installationId);
+        GitHubAppAuthService.GitHubInstallationRepositoriesPageContext context =
+            gitHubAppAuthService.fetchInstallationRepositories(installationId, normalizedPage, normalizedSize);
 
-        return repositories.stream()
+        List<GitHubInstallationRepositoryDto> items = context.repositories().stream()
             .filter(repository -> repository != null)
             .map(repository -> {
                 String fullName = resolveFullName(repository);
@@ -467,11 +472,35 @@ class ProjectServiceImpl implements ProjectService {
                     nullable(repository.defaultBranch(), defaultBranch())
                 );
             })
-            .sorted(Comparator.comparing(
-                dto -> nullable(dto.getFullName(), nullable(dto.getName(), "")),
-                String.CASE_INSENSITIVE_ORDER
-            ))
             .toList();
+
+        int returnedCount = items.size();
+        Long totalCount = context.totalCount();
+        boolean hasPrevious = normalizedPage > 1;
+        boolean hasNext = totalCount != null
+            ? (long) normalizedPage * normalizedSize < totalCount
+            : returnedCount >= normalizedSize && returnedCount > 0;
+        Integer nextPage = hasNext ? normalizedPage + 1 : null;
+
+        LOGGER.info(
+            "GitHub installation repositories loaded installationId={} page={} size={} returnedCount={} totalCount={}",
+            installationId,
+            normalizedPage,
+            normalizedSize,
+            returnedCount,
+            totalCount
+        );
+
+        return new GitHubInstallationRepositoryPageDto(
+            items,
+            normalizedPage,
+            normalizedSize,
+            returnedCount,
+            totalCount,
+            hasNext,
+            hasPrevious,
+            nextPage
+        );
     }
 
     @Override
@@ -492,15 +521,8 @@ class ProjectServiceImpl implements ProjectService {
             throw new ValidationException("repositoryId", "GitHub repository id is required.");
         }
 
-        GitHubAppAuthService.GitHubInstallationRepositoryContext selectedRepository = gitHubAppAuthService
-            .fetchInstallationRepositories(installationId)
-            .stream()
-            .filter(repository -> repository != null && repositoryId.equals(repository.repositoryId()))
-            .findFirst()
-            .orElseThrow(() -> new ValidationException(
-                "repositoryId",
-                "Selected repository is not accessible under the selected installation."
-            ));
+        GitHubAppAuthService.GitHubInstallationRepositoryContext selectedRepository =
+            resolveInstallationRepositoryById(installationId, repositoryId);
 
         String repositoryUrl = resolveRepositoryUrlFromContext(selectedRepository);
 
@@ -549,6 +571,42 @@ class ProjectServiceImpl implements ProjectService {
             refreshedRepository.getOwnerLogin(),
             refreshedRepository.getDefaultBranch(),
             refreshedRepository.getLastSyncedAt()
+        );
+    }
+
+    private GitHubAppAuthService.GitHubInstallationRepositoryContext resolveInstallationRepositoryById(
+        Long installationId,
+        Long repositoryId
+    ) {
+        int page = 1;
+        int pageSize = installationRepositoriesMaxPageSize();
+
+        while (true) {
+            GitHubAppAuthService.GitHubInstallationRepositoriesPageContext context =
+                gitHubAppAuthService.fetchInstallationRepositories(installationId, page, pageSize);
+
+            GitHubAppAuthService.GitHubInstallationRepositoryContext found = context.repositories().stream()
+                .filter(repository -> repository != null && repositoryId.equals(repository.repositoryId()))
+                .findFirst()
+                .orElse(null);
+            if (found != null) {
+                return found;
+            }
+
+            int returnedCount = context.repositories().size();
+            Long totalCount = context.totalCount();
+            boolean hasNext = totalCount != null
+                ? (long) page * pageSize < totalCount
+                : returnedCount >= pageSize && returnedCount > 0;
+            if (!hasNext) {
+                break;
+            }
+            page++;
+        }
+
+        throw new ValidationException(
+            "repositoryId",
+            "Selected repository is not accessible under the selected installation."
         );
     }
 
@@ -990,6 +1048,51 @@ class ProjectServiceImpl implements ProjectService {
 
     private int normalizePage(int page) {
         return page < 1 ? DEFAULT_PAGE : page;
+    }
+
+    private int normalizeInstallationRepositoriesPage(int page) {
+        if (page < 1) {
+            throw new ValidationException("page", "Page must be greater than zero.");
+        }
+        return page;
+    }
+
+    private int normalizeInstallationRepositoriesPageSize(Integer size) {
+        int configuredDefault = installationRepositoriesDefaultPageSize();
+        int configuredMax = installationRepositoriesMaxPageSize();
+
+        if (size == null) {
+            return configuredDefault;
+        }
+        if (size < 1) {
+            throw new ValidationException("size", "Size must be greater than zero.");
+        }
+        return Math.min(size, configuredMax);
+    }
+
+    private int installationRepositoriesDefaultPageSize() {
+        GitHubProperties.InstallationRepositories configuration = gitHubProperties.getInstallationRepositories();
+        if (configuration == null) {
+            throw new ValidationException(
+                "app.github.installation-repositories.default-page-size",
+                "GitHub installation repositories pagination config is missing."
+            );
+        }
+        int configuredDefault = configuration.getDefaultPageSize();
+        return Math.max(1, configuredDefault);
+    }
+
+    private int installationRepositoriesMaxPageSize() {
+        GitHubProperties.InstallationRepositories configuration = gitHubProperties.getInstallationRepositories();
+        if (configuration == null) {
+            throw new ValidationException(
+                "app.github.installation-repositories.max-page-size",
+                "GitHub installation repositories pagination config is missing."
+            );
+        }
+        int configuredDefault = installationRepositoriesDefaultPageSize();
+        int configuredMax = configuration.getMaxPageSize();
+        return Math.max(configuredDefault, configuredMax);
     }
 
     private String normalizeRepositoryUrl(String repositoryUrl) {

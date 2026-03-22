@@ -9,7 +9,7 @@ public interface GitHubAppAuthService {
 
     GitHubInstallationContext fetchInstallationContext(Long installationId);
 
-    java.util.List<GitHubInstallationRepositoryContext> fetchInstallationRepositories(Long installationId);
+    GitHubInstallationRepositoriesPageContext fetchInstallationRepositories(Long installationId, int page, int size);
 
     record GitHubInstallationToken(String token, Instant expiresAt) {
     }
@@ -29,6 +29,12 @@ public interface GitHubAppAuthService {
         String ownerLogin,
         String htmlUrl,
         String defaultBranch
+    ) {
+    }
+
+    record GitHubInstallationRepositoriesPageContext(
+        java.util.List<GitHubInstallationRepositoryContext> repositories,
+        Long totalCount
     ) {
     }
 }

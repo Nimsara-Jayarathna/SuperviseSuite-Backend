@@ -8,7 +8,7 @@ import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
-import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryDto;
+import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
@@ -514,17 +514,19 @@ SupervisorServiceImpl(
 
     @Override
     @Transactional(readOnly = true)
-    public List<GitHubInstallationRepositoryDto> getGitHubInstallationRepositories(
+    public GitHubInstallationRepositoryPageDto getGitHubInstallationRepositories(
         String authenticatedUserId,
         String projectId,
-        Long installationId
+        Long installationId,
+        int page,
+        Integer size
     ) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
         Project project = projectRepository
             .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
             .orElseThrow(EntityNotFoundException::new);
-        return projectService.getInstallationRepositories(project.getId(), installationId, supervisor.getId());
+        return projectService.getInstallationRepositories(project.getId(), installationId, supervisor.getId(), page, size);
     }
 
     @Override

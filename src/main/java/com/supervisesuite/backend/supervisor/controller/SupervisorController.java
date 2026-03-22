@@ -2,7 +2,7 @@ package com.supervisesuite.backend.supervisor.controller;
 
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
-import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryDto;
+import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
@@ -138,16 +138,20 @@ public class SupervisorController {
     }
 
     @GetMapping("/projects/{projectId}/github/installations/{installationId}/repositories")
-    public ResponseEntity<ApiResponse<List<GitHubInstallationRepositoryDto>>> getGitHubInstallationRepositories(
+    public ResponseEntity<ApiResponse<GitHubInstallationRepositoryPageDto>> getGitHubInstallationRepositories(
         Authentication authentication,
         HttpServletRequest request,
         @PathVariable String projectId,
-        @PathVariable Long installationId
+        @PathVariable Long installationId,
+        @RequestParam(name = "page", defaultValue = "1") int page,
+        @RequestParam(name = "size", required = false) Integer size
     ) {
-        List<GitHubInstallationRepositoryDto> data = supervisorService.getGitHubInstallationRepositories(
+        GitHubInstallationRepositoryPageDto data = supervisorService.getGitHubInstallationRepositories(
             authentication.getName(),
             projectId,
-            installationId
+            installationId,
+            page,
+            size
         );
         return apiResponseFactory.ok("GitHub installation repositories loaded.", data, request);
     }

@@ -70,6 +70,8 @@ The backend reads DB and auth config from environment variables:
 - `GITHUB_COMMITS_PAGE_SIZE` — per-page size used while syncing commits from GitHub API (default: `100`)
 - `GITHUB_DEFAULT_PAGE_SIZE` — default page size for GitHub paginated APIs (default: `10`)
 - `GITHUB_MAX_PAGE_SIZE` — max allowed page size for GitHub paginated APIs (default: `100`)
+- `GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE` — default page size for installation repositories listing (`GET /api/supervisor/projects/{projectId}/github/installations/{installationId}/repositories`) when client does not provide `size` (default: `100`)
+- `GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE` — max allowed `size` for installation repositories listing; request values above this are capped (default: `100`)
 
 Setup for local development:
 
@@ -88,6 +90,8 @@ GITHUB_DASHBOARD_CONTRIBUTORS_LIMIT=5
 GITHUB_COMMITS_PAGE_SIZE=100
 GITHUB_DEFAULT_PAGE_SIZE=10
 GITHUB_MAX_PAGE_SIZE=100
+GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE=100
+GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE=100
 ```
 
 3. Keep hostnames consistent across FE/BE in local dev:

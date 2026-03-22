@@ -87,4 +87,23 @@ public class GitHubProperties {
      */
     private int maxPageSize = 100;
 
+    /**
+     * Page-size settings for installation repositories listing.
+     */
+    private InstallationRepositories installationRepositories = new InstallationRepositories();
+
+    @Getter
+    @Setter
+    public static class InstallationRepositories {
+        /**
+         * Default page size used when listing repositories under an installation.
+         */
+        private int defaultPageSize = 100;
+
+        /**
+         * Maximum allowed page size used when listing repositories under an installation.
+         */
+        private int maxPageSize = 100;
+    }
+
 }

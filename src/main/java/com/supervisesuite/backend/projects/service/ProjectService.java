@@ -1,11 +1,10 @@
 package com.supervisesuite.backend.projects.service;
 
-import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryDto;
+import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto;
-import java.util.List;
 import java.util.UUID;
 
 public interface ProjectService {
@@ -39,10 +38,12 @@ public interface ProjectService {
         String ownerLogin
     );
 
-    List<GitHubInstallationRepositoryDto> getInstallationRepositories(
+    GitHubInstallationRepositoryPageDto getInstallationRepositories(
         UUID projectId,
         Long installationId,
-        UUID supervisorUserId
+        UUID supervisorUserId,
+        int page,
+        Integer size
     );
 
     ProjectGitHubRepositoryLinkDto linkProjectToInstallationRepository(

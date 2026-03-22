@@ -12,7 +12,7 @@ import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
-import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryDto;
+import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
@@ -42,10 +42,12 @@ public interface SupervisorService {
         int size
     );
 
-    List<GitHubInstallationRepositoryDto> getGitHubInstallationRepositories(
+    GitHubInstallationRepositoryPageDto getGitHubInstallationRepositories(
         String authenticatedUserId,
         String projectId,
-        Long installationId
+        Long installationId,
+        int page,
+        Integer size
     );
 
     ProjectGitHubRepositoryLinkDto linkProjectGitHubRepository(

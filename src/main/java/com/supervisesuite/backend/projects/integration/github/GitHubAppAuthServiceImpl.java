@@ -149,16 +149,26 @@ public class GitHubAppAuthServiceImpl implements GitHubAppAuthService {
     }
 
     @Override
-    public List<GitHubInstallationRepositoryContext> fetchInstallationRepositories(Long installationId) {
+    public GitHubInstallationRepositoriesPageContext fetchInstallationRepositories(Long installationId, int page, int size) {
         if (installationId == null || installationId < 1) {
             throw new ValidationException("installationId", "Installation id is required.");
+        }
+        if (page < 1) {
+            throw new ValidationException("page", "Page must be greater than zero.");
+        }
+        if (size < 1) {
+            throw new ValidationException("size", "Size must be greater than zero.");
         }
 
         try {
             GitHubInstallationToken installationToken = createInstallationAccessToken(installationId);
             JsonNode response = restClient
                 .get()
-                .uri("/installation/repositories")
+                .uri(uriBuilder -> uriBuilder
+                    .path("/installation/repositories")
+                    .queryParam("per_page", size)
+                    .queryParam("page", page)
+                    .build())
                 .headers(headers -> {
                     headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
                     headers.add(HttpHeaders.USER_AGENT, USER_AGENT);
@@ -169,7 +179,7 @@ public class GitHubAppAuthServiceImpl implements GitHubAppAuthService {
 
             JsonNode repositoriesNode = response == null ? null : response.path("repositories");
             if (repositoriesNode == null || !repositoriesNode.isArray()) {
-                return List.of();
+                return new GitHubInstallationRepositoriesPageContext(List.of(), null);
             }
 
             List<GitHubInstallationRepositoryContext> repositories = new ArrayList<>();
@@ -184,7 +194,11 @@ public class GitHubAppAuthServiceImpl implements GitHubAppAuthService {
                     textOrNull(repo.path("default_branch"))
                 ));
             }
-            return repositories;
+            Long totalCount = response != null && response.path("total_count").isIntegralNumber()
+                ? response.path("total_count").asLong()
+                : null;
+
+            return new GitHubInstallationRepositoriesPageContext(repositories, totalCount);
         } catch (ValidationException exception) {
             throw exception;
         } catch (RestClientResponseException | ResourceAccessException exception) {
