@@ -60,7 +60,7 @@ The backend reads DB and auth config from environment variables:
 - `GITHUB_APP_ID` — GitHub App id used for app JWT generation
 - `GITHUB_APP_CLIENT_ID` — GitHub App client id for setup/install flow
 - `GITHUB_APP_CLIENT_SECRET` — GitHub App client secret (if used by your callback flow)
-- `GITHUB_APP_INSTALL_URL` — GitHub App installation URL used by backend to continue project-scoped access requests
+- `GITHUB_APP_INSTALL_URL` — GitHub App installation URL used by backend for setup-start redirects (`GET /api/supervisor/projects/{projectId}/github/setup/start`) and access-request continuation flows
 - `GITHUB_APP_PRIVATE_KEY` — GitHub App PEM private key (escaped newlines supported in `.env`)
 - `GITHUB_APP_WEBHOOK_SECRET` — webhook signature secret for `/api/github/webhooks`
 - `GITHUB_DEFAULT_BRANCH` — fallback default branch when metadata is missing (default: `main`)

@@ -179,6 +179,25 @@ class SupervisorServiceImplUnitTest {
     }
 
     @Test
+    void buildGitHubSetupStartUrl_delegatesToIntegrationServiceAfterOwnershipCheck() {
+        UUID projectId = UUID.randomUUID();
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        String authorizeUrl = "https://github.com/apps/supervisesuite/installations/new?state=test";
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+            .thenReturn(Optional.of(project));
+        when(gitHubAppIntegrationService.buildProjectSetupAuthorizeUrl(projectId)).thenReturn(authorizeUrl);
+
+        String result = service.buildGitHubSetupStartUrl(supervisorId.toString(), projectId.toString());
+
+        assertThat(result).isEqualTo(authorizeUrl);
+        verify(gitHubAppIntegrationService).buildProjectSetupAuthorizeUrl(projectId);
+    }
+
+    @Test
     void linkProjectGitHubRepository_updatesProjectRepositoryUrl() {
         UUID projectId = UUID.randomUUID();
         Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));

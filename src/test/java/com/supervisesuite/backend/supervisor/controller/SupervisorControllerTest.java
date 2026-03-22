@@ -117,6 +117,18 @@ class SupervisorControllerTest {
     }
 
     @Test
+    void startGitHubSetup_redirectsToAuthorizeUrlFromService() {
+        when(supervisorService.buildGitHubSetupStartUrl("supervisor-id", "project-1"))
+            .thenReturn("https://github.com/apps/supervisesuite/installations/new?state=test");
+
+        ResponseEntity<Void> response = controller.startGitHubSetup(authentication, "project-1");
+
+        assertThat(response.getStatusCode().value()).isEqualTo(303);
+        assertThat(response.getHeaders().getLocation())
+            .hasToString("https://github.com/apps/supervisesuite/installations/new?state=test");
+    }
+
+    @Test
     void linkProjectGitHubRepository_delegatesToServiceAndFactory() {
         LinkProjectGitHubRepositoryRequest body = new LinkProjectGitHubRepositoryRequest();
         body.setInstallationId(10L);

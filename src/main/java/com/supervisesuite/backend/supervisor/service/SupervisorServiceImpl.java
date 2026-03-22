@@ -589,6 +589,20 @@ SupervisorServiceImpl(
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public String buildGitHubSetupStartUrl(
+        String authenticatedUserId,
+        String projectId
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+        return gitHubAppIntegrationService.buildProjectSetupAuthorizeUrl(parsedProjectId);
+    }
+
+    @Override
     @Transactional
     public ProjectGitHubRepositoryLinkDto linkProjectGitHubRepository(
         String authenticatedUserId,

@@ -25,7 +25,9 @@ import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRe
 import com.supervisesuite.backend.supervisor.service.SupervisorService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.net.URI;
 import java.util.List;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -200,6 +202,15 @@ public class SupervisorController {
             token
         );
         return apiResponseFactory.ok("GitHub repository access request continuation prepared.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/github/setup/start")
+    public ResponseEntity<Void> startGitHubSetup(
+        Authentication authentication,
+        @PathVariable String projectId
+    ) {
+        String authorizeUrl = supervisorService.buildGitHubSetupStartUrl(authentication.getName(), projectId);
+        return ResponseEntity.status(HttpStatus.SEE_OTHER).location(URI.create(authorizeUrl)).build();
     }
 
     @PostMapping("/projects/{projectId}/github/link")

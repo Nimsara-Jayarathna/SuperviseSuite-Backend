@@ -246,6 +246,25 @@ public class GitHubAppIntegrationService {
         return new SetupCallbackResult(projectId, installationId, accessRequest != null, resultToken);
     }
 
+    @Transactional(readOnly = true)
+    public String buildProjectSetupAuthorizeUrl(UUID projectId) {
+        if (projectId == null) {
+            throw new ValidationException("projectId", "Project id is required.");
+        }
+
+        String statePayload = "{\"projectId\":\"" + projectId + "\"}";
+        String state = Base64
+            .getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(statePayload.getBytes(StandardCharsets.UTF_8));
+
+        return UriComponentsBuilder
+            .fromUriString(requireGitHubAppInstallUrl())
+            .queryParam("state", state)
+            .build(true)
+            .toUriString();
+    }
+
     @Transactional
     public void handleSetupCallback(Long installationId, UUID projectId) {
         Instant now = Instant.now();
@@ -430,6 +449,19 @@ public class GitHubAppIntegrationService {
     }
 
     private String buildGithubAuthorizeUrlAndStoreState(ProjectGitHubAccessRequest accessRequest, Instant now) {
+        String state = generateOpaqueToken();
+        accessRequest.setGithubStateHash(sha256Base64(state));
+        accessRequest.setUpdatedAt(now);
+        projectGitHubAccessRequestRepository.save(accessRequest);
+
+        return UriComponentsBuilder
+            .fromUriString(requireGitHubAppInstallUrl())
+            .queryParam("state", state)
+            .build(true)
+            .toUriString();
+    }
+
+    private String requireGitHubAppInstallUrl() {
         String appInstallUrl = trimToNull(gitHubProperties.getAppInstallUrl());
         if (appInstallUrl == null) {
             throw new ValidationException(
@@ -437,17 +469,7 @@ public class GitHubAppIntegrationService {
                 "GitHub App install URL is not configured."
             );
         }
-
-        String state = generateOpaqueToken();
-        accessRequest.setGithubStateHash(sha256Base64(state));
-        accessRequest.setUpdatedAt(now);
-        projectGitHubAccessRequestRepository.save(accessRequest);
-
-        return UriComponentsBuilder
-            .fromUriString(appInstallUrl)
-            .queryParam("state", state)
-            .build(true)
-            .toUriString();
+        return appInstallUrl;
     }
 
     private void refreshAccessibleRepositoriesSnapshot(Long installationId) {

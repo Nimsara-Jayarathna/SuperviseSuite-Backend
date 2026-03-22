@@ -70,6 +70,11 @@ public interface SupervisorService {
         String requestToken
     );
 
+    String buildGitHubSetupStartUrl(
+        String authenticatedUserId,
+        String projectId
+    );
+
     ProjectGitHubRepositoryLinkDto linkProjectGitHubRepository(
         String authenticatedUserId,
         String projectId,

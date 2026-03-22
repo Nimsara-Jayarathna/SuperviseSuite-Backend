@@ -144,6 +144,25 @@ Commit range: `43ff515` -> `5952bec`
   - expired access-request cleanup (fixed delay)
   - linked repository refresh (cron + zone + batch size)
 
+## Post-Branch Updates (2026-03-23): Supervisor Setup-Start Redirect Endpoint
+
+### Why this follow-up was needed
+
+- Frontend needed a stable "Connect GitHub App" entrypoint without building GitHub install URL/state in browser env.
+- Setup URL/state generation should be owned by backend for consistency with callback and access-request flows.
+
+### What was changed
+
+- Added supervisor-authenticated setup-start endpoint:
+  - `GET /api/supervisor/projects/{projectId}/github/setup/start`
+  - validates supervisor ownership
+  - builds project-aware `state` payload server-side
+  - returns `303 See Other` to `GITHUB_APP_INSTALL_URL` + `state`
+- Extended service layer contract:
+  - `SupervisorService.buildGitHubSetupStartUrl(...)`
+  - `GitHubAppIntegrationService.buildProjectSetupAuthorizeUrl(...)`
+- Consolidated install URL validation in integration service with shared helper (`requireGitHubAppInstallUrl()`).
+
 ## Changed Files (`dev...HEAD`)
 
 - `.env.example`

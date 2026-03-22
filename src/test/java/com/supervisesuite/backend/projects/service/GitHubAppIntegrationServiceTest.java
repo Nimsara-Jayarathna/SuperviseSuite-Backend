@@ -160,6 +160,21 @@ class GitHubAppIntegrationServiceTest {
     }
 
     @Test
+    void buildProjectSetupAuthorizeUrl_encodesProjectIdInState() {
+        String url = service.buildProjectSetupAuthorizeUrl(projectId);
+
+        assertThat(url).startsWith("https://github.com/apps/supervisesuite/installations/new");
+        assertThat(url).contains("state=");
+
+        String encodedState = url.substring(url.indexOf("state=") + "state=".length());
+        String decodedState = new String(
+            Base64.getUrlDecoder().decode(encodedState),
+            StandardCharsets.UTF_8
+        );
+        assertThat(decodedState).contains("\"projectId\":\"" + projectId + "\"");
+    }
+
+    @Test
     void handleSetupCallback_marksAccessRequestCompletedAndReturnsResultToken() {
         Long installationId = 77L;
         String state = "setup-state";

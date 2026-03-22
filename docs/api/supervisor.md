@@ -26,6 +26,7 @@ All endpoints in this document:
 - `POST /api/supervisor/projects/{projectId}/github/access-requests`
 - `GET /api/supervisor/projects/{projectId}/github/access-requests/validate?token=...`
 - `POST /api/supervisor/projects/{projectId}/github/access-requests/continue?token=...`
+- `GET /api/supervisor/projects/{projectId}/github/setup/start`
 - `POST /api/supervisor/projects/{projectId}/github/link`
 - `POST /api/supervisor/projects/{projectId}/github/access/remove`
 - `POST /api/supervisor/projects/{projectId}/github/refresh`
@@ -318,6 +319,23 @@ Supervisor-authenticated continuation endpoint that returns GitHub authorization
 
 - `projectId`
 - `githubAuthorizeUrl`
+
+---
+
+## GET /api/supervisor/projects/{projectId}/github/setup/start
+
+Supervisor-authenticated setup-start endpoint for direct "Connect GitHub App" flow.
+
+### Behavior
+
+- validates supervisor ownership of project
+- builds project-aware `state` payload server-side
+- returns `303 See Other` redirect to GitHub App install/authorize URL (`GITHUB_APP_INSTALL_URL`)
+
+### Notes
+
+- This endpoint is intended for browser navigation (not JSON/XHR usage).
+- Keeps GitHub setup URL composition out of frontend runtime env config.
 
 ---
 

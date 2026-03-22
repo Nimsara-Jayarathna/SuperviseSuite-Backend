@@ -105,6 +105,16 @@ Behavior:
 
 All endpoints below are authenticated and require role `SUPERVISOR`.
 
+### GET /api/supervisor/projects/{projectId}/github/setup/start
+
+Starts direct GitHub App connect flow for a supervisor-owned project.
+
+Behavior:
+
+- validates project ownership
+- builds project-aware `state` server-side (`{"projectId":"..."}` base64url)
+- responds with `303 See Other` redirect to `GITHUB_APP_INSTALL_URL` + `state`
+
 ### GET /api/supervisor/projects/{projectId}/github/installations/{installationId}/repositories?page=&size=
 
 Returns paginated repositories accessible under a specific installation for a specific project authorization context.
