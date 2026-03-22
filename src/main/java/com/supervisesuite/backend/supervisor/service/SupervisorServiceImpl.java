@@ -619,6 +619,29 @@ SupervisorServiceImpl(
     }
 
     @Override
+    @Transactional
+    public SupervisorProjectDetailDto removeProjectGitHubAccessAuthorization(
+        String authenticatedUserId,
+        String projectId
+    ) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        Instant now = Instant.now();
+        projectService.clearGitHubLinkage(project.getId());
+        project.setRepositoryUrl(null);
+        project.setUpdatedAt(now);
+        project.setLastActivityAt(now);
+        Project savedProject = projectRepository.save(project);
+
+        return toProjectDetail(savedProject);
+    }
+
+    @Override
     @Transactional(noRollbackFor = GitHubInstallationDisconnectedException.class)
     public void refreshProjectGitHubData(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);

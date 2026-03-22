@@ -673,21 +673,19 @@ class ProjectServiceImpl implements ProjectService {
     @Transactional
     public void clearGitHubLinkage(UUID projectId) {
         List<ProjectRepository> repositories = projectRepositoryCacheRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
-        if (repositories.isEmpty()) {
-            return;
-        }
-
         java.util.Set<Long> removedInstallationIds = new java.util.HashSet<>();
-        for (ProjectRepository repository : repositories) {
-            if (repository.getInstallationId() != null) {
-                removedInstallationIds.add(repository.getInstallationId());
+        if (!repositories.isEmpty()) {
+            for (ProjectRepository repository : repositories) {
+                if (repository.getInstallationId() != null) {
+                    removedInstallationIds.add(repository.getInstallationId());
+                }
+                if (repository.getId() != null) {
+                    purgeRepositoryData(repository.getId());
+                }
             }
-            if (repository.getId() != null) {
-                purgeRepositoryData(repository.getId());
-            }
-        }
 
-        projectRepositoryCacheRepository.deleteAll(repositories);
+            projectRepositoryCacheRepository.deleteAll(repositories);
+        }
         projectGitHubInstallationAuthorizationRepository.deleteByProjectId(projectId);
         cleanupOrphanInstallations(removedInstallationIds);
     }

@@ -217,6 +217,19 @@ public class SupervisorController {
         return apiResponseFactory.ok("GitHub repository linked successfully.", data, request);
     }
 
+    @PostMapping("/projects/{projectId}/github/access/remove")
+    public ResponseEntity<ApiResponse<SupervisorProjectDetailDto>> removeProjectGitHubAccessAuthorization(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        SupervisorProjectDetailDto data = supervisorService.removeProjectGitHubAccessAuthorization(
+            authentication.getName(),
+            projectId
+        );
+        return apiResponseFactory.ok("GitHub access authorization removed for this project.", data, request);
+    }
+
     @PostMapping("/projects/{projectId}/github/refresh")
     public ResponseEntity<ApiResponse<Void>> refreshProjectGitHub(
         Authentication authentication,

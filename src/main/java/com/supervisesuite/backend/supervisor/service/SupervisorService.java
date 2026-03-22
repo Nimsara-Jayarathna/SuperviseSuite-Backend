@@ -76,6 +76,11 @@ public interface SupervisorService {
         LinkProjectGitHubRepositoryRequest request
     );
 
+    SupervisorProjectDetailDto removeProjectGitHubAccessAuthorization(
+        String authenticatedUserId,
+        String projectId
+    );
+
     void refreshProjectGitHubData(String authenticatedUserId, String projectId);
 
     SupervisorProjectDetailDto updateProject(
