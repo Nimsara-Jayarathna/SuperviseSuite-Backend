@@ -9,5 +9,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ProjectRepositoryCacheRepository extends JpaRepository<ProjectRepository, UUID> {
     Optional<ProjectRepository> findByProjectIdAndIsPrimaryTrue(UUID projectId);
 
+    Optional<ProjectRepository> findByProjectIdAndProviderAndRepositoryUrl(
+        UUID projectId,
+        String provider,
+        String repositoryUrl
+    );
+
     List<ProjectRepository> findByProjectIdOrderByCreatedAtAsc(UUID projectId);
 }

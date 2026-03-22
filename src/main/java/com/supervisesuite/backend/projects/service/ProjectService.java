@@ -24,5 +24,7 @@ public interface ProjectService {
         int size
     );
 
+    void onRepositoryUrlUpdated(UUID projectId, String repositoryUrl);
+
     void refreshGitHubData(UUID projectId, String repositoryUrl);
 }

@@ -83,10 +83,7 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
 
             return commits;
         } catch (RestClientResponseException | ResourceAccessException exception) {
-            throw new ServiceUnavailableException(
-                "Unable to retrieve commit activity from GitHub right now.",
-                exception
-            );
+            throw new ServiceUnavailableException(buildGitHubFailureMessage("commit activity", exception), exception);
         }
     }
 
@@ -125,9 +122,47 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
             );
         } catch (RestClientResponseException | ResourceAccessException exception) {
             throw new ServiceUnavailableException(
-                "Unable to retrieve repository metadata from GitHub right now.",
+                buildGitHubFailureMessage("repository metadata", exception),
                 exception
             );
+        }
+    }
+
+    private String buildGitHubFailureMessage(String operation, Exception exception) {
+        if (exception instanceof ResourceAccessException) {
+            return "GitHub is currently unreachable. Please check network access and try again.";
+        }
+
+        if (exception instanceof RestClientResponseException responseException) {
+            int status = responseException.getStatusCode().value();
+            String providerMessage = extractProviderMessage(responseException.getResponseBodyAsString());
+
+            if (status == 404) {
+                return "GitHub repository not found or inaccessible. Verify owner/repo URL and access.";
+            }
+            if (status == 401 || status == 403) {
+                String base = "GitHub access denied or rate-limited. Verify GITHUB_TOKEN and repository access.";
+                return hasText(providerMessage) ? base + " " + providerMessage : base;
+            }
+
+            String base = "GitHub " + operation + " request failed with status " + status + ".";
+            return hasText(providerMessage) ? base + " " + providerMessage : base;
+        }
+
+        return "GitHub request failed. Please try again.";
+    }
+
+    private String extractProviderMessage(String body) {
+        if (!hasText(body)) {
+            return null;
+        }
+
+        try {
+            JsonNode root = com.fasterxml.jackson.databind.json.JsonMapper.builder().build().readTree(body);
+            String message = textOrNull(root.path("message"));
+            return hasText(message) ? message.trim() : null;
+        } catch (Exception ignored) {
+            return null;
         }
     }
 

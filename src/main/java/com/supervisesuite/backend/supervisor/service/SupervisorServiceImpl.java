@@ -251,6 +251,7 @@ SupervisorServiceImpl(
         project.setLastActivityAt(now);
 
         Project savedProject = projectRepository.save(project);
+        projectService.onRepositoryUrlUpdated(savedProject.getId(), savedProject.getRepositoryUrl());
         return toProjectDetail(savedProject);
     }
 

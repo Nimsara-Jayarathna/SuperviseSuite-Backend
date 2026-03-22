@@ -109,9 +109,10 @@ class ProjectServiceImpl implements ProjectService {
             );
         }
 
-        ProjectRepository repository = projectRepositoryCacheRepository
-            .findByProjectIdAndIsPrimaryTrue(projectId)
-            .orElseGet(() -> buildTransientRepository(projectId, repositoryUrl));
+        ProjectRepository repository = resolvePrimaryRepository(projectId, repositoryUrl);
+        if (repository == null) {
+            repository = buildTransientRepository(projectId, repositoryUrl);
+        }
 
         long totalCommits = repository.getId() == null ? 0 : projectRepositoryCommitRepository.countByRepositoryId(repository.getId());
         Instant lastActivityAt = repository.getId() == null
@@ -273,12 +274,78 @@ class ProjectServiceImpl implements ProjectService {
             syncCommits(repository.getId(), commits, now);
             syncContributors(repository.getId(), commits, now);
         } catch (RuntimeException exception) {
+            String failureMessage = nullable(exception.getMessage(), "GitHub refresh failed.");
             repository.setLastSyncedAt(now);
             repository.setSyncStatus("FAILED");
-            repository.setLastSyncError(nullable(exception.getMessage(), "GitHub refresh failed."));
+            repository.setLastSyncError(failureMessage);
             repository.setUpdatedAt(now);
             projectRepositoryCacheRepository.save(repository);
-            throw new ServiceUnavailableException("GitHub refresh failed.", exception);
+            LOGGER.warn(
+                "GitHub refresh failed for projectId={} repositoryUrl={}: {}",
+                projectId,
+                repositoryUrl,
+                failureMessage
+            );
+            throw new ServiceUnavailableException(failureMessage, exception);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void onRepositoryUrlUpdated(UUID projectId, String repositoryUrl) {
+        Instant now = Instant.now();
+        String normalizedUrl = normalizeRepositoryUrl(repositoryUrl);
+        List<ProjectRepository> repositories = projectRepositoryCacheRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
+
+        if (normalizedUrl == null) {
+            for (ProjectRepository repository : repositories) {
+                if (Boolean.TRUE.equals(repository.getIsPrimary())) {
+                    repository.setIsPrimary(false);
+                    repository.setUpdatedAt(now);
+                }
+            }
+            if (!repositories.isEmpty()) {
+                projectRepositoryCacheRepository.saveAll(repositories);
+            }
+            return;
+        }
+
+        ProjectRepository target = projectRepositoryCacheRepository
+            .findByProjectIdAndProviderAndRepositoryUrl(projectId, PROVIDER_GITHUB, normalizedUrl)
+            .orElseGet(() -> {
+                ProjectRepository created = new ProjectRepository();
+                created.setProjectId(projectId);
+                created.setProvider(PROVIDER_GITHUB);
+                created.setRepositoryUrl(normalizedUrl);
+                created.setRepositoryName(deriveRepositoryName(normalizedUrl));
+                created.setDefaultBranch("main");
+                created.setCreatedAt(now);
+                return created;
+            });
+
+        for (ProjectRepository repository : repositories) {
+            if (repository.getId() != null && !repository.getId().equals(target.getId())) {
+                repository.setIsPrimary(false);
+                repository.setUpdatedAt(now);
+            }
+        }
+
+        target.setProjectId(projectId);
+        target.setProvider(PROVIDER_GITHUB);
+        target.setRepositoryUrl(normalizedUrl);
+        target.setIsPrimary(true);
+        if (target.getCreatedAt() == null) {
+            target.setCreatedAt(now);
+        }
+        target.setUpdatedAt(now);
+
+        projectRepositoryCacheRepository.save(target);
+        if (!repositories.isEmpty()) {
+            projectRepositoryCacheRepository.saveAll(
+                repositories.stream()
+                    .filter(repository -> repository.getId() != null && !repository.getId().equals(target.getId()))
+                    .toList()
+            );
         }
     }
 
@@ -349,44 +416,66 @@ class ProjectServiceImpl implements ProjectService {
     }
 
     private ProjectRepository resolvePrimaryRepository(UUID projectId, String repositoryUrl) {
-        ProjectRepository existing = projectRepositoryCacheRepository
-            .findByProjectIdAndIsPrimaryTrue(projectId)
-            .orElse(null);
-        if (existing != null) {
-            return existing;
-        }
-
-        if (repositoryUrl == null || repositoryUrl.isBlank()) {
+        String normalizedUrl = normalizeRepositoryUrl(repositoryUrl);
+        if (normalizedUrl == null) {
             return null;
         }
 
-        return buildTransientRepository(projectId, repositoryUrl);
+        ProjectRepository matchingRepository = projectRepositoryCacheRepository
+            .findByProjectIdAndProviderAndRepositoryUrl(projectId, PROVIDER_GITHUB, normalizedUrl)
+            .orElse(null);
+        if (matchingRepository != null) {
+            return matchingRepository;
+        }
+
+        return buildTransientRepository(projectId, normalizedUrl);
     }
 
     private ProjectRepository ensurePrimaryRepository(UUID projectId, String repositoryUrl, Instant now) {
+        String normalizedUrl = normalizeRepositoryUrl(repositoryUrl);
+        if (normalizedUrl == null) {
+            throw new ValidationException("repositoryUrl", "No repository linked for this project.");
+        }
+
         ProjectRepository repository = projectRepositoryCacheRepository
-            .findByProjectIdAndIsPrimaryTrue(projectId)
+            .findByProjectIdAndProviderAndRepositoryUrl(projectId, PROVIDER_GITHUB, normalizedUrl)
             .orElseGet(() -> {
                 ProjectRepository created = new ProjectRepository();
                 created.setProjectId(projectId);
                 created.setProvider(PROVIDER_GITHUB);
-                created.setRepositoryUrl(repositoryUrl.trim());
-                created.setRepositoryName(deriveRepositoryName(repositoryUrl));
+                created.setRepositoryUrl(normalizedUrl);
+                created.setRepositoryName(deriveRepositoryName(normalizedUrl));
                 created.setDefaultBranch("main");
                 created.setIsPrimary(true);
                 created.setCreatedAt(now);
                 return created;
             });
 
+        List<ProjectRepository> repositories = projectRepositoryCacheRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
+        for (ProjectRepository existing : repositories) {
+            if (existing.getId() != null && !existing.getId().equals(repository.getId())) {
+                existing.setIsPrimary(false);
+                existing.setUpdatedAt(now);
+            }
+        }
+
         repository.setProjectId(projectId);
         repository.setProvider(PROVIDER_GITHUB);
-        repository.setRepositoryUrl(repositoryUrl.trim());
+        repository.setRepositoryUrl(normalizedUrl);
         repository.setIsPrimary(true);
         if (repository.getCreatedAt() == null) {
             repository.setCreatedAt(now);
         }
         repository.setUpdatedAt(now);
-        return projectRepositoryCacheRepository.save(repository);
+        ProjectRepository saved = projectRepositoryCacheRepository.save(repository);
+        if (!repositories.isEmpty()) {
+            projectRepositoryCacheRepository.saveAll(
+                repositories.stream()
+                    .filter(existing -> existing.getId() != null && !existing.getId().equals(saved.getId()))
+                    .toList()
+            );
+        }
+        return saved;
     }
 
     private ProjectRepository buildTransientRepository(UUID projectId, String repositoryUrl) {
@@ -473,6 +562,13 @@ class ProjectServiceImpl implements ProjectService {
 
     private int normalizePage(int page) {
         return page < 1 ? DEFAULT_PAGE : page;
+    }
+
+    private String normalizeRepositoryUrl(String repositoryUrl) {
+        if (repositoryUrl == null || repositoryUrl.isBlank()) {
+            return null;
+        }
+        return repositoryUrl.trim();
     }
 
     private int normalizePageSize(int size) {
