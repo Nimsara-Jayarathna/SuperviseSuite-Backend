@@ -31,6 +31,12 @@ public class ProjectRepository {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String repositoryUrl;
 
+    private Long installationId;
+
+    private Long repositoryExternalId;
+
+    private String ownerLogin;
+
     private String repositoryName;
 
     private String defaultBranch;

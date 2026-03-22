@@ -1,9 +1,11 @@
 package com.supervisesuite.backend.projects.repository;
 
 import com.supervisesuite.backend.projects.entity.ProjectRepository;
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ProjectRepositoryCacheRepository extends JpaRepository<ProjectRepository, UUID> {
@@ -16,4 +18,9 @@ public interface ProjectRepositoryCacheRepository extends JpaRepository<ProjectR
     );
 
     List<ProjectRepository> findByProjectIdOrderByCreatedAtAsc(UUID projectId);
+
+    List<ProjectRepository> findByInstallationId(Long installationId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<ProjectRepository> findById(UUID id);
 }

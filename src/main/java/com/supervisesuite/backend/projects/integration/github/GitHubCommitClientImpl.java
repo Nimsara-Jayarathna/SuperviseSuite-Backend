@@ -12,6 +12,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -31,17 +32,24 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
 
     private final RestClient restClient;
     private final GitHubProperties gitHubProperties;
+    private final GitHubAppAuthService gitHubAppAuthService;
 
-    GitHubCommitClientImpl(RestClient.Builder restClientBuilder, GitHubProperties gitHubProperties) {
+    GitHubCommitClientImpl(
+        RestClient.Builder restClientBuilder,
+        GitHubProperties gitHubProperties,
+        ObjectProvider<GitHubAppAuthService> gitHubAppAuthServiceProvider
+    ) {
         this.gitHubProperties = gitHubProperties;
+        this.gitHubAppAuthService = gitHubAppAuthServiceProvider.getIfAvailable();
         this.restClient = restClientBuilder
             .baseUrl(normalizeBaseUrl(gitHubProperties.getApiBaseUrl()))
             .build();
     }
 
     @Override
-    public List<ProjectCommitDto> fetchRecentCommits(String repositoryUrl) {
+    public List<ProjectCommitDto> fetchRecentCommits(String repositoryUrl, Long installationId) {
         RepositoryRef ref = parseRepositoryRef(repositoryUrl);
+        String authToken = resolveAuthToken(installationId);
 
         try {
             List<ProjectCommitDto> commits = new ArrayList<>();
@@ -59,8 +67,8 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
                     .headers(headers -> {
                         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
                         headers.add(HttpHeaders.USER_AGENT, USER_AGENT);
-                        if (hasText(gitHubProperties.getToken())) {
-                            headers.setBearerAuth(gitHubProperties.getToken().trim());
+                        if (hasText(authToken)) {
+                            headers.setBearerAuth(authToken);
                         }
                     })
                     .retrieve()
@@ -88,8 +96,9 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
     }
 
     @Override
-    public ProjectRepositoryMetadataDto fetchRepositoryMetadata(String repositoryUrl) {
+    public ProjectRepositoryMetadataDto fetchRepositoryMetadata(String repositoryUrl, Long installationId) {
         RepositoryRef ref = parseRepositoryRef(repositoryUrl);
+        String authToken = resolveAuthToken(installationId);
 
         try {
             JsonNode response = restClient
@@ -100,22 +109,32 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
                 .headers(headers -> {
                     headers.setAccept(List.of(MediaType.APPLICATION_JSON));
                     headers.add(HttpHeaders.USER_AGENT, USER_AGENT);
-                    if (hasText(gitHubProperties.getToken())) {
-                        headers.setBearerAuth(gitHubProperties.getToken().trim());
+                    if (hasText(authToken)) {
+                        headers.setBearerAuth(authToken);
                     }
                 })
                 .retrieve()
                 .body(JsonNode.class);
 
             if (response == null) {
-                return new ProjectRepositoryMetadataDto(ref.repo(), repositoryUrl, "main");
+                return new ProjectRepositoryMetadataDto(
+                    null,
+                    ref.owner(),
+                    ref.repo(),
+                    repositoryUrl,
+                    "main"
+                );
             }
 
+            Long repositoryExternalId = response.path("id").isIntegralNumber() ? response.path("id").asLong() : null;
+            String ownerLogin = textOrNull(response.path("owner").path("login"));
             String name = textOrNull(response.path("name"));
             String url = textOrNull(response.path("html_url"));
             String defaultBranch = textOrNull(response.path("default_branch"));
 
             return new ProjectRepositoryMetadataDto(
+                repositoryExternalId,
+                hasText(ownerLogin) ? ownerLogin.trim() : ref.owner(),
                 hasText(name) ? name.trim() : ref.repo(),
                 hasText(url) ? url.trim() : repositoryUrl,
                 hasText(defaultBranch) ? defaultBranch.trim() : "main"
@@ -141,7 +160,8 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
                 return "GitHub repository not found or inaccessible. Verify owner/repo URL and access.";
             }
             if (status == 401 || status == 403) {
-                String base = "GitHub access denied or rate-limited. Verify GITHUB_TOKEN and repository access.";
+                String base =
+                    "GitHub access denied or rate-limited. Verify GitHub App installation access or fallback token configuration.";
                 return hasText(providerMessage) ? base + " " + providerMessage : base;
             }
 
@@ -164,6 +184,13 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private String resolveAuthToken(Long installationId) {
+        if (installationId != null && installationId > 0 && gitHubAppAuthService != null) {
+            return gitHubAppAuthService.createInstallationAccessToken(installationId).token();
+        }
+        return hasText(gitHubProperties.getToken()) ? gitHubProperties.getToken().trim() : null;
     }
 
     private ProjectCommitDto mapCommit(JsonNode node) {

@@ -246,12 +246,17 @@ SupervisorServiceImpl(
             .orElseThrow(EntityNotFoundException::new);
 
         Instant now = Instant.now();
-        project.setRepositoryUrl(trimToNull(request.getRepositoryUrl()));
+        String normalizedRepositoryUrl = trimToNull(request.getRepositoryUrl());
+        project.setRepositoryUrl(normalizedRepositoryUrl);
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
 
         Project savedProject = projectRepository.save(project);
-        projectService.onRepositoryUrlUpdated(savedProject.getId(), savedProject.getRepositoryUrl());
+        if (normalizedRepositoryUrl == null) {
+            projectService.clearGitHubLinkage(savedProject.getId());
+        } else {
+            projectService.switchToManualRepository(savedProject.getId(), normalizedRepositoryUrl);
+        }
         return toProjectDetail(savedProject);
     }
 

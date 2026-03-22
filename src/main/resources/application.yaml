@@ -38,8 +38,16 @@ app:
     # Set to false in local dev (HTTP). Must be true in production (HTTPS).
     # Browsers (except Chrome) block Secure cookies over plain HTTP even on localhost.
     secure: ${COOKIE_SECURE:true}
+  frontend:
+    base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
   github:
     api-base-url: ${GITHUB_API_BASE_URL:https://api.github.com}
     token: ${GITHUB_TOKEN:}
+    app-id: ${GITHUB_APP_ID:}
+    app-client-id: ${GITHUB_APP_CLIENT_ID:}
+    app-client-secret: ${GITHUB_APP_CLIENT_SECRET:}
+    app-private-key: ${GITHUB_APP_PRIVATE_KEY:}
+    app-webhook-secret: ${GITHUB_APP_WEBHOOK_SECRET:}
+    setup-redirect-url: ${GITHUB_APP_SETUP_REDIRECT_URL:}
     default-page-size: ${GITHUB_DEFAULT_PAGE_SIZE:10}
     max-page-size: ${GITHUB_MAX_PAGE_SIZE:100}

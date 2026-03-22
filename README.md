@@ -51,9 +51,16 @@ The backend reads DB and auth config from environment variables:
 - `DB_PASSWORD`
 - `APP_PORT`
 - `CORS_ALLOWED_ORIGINS`
+- `FRONTEND_BASE_URL` — frontend base URL used by backend redirects (for example GitHub setup callback)
 - `COOKIE_SECURE` — set to `false` for local HTTP development (default: `true`)
 - `JWT_SECRET` — base64-encoded secret used to sign and verify access token JWTs
 - `GITHUB_TOKEN` — optional GitHub token (recommended for higher rate limits)
+- `GITHUB_APP_ID` — GitHub App id used for app JWT generation
+- `GITHUB_APP_CLIENT_ID` — GitHub App client id for setup/install flow
+- `GITHUB_APP_CLIENT_SECRET` — GitHub App client secret (if used by your callback flow)
+- `GITHUB_APP_PRIVATE_KEY` — GitHub App PEM private key (escaped newlines supported in `.env`)
+- `GITHUB_APP_WEBHOOK_SECRET` — webhook signature secret for `/api/github/webhooks`
+- `GITHUB_APP_SETUP_REDIRECT_URL` — optional frontend redirect target after `/api/github/setup`
 - `GITHUB_DEFAULT_PAGE_SIZE` — default page size for GitHub paginated APIs (default: `10`)
 - `GITHUB_MAX_PAGE_SIZE` — max allowed page size for GitHub paginated APIs (default: `100`)
 

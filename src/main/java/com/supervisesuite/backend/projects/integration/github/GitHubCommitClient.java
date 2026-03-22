@@ -5,7 +5,15 @@ import com.supervisesuite.backend.projects.dto.ProjectRepositoryMetadataDto;
 import java.util.List;
 
 public interface GitHubCommitClient {
-    List<ProjectCommitDto> fetchRecentCommits(String repositoryUrl);
+    default List<ProjectCommitDto> fetchRecentCommits(String repositoryUrl) {
+        return fetchRecentCommits(repositoryUrl, null);
+    }
 
-    ProjectRepositoryMetadataDto fetchRepositoryMetadata(String repositoryUrl);
+    List<ProjectCommitDto> fetchRecentCommits(String repositoryUrl, Long installationId);
+
+    default ProjectRepositoryMetadataDto fetchRepositoryMetadata(String repositoryUrl) {
+        return fetchRepositoryMetadata(repositoryUrl, null);
+    }
+
+    ProjectRepositoryMetadataDto fetchRepositoryMetadata(String repositoryUrl, Long installationId);
 }

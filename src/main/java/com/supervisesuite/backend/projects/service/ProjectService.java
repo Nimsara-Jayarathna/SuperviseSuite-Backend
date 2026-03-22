@@ -26,5 +26,16 @@ public interface ProjectService {
 
     void onRepositoryUrlUpdated(UUID projectId, String repositoryUrl);
 
+    void switchToManualRepository(UUID projectId, String repositoryUrl);
+
+    void clearGitHubLinkage(UUID projectId);
+
+    void linkGitHubInstallation(
+        UUID projectId,
+        String repositoryUrl,
+        Long installationId,
+        String ownerLogin
+    );
+
     void refreshGitHubData(UUID projectId, String repositoryUrl);
 }

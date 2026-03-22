@@ -12,6 +12,7 @@ import com.supervisesuite.backend.projects.entity.ProjectRepository;
 import com.supervisesuite.backend.projects.entity.ProjectRepositoryCommit;
 import com.supervisesuite.backend.projects.entity.ProjectRepositoryContributor;
 import com.supervisesuite.backend.projects.integration.github.GitHubCommitClient;
+import com.supervisesuite.backend.projects.repository.GitHubAppInstallationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryCacheRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryCommitRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryContributorRepository;
@@ -20,6 +21,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -49,6 +51,7 @@ class ProjectServiceImpl implements ProjectService {
     private final ProjectRepositoryCacheRepository projectRepositoryCacheRepository;
     private final ProjectRepositoryCommitRepository projectRepositoryCommitRepository;
     private final ProjectRepositoryContributorRepository projectRepositoryContributorRepository;
+    private final GitHubAppInstallationRepository gitHubAppInstallationRepository;
     private final GitHubProperties gitHubProperties;
 
     ProjectServiceImpl(
@@ -57,6 +60,7 @@ class ProjectServiceImpl implements ProjectService {
         ProjectRepositoryCacheRepository projectRepositoryCacheRepository,
         ProjectRepositoryCommitRepository projectRepositoryCommitRepository,
         ProjectRepositoryContributorRepository projectRepositoryContributorRepository,
+        GitHubAppInstallationRepository gitHubAppInstallationRepository,
         GitHubProperties gitHubProperties
     ) {
         this.gitHubCommitClient = gitHubCommitClient;
@@ -64,6 +68,7 @@ class ProjectServiceImpl implements ProjectService {
         this.projectRepositoryCacheRepository = projectRepositoryCacheRepository;
         this.projectRepositoryCommitRepository = projectRepositoryCommitRepository;
         this.projectRepositoryContributorRepository = projectRepositoryContributorRepository;
+        this.gitHubAppInstallationRepository = gitHubAppInstallationRepository;
         this.gitHubProperties = gitHubProperties;
     }
 
@@ -99,7 +104,8 @@ class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional(readOnly = true)
     public ProjectGitHubPreviewDto getGitHubPreview(UUID projectId, String repositoryUrl) {
-        if (repositoryUrl == null || repositoryUrl.isBlank()) {
+        ProjectRepository repository = resolveLinkedRepository(projectId, repositoryUrl);
+        if (repository == null || repository.getRepositoryUrl() == null || repository.getRepositoryUrl().isBlank()) {
             return new ProjectGitHubPreviewDto(
                 false,
                 List.of(),
@@ -107,11 +113,6 @@ class ProjectServiceImpl implements ProjectService {
                 List.of(),
                 List.of()
             );
-        }
-
-        ProjectRepository repository = resolvePrimaryRepository(projectId, repositoryUrl);
-        if (repository == null) {
-            repository = buildTransientRepository(projectId, repositoryUrl);
         }
 
         long totalCommits = repository.getId() == null ? 0 : projectRepositoryCommitRepository.countByRepositoryId(repository.getId());
@@ -176,7 +177,7 @@ class ProjectServiceImpl implements ProjectService {
         int page,
         int size
     ) {
-        ProjectRepository repository = resolvePrimaryRepository(projectId, repositoryUrl);
+        ProjectRepository repository = resolveLinkedRepository(projectId, repositoryUrl);
         if (repository == null || repository.getId() == null) {
             int normalizedPage = normalizePage(page);
             int normalizedSize = normalizePageSize(size);
@@ -215,7 +216,7 @@ class ProjectServiceImpl implements ProjectService {
         int page,
         int size
     ) {
-        ProjectRepository repository = resolvePrimaryRepository(projectId, repositoryUrl);
+        ProjectRepository repository = resolveLinkedRepository(projectId, repositoryUrl);
         if (repository == null || repository.getId() == null) {
             int normalizedPage = normalizePage(page);
             int normalizedSize = normalizePageSize(size);
@@ -251,19 +252,27 @@ class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     public void refreshGitHubData(UUID projectId, String repositoryUrl) {
-        if (repositoryUrl == null || repositoryUrl.isBlank()) {
+        ProjectRepository linkedRepository = resolveLinkedRepository(projectId, repositoryUrl);
+        if (linkedRepository == null || linkedRepository.getRepositoryUrl() == null || linkedRepository.getRepositoryUrl().isBlank()) {
             throw new ValidationException("repositoryUrl", "No repository linked for this project.");
         }
+        String targetRepositoryUrl = linkedRepository.getRepositoryUrl().trim();
 
         Instant now = Instant.now();
-        ProjectRepository repository = ensurePrimaryRepository(projectId, repositoryUrl, now);
+        ProjectRepository repository = ensurePrimaryRepository(projectId, targetRepositoryUrl, now);
+        repository = projectRepositoryCacheRepository.findById(repository.getId())
+            .orElseThrow(() -> new ValidationException("repositoryUrl", "No repository linked for this project."));
 
         try {
-            ProjectRepositoryMetadataDto metadata = gitHubCommitClient.fetchRepositoryMetadata(repositoryUrl);
-            List<ProjectCommitDto> commits = gitHubCommitClient.fetchRecentCommits(repositoryUrl);
+            ProjectRepositoryMetadataDto metadata = gitHubCommitClient
+                .fetchRepositoryMetadata(targetRepositoryUrl, repository.getInstallationId());
+            List<ProjectCommitDto> commits = gitHubCommitClient
+                .fetchRecentCommits(targetRepositoryUrl, repository.getInstallationId());
 
-            repository.setRepositoryName(nullable(metadata.getName(), deriveRepositoryName(repositoryUrl)));
-            repository.setRepositoryUrl(nullable(metadata.getUrl(), repositoryUrl));
+            repository.setRepositoryName(nullable(metadata.getName(), deriveRepositoryName(targetRepositoryUrl)));
+            repository.setRepositoryUrl(nullable(metadata.getUrl(), targetRepositoryUrl));
+            repository.setRepositoryExternalId(metadata.getExternalRepositoryId());
+            repository.setOwnerLogin(nullable(metadata.getOwnerLogin(), repository.getOwnerLogin()));
             repository.setDefaultBranch(nullable(metadata.getDefaultBranch(), "main"));
             repository.setLastSyncedAt(now);
             repository.setSyncStatus("SUCCESS");
@@ -283,11 +292,38 @@ class ProjectServiceImpl implements ProjectService {
             LOGGER.warn(
                 "GitHub refresh failed for projectId={} repositoryUrl={}: {}",
                 projectId,
-                repositoryUrl,
+                targetRepositoryUrl,
                 failureMessage
             );
             throw new ServiceUnavailableException(failureMessage, exception);
         }
+    }
+
+    @Override
+    @Transactional
+    public void linkGitHubInstallation(
+        UUID projectId,
+        String repositoryUrl,
+        Long installationId,
+        String ownerLogin
+    ) {
+        if (projectId == null) {
+            throw new ValidationException("projectId", "Project id is required.");
+        }
+        String normalizedUrl = normalizeRepositoryUrl(repositoryUrl);
+        if (normalizedUrl == null) {
+            throw new ValidationException("repositoryUrl", "Repository URL is required to link installation.");
+        }
+        if (installationId == null || installationId < 1) {
+            throw new ValidationException("installationId", "GitHub installation id is required.");
+        }
+
+        Instant now = Instant.now();
+        ProjectRepository repository = ensurePrimaryRepository(projectId, normalizedUrl, now);
+        repository.setInstallationId(installationId);
+        repository.setOwnerLogin(nullable(ownerLogin, repository.getOwnerLogin()));
+        repository.setUpdatedAt(now);
+        projectRepositoryCacheRepository.save(repository);
     }
 
     @Override
@@ -349,13 +385,79 @@ class ProjectServiceImpl implements ProjectService {
         }
     }
 
+    @Override
+    @Transactional
+    public void switchToManualRepository(UUID projectId, String repositoryUrl) {
+        String normalizedUrl = normalizeRepositoryUrl(repositoryUrl);
+        if (normalizedUrl == null) {
+            throw new ValidationException("repositoryUrl", "Repository URL is required.");
+        }
+
+        Instant now = Instant.now();
+        ProjectRepository target = ensurePrimaryRepository(projectId, normalizedUrl, now);
+        List<ProjectRepository> repositories = projectRepositoryCacheRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
+
+        java.util.Set<Long> removedInstallationIds = new java.util.HashSet<>();
+        for (ProjectRepository repository : repositories) {
+            if (repository.getId() == null || repository.getId().equals(target.getId())) {
+                continue;
+            }
+            if (repository.getInstallationId() != null) {
+                removedInstallationIds.add(repository.getInstallationId());
+            }
+            purgeRepositoryData(repository.getId());
+        }
+
+        List<ProjectRepository> toDelete = repositories.stream()
+            .filter(repository -> repository.getId() != null && !repository.getId().equals(target.getId()))
+            .toList();
+        if (!toDelete.isEmpty()) {
+            projectRepositoryCacheRepository.deleteAll(toDelete);
+        }
+
+        if (target.getInstallationId() != null) {
+            removedInstallationIds.add(target.getInstallationId());
+        }
+        target.setInstallationId(null);
+        target.setSyncStatus(null);
+        target.setLastSyncError(null);
+        target.setUpdatedAt(now);
+        projectRepositoryCacheRepository.save(target);
+
+        cleanupOrphanInstallations(removedInstallationIds);
+    }
+
+    @Override
+    @Transactional
+    public void clearGitHubLinkage(UUID projectId) {
+        List<ProjectRepository> repositories = projectRepositoryCacheRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
+        if (repositories.isEmpty()) {
+            return;
+        }
+
+        java.util.Set<Long> removedInstallationIds = new java.util.HashSet<>();
+        for (ProjectRepository repository : repositories) {
+            if (repository.getInstallationId() != null) {
+                removedInstallationIds.add(repository.getInstallationId());
+            }
+            if (repository.getId() != null) {
+                purgeRepositoryData(repository.getId());
+            }
+        }
+
+        projectRepositoryCacheRepository.deleteAll(repositories);
+        cleanupOrphanInstallations(removedInstallationIds);
+    }
+
     private void syncCommits(UUID repositoryId, List<ProjectCommitDto> commits, Instant now) {
         projectRepositoryCommitRepository.deleteByRepositoryId(repositoryId);
+        projectRepositoryCommitRepository.flush();
 
-        List<ProjectRepositoryCommit> entities = (commits == null ? List.<ProjectCommitDto>of() : commits)
+        Map<String, ProjectRepositoryCommit> uniqueBySha = new LinkedHashMap<>();
+        (commits == null ? List.<ProjectCommitDto>of() : commits)
             .stream()
             .filter(commit -> commit != null)
-            .map(commit -> {
+            .forEach(commit -> {
                 ProjectRepositoryCommit entity = new ProjectRepositoryCommit();
                 entity.setRepositoryId(repositoryId);
                 entity.setSha(nullable(commit.getSha(), "unknown"));
@@ -364,9 +466,10 @@ class ProjectServiceImpl implements ProjectService {
                 entity.setCommittedAt(commit.getCommittedAt());
                 entity.setCommitType(resolveCommitType(commit.getMessage()));
                 entity.setCreatedAt(now);
-                return entity;
-            })
-            .toList();
+                uniqueBySha.putIfAbsent(entity.getSha(), entity);
+            });
+
+        List<ProjectRepositoryCommit> entities = List.copyOf(uniqueBySha.values());
 
         if (!entities.isEmpty()) {
             projectRepositoryCommitRepository.saveAll(entities);
@@ -375,6 +478,7 @@ class ProjectServiceImpl implements ProjectService {
 
     private void syncContributors(UUID repositoryId, List<ProjectCommitDto> commits, Instant now) {
         projectRepositoryContributorRepository.deleteByRepositoryId(repositoryId);
+        projectRepositoryContributorRepository.flush();
 
         Map<String, Integer> countByContributor = new HashMap<>();
         Map<String, Instant> lastByContributor = new HashMap<>();
@@ -415,6 +519,29 @@ class ProjectServiceImpl implements ProjectService {
         }
     }
 
+    private void purgeRepositoryData(UUID repositoryId) {
+        projectRepositoryCommitRepository.deleteByRepositoryId(repositoryId);
+        projectRepositoryCommitRepository.flush();
+        projectRepositoryContributorRepository.deleteByRepositoryId(repositoryId);
+        projectRepositoryContributorRepository.flush();
+    }
+
+    private void cleanupOrphanInstallations(java.util.Set<Long> installationIds) {
+        if (installationIds == null || installationIds.isEmpty()) {
+            return;
+        }
+        for (Long installationId : installationIds) {
+            if (installationId == null) {
+                continue;
+            }
+            boolean stillReferenced = !projectRepositoryCacheRepository.findByInstallationId(installationId).isEmpty();
+            if (!stillReferenced) {
+                gitHubAppInstallationRepository.findByInstallationId(installationId)
+                    .ifPresent(gitHubAppInstallationRepository::delete);
+            }
+        }
+    }
+
     private ProjectRepository resolvePrimaryRepository(UUID projectId, String repositoryUrl) {
         String normalizedUrl = normalizeRepositoryUrl(repositoryUrl);
         if (normalizedUrl == null) {
@@ -429,6 +556,25 @@ class ProjectServiceImpl implements ProjectService {
         }
 
         return buildTransientRepository(projectId, normalizedUrl);
+    }
+
+    private ProjectRepository resolveLinkedRepository(UUID projectId, String repositoryUrl) {
+        ProjectRepository byUrl = resolvePrimaryRepository(projectId, repositoryUrl);
+        if (byUrl != null && byUrl.getRepositoryUrl() != null && !byUrl.getRepositoryUrl().isBlank()) {
+            return byUrl;
+        }
+
+        ProjectRepository primary = projectRepositoryCacheRepository
+            .findByProjectIdAndIsPrimaryTrue(projectId)
+            .orElse(null);
+        if (primary != null && PROVIDER_GITHUB.equalsIgnoreCase(nullable(primary.getProvider(), ""))) {
+            return primary;
+        }
+
+        return projectRepositoryCacheRepository.findByProjectIdOrderByCreatedAtAsc(projectId).stream()
+            .filter(repository -> PROVIDER_GITHUB.equalsIgnoreCase(nullable(repository.getProvider(), "")))
+            .findFirst()
+            .orElse(null);
     }
 
     private ProjectRepository ensurePrimaryRepository(UUID projectId, String repositoryUrl, Instant now) {

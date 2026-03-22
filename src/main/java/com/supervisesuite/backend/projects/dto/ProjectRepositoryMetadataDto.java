@@ -1,6 +1,8 @@
 package com.supervisesuite.backend.projects.dto;
 
 public class ProjectRepositoryMetadataDto {
+    private Long externalRepositoryId;
+    private String ownerLogin;
     private String name;
     private String url;
     private String defaultBranch;
@@ -8,10 +10,34 @@ public class ProjectRepositoryMetadataDto {
     public ProjectRepositoryMetadataDto() {
     }
 
-    public ProjectRepositoryMetadataDto(String name, String url, String defaultBranch) {
+    public ProjectRepositoryMetadataDto(
+        Long externalRepositoryId,
+        String ownerLogin,
+        String name,
+        String url,
+        String defaultBranch
+    ) {
+        this.externalRepositoryId = externalRepositoryId;
+        this.ownerLogin = ownerLogin;
         this.name = name;
         this.url = url;
         this.defaultBranch = defaultBranch;
+    }
+
+    public Long getExternalRepositoryId() {
+        return externalRepositoryId;
+    }
+
+    public void setExternalRepositoryId(Long externalRepositoryId) {
+        this.externalRepositoryId = externalRepositoryId;
+    }
+
+    public String getOwnerLogin() {
+        return ownerLogin;
+    }
+
+    public void setOwnerLogin(String ownerLogin) {
+        this.ownerLogin = ownerLogin;
     }
 
     public String getName() {
