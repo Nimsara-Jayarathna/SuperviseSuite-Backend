@@ -1,6 +1,5 @@
 package com.supervisesuite.backend.projects.service;
 
-import com.supervisesuite.backend.common.error.ConflictException;
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.config.GitHubProperties;
@@ -26,12 +25,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -393,40 +390,17 @@ class ProjectServiceImpl implements ProjectService {
         List<GitHubAppAuthService.GitHubInstallationRepositoryContext> repositories =
             gitHubAppAuthService.fetchInstallationRepositories(installationId);
 
-        Set<Long> repositoryIds = new HashSet<>();
-        for (GitHubAppAuthService.GitHubInstallationRepositoryContext repository : repositories) {
-            if (repository != null && repository.repositoryId() != null) {
-                repositoryIds.add(repository.repositoryId());
-            }
-        }
-
-        Map<Long, ProjectRepository> linkedByRepositoryId = new HashMap<>();
-        if (!repositoryIds.isEmpty()) {
-            List<ProjectRepository> linkedRepositories = projectRepositoryCacheRepository
-                .findByProviderAndRepositoryExternalIdInAndIsPrimaryTrue(PROVIDER_GITHUB, repositoryIds);
-            for (ProjectRepository linkedRepository : linkedRepositories) {
-                if (linkedRepository.getRepositoryExternalId() != null) {
-                    linkedByRepositoryId.put(linkedRepository.getRepositoryExternalId(), linkedRepository);
-                }
-            }
-        }
-
         return repositories.stream()
             .filter(repository -> repository != null)
             .map(repository -> {
                 String fullName = resolveFullName(repository);
-                ProjectRepository linkedRepository = repository.repositoryId() == null
-                    ? null
-                    : linkedByRepositoryId.get(repository.repositoryId());
                 return new GitHubInstallationRepositoryDto(
                     repository.repositoryId(),
                     nullable(repository.repositoryName(), deriveRepositoryName(repository.htmlUrl())),
                     fullName,
                     resolveRepositoryUrlFromContext(repository),
                     nullable(repository.ownerLogin(), deriveOwnerFromFullName(fullName)),
-                    nullable(repository.defaultBranch(), defaultBranch()),
-                    linkedRepository != null,
-                    linkedRepository == null ? null : linkedRepository.getProjectId()
+                    nullable(repository.defaultBranch(), defaultBranch())
                 );
             })
             .sorted(Comparator.comparing(
@@ -463,7 +437,6 @@ class ProjectServiceImpl implements ProjectService {
             ));
 
         String repositoryUrl = resolveRepositoryUrlFromContext(selectedRepository);
-        validateRepositoryNotLinkedElsewhere(projectId, repositoryId, repositoryUrl);
 
         Instant now = Instant.now();
         String fullName = resolveFullName(selectedRepository);
@@ -699,36 +672,6 @@ class ProjectServiceImpl implements ProjectService {
         return installation;
     }
 
-    private void validateRepositoryNotLinkedElsewhere(UUID projectId, Long repositoryId, String repositoryUrl) {
-        if (repositoryId != null) {
-            projectRepositoryCacheRepository
-                .findFirstByProviderAndRepositoryExternalIdAndIsPrimaryTrueAndProjectIdNot(
-                    PROVIDER_GITHUB,
-                    repositoryId,
-                    projectId
-                )
-                .ifPresent(conflict -> {
-                    throw new ConflictException(
-                        "Selected repository is already linked to another project (" + conflict.getProjectId() + ")."
-                    );
-                });
-        }
-
-        if (hasText(repositoryUrl)) {
-            projectRepositoryCacheRepository
-                .findFirstByProviderAndRepositoryUrlAndIsPrimaryTrueAndProjectIdNot(
-                    PROVIDER_GITHUB,
-                    repositoryUrl.trim(),
-                    projectId
-                )
-                .ifPresent(conflict -> {
-                    throw new ConflictException(
-                        "Selected repository is already linked to another project (" + conflict.getProjectId() + ")."
-                    );
-                });
-        }
-    }
-
     private String resolveRepositoryUrlFromContext(GitHubAppAuthService.GitHubInstallationRepositoryContext repository) {
         String htmlUrl = trimToNull(repository == null ? null : repository.htmlUrl());
         if (htmlUrl != null) {
@@ -956,10 +899,6 @@ class ProjectServiceImpl implements ProjectService {
             return null;
         }
         return repositoryUrl.trim();
-    }
-
-    private boolean hasText(String value) {
-        return value != null && !value.trim().isEmpty();
     }
 
     private String trimToNull(String value) {

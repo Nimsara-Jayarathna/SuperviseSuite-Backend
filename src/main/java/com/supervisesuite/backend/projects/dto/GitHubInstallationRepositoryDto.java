@@ -1,7 +1,5 @@
 package com.supervisesuite.backend.projects.dto;
 
-import java.util.UUID;
-
 public class GitHubInstallationRepositoryDto {
 
     private Long repositoryId;
@@ -10,8 +8,6 @@ public class GitHubInstallationRepositoryDto {
     private String url;
     private String ownerLogin;
     private String defaultBranch;
-    private boolean alreadyLinked;
-    private UUID linkedProjectId;
 
     public GitHubInstallationRepositoryDto() {
     }
@@ -22,9 +18,7 @@ public class GitHubInstallationRepositoryDto {
         String fullName,
         String url,
         String ownerLogin,
-        String defaultBranch,
-        boolean alreadyLinked,
-        UUID linkedProjectId
+        String defaultBranch
     ) {
         this.repositoryId = repositoryId;
         this.name = name;
@@ -32,8 +26,6 @@ public class GitHubInstallationRepositoryDto {
         this.url = url;
         this.ownerLogin = ownerLogin;
         this.defaultBranch = defaultBranch;
-        this.alreadyLinked = alreadyLinked;
-        this.linkedProjectId = linkedProjectId;
     }
 
     public Long getRepositoryId() {
@@ -82,21 +74,5 @@ public class GitHubInstallationRepositoryDto {
 
     public void setDefaultBranch(String defaultBranch) {
         this.defaultBranch = defaultBranch;
-    }
-
-    public boolean isAlreadyLinked() {
-        return alreadyLinked;
-    }
-
-    public void setAlreadyLinked(boolean alreadyLinked) {
-        this.alreadyLinked = alreadyLinked;
-    }
-
-    public UUID getLinkedProjectId() {
-        return linkedProjectId;
-    }
-
-    public void setLinkedProjectId(UUID linkedProjectId) {
-        this.linkedProjectId = linkedProjectId;
     }
 }
