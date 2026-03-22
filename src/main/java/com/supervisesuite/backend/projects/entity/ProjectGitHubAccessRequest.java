@@ -43,6 +43,12 @@ public class ProjectGitHubAccessRequest {
 
     private Long installationId;
 
+    private String resultTokenHash;
+
+    private Instant resultExpiresAt;
+
+    private Instant resultAcknowledgedAt;
+
     @Column(nullable = false)
     private Instant createdAt;
 

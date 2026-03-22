@@ -8,6 +8,9 @@ import com.supervisesuite.backend.config.GitHubProperties;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
+import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryDto;
 import com.supervisesuite.backend.projects.dto.GitHubWebhookResultDto;
 import com.supervisesuite.backend.projects.entity.GitHubAppInstallation;
 import com.supervisesuite.backend.projects.entity.Project;
@@ -24,6 +27,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
@@ -95,6 +99,7 @@ public class GitHubAppIntegrationService {
 
         Instant now = Instant.now();
         String rawToken = generateOpaqueToken();
+
         ProjectGitHubAccessRequest accessRequest = new ProjectGitHubAccessRequest();
         accessRequest.setProjectId(projectId);
         accessRequest.setRequestedBySupervisorUserId(supervisorUserId);
@@ -116,7 +121,7 @@ public class GitHubAppIntegrationService {
         return new GitHubAccessRequestCreateDto(projectId, rawToken, requestUrl, accessRequest.getExpiresAt());
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public GitHubAccessRequestValidationDto validateProjectAccessRequest(
         UUID projectId,
         UUID supervisorUserId,
@@ -173,24 +178,7 @@ public class GitHubAppIntegrationService {
             now
         );
 
-        String appInstallUrl = trimToNull(gitHubProperties.getAppInstallUrl());
-        if (appInstallUrl == null) {
-            throw new ValidationException(
-                "GITHUB_APP_INSTALL_URL",
-                "GitHub App install URL is not configured."
-            );
-        }
-
-        String state = generateOpaqueToken();
-        accessRequest.setGithubStateHash(sha256Base64(state));
-        accessRequest.setUpdatedAt(now);
-        projectGitHubAccessRequestRepository.save(accessRequest);
-
-        String githubAuthorizeUrl = UriComponentsBuilder
-            .fromUriString(appInstallUrl)
-            .queryParam("state", state)
-            .build(true)
-            .toUriString();
+        String githubAuthorizeUrl = buildGithubAuthorizeUrlAndStoreState(accessRequest, now);
 
         LOGGER.info(
             "Prepared GitHub access request redirect projectId={} supervisorUserId={} requestId={}",
@@ -207,24 +195,7 @@ public class GitHubAppIntegrationService {
         Instant now = Instant.now();
         ProjectGitHubAccessRequest accessRequest = requirePendingAccessRequestByToken(requestToken, now);
 
-        String appInstallUrl = trimToNull(gitHubProperties.getAppInstallUrl());
-        if (appInstallUrl == null) {
-            throw new ValidationException(
-                "GITHUB_APP_INSTALL_URL",
-                "GitHub App install URL is not configured."
-            );
-        }
-
-        String state = generateOpaqueToken();
-        accessRequest.setGithubStateHash(sha256Base64(state));
-        accessRequest.setUpdatedAt(now);
-        projectGitHubAccessRequestRepository.save(accessRequest);
-
-        String githubAuthorizeUrl = UriComponentsBuilder
-            .fromUriString(appInstallUrl)
-            .queryParam("state", state)
-            .build(true)
-            .toUriString();
+        String githubAuthorizeUrl = buildGithubAuthorizeUrlAndStoreState(accessRequest, now);
 
         LOGGER.info(
             "Prepared public GitHub access request redirect projectId={} requestId={}",
@@ -252,10 +223,15 @@ public class GitHubAppIntegrationService {
         completeSetupCallback(installationId, projectId, now);
         refreshAccessibleRepositoriesSnapshot(installationId);
 
+        String resultToken = null;
         if (accessRequest != null) {
+            resultToken = generateOpaqueToken();
             accessRequest.setStatus(ACCESS_REQUEST_STATUS_COMPLETED);
             accessRequest.setUsedAt(now);
             accessRequest.setInstallationId(installationId);
+            accessRequest.setResultTokenHash(sha256Base64(resultToken));
+            accessRequest.setResultExpiresAt(now.plusSeconds((long) accessRequestExpiryMinutes() * 60L));
+            accessRequest.setResultAcknowledgedAt(null);
             accessRequest.setUpdatedAt(now);
             projectGitHubAccessRequestRepository.save(accessRequest);
 
@@ -267,7 +243,7 @@ public class GitHubAppIntegrationService {
             );
         }
 
-        return new SetupCallbackResult(projectId, installationId, accessRequest != null);
+        return new SetupCallbackResult(projectId, installationId, accessRequest != null, resultToken);
     }
 
     @Transactional
@@ -275,6 +251,91 @@ public class GitHubAppIntegrationService {
         Instant now = Instant.now();
         completeSetupCallback(installationId, projectId, now);
         refreshAccessibleRepositoriesSnapshot(installationId);
+    }
+
+    @Transactional(readOnly = true)
+    public GitHubAccessUpdatedSummaryDto getAccessUpdatedSummary(String resultToken) {
+        Instant now = Instant.now();
+        ProjectGitHubAccessRequest accessRequest = requireCompletedAccessRequestByResultToken(resultToken, now);
+
+        Project project = projectRepository
+            .findByIdAndDeletedAtIsNull(accessRequest.getProjectId())
+            .orElseThrow(() -> new ValidationException("token", ACCESS_REQUEST_INVALID_MESSAGE));
+
+        Long installationId = accessRequest.getInstallationId();
+        if (installationId == null || installationId < 1) {
+            throw new ValidationException("token", ACCESS_REQUEST_INVALID_MESSAGE);
+        }
+
+        int pageSize = installationRepositoriesSummaryPageSize();
+        int page = 1;
+        List<GitHubInstallationRepositoryDto> repositories = new ArrayList<>();
+        Long totalCount = null;
+
+        while (true) {
+            GitHubAppAuthService.GitHubInstallationRepositoriesPageContext context =
+                gitHubAppAuthService.fetchInstallationRepositories(installationId, page, pageSize);
+
+            if (context.totalCount() != null) {
+                totalCount = context.totalCount();
+            }
+
+            for (GitHubAppAuthService.GitHubInstallationRepositoryContext repository : context.repositories()) {
+                if (repository == null) {
+                    continue;
+                }
+                repositories.add(new GitHubInstallationRepositoryDto(
+                    repository.repositoryId(),
+                    nullable(repository.repositoryName(), deriveRepositoryName(repository.htmlUrl())),
+                    resolveFullName(repository),
+                    resolveRepositoryUrl(repository),
+                    nullable(repository.ownerLogin(), deriveOwnerFromFullName(resolveFullName(repository))),
+                    nullable(repository.defaultBranch(), defaultBranch())
+                ));
+            }
+
+            int returnedCount = context.repositories().size();
+            boolean hasNext = totalCount != null
+                ? (long) page * pageSize < totalCount
+                : returnedCount >= pageSize && returnedCount > 0;
+            if (!hasNext) {
+                break;
+            }
+            page++;
+        }
+
+        int repositoryCount;
+        if (totalCount == null) {
+            repositoryCount = repositories.size();
+        } else if (totalCount <= 0) {
+            repositoryCount = 0;
+        } else {
+            repositoryCount = totalCount > Integer.MAX_VALUE ? Integer.MAX_VALUE : totalCount.intValue();
+        }
+        String accessScope = repositoryCount <= 0
+            ? "NO_REPOSITORIES"
+            : repositoryCount == 1 ? "SINGLE_REPOSITORY" : "MULTIPLE_REPOSITORIES";
+
+        return new GitHubAccessUpdatedSummaryDto(
+            accessRequest.getProjectId(),
+            nullable(project.getName(), "Project"),
+            installationId,
+            accessScope,
+            repositoryCount,
+            repositories
+        );
+    }
+
+    @Transactional
+    public GitHubAccessUpdatedAcknowledgeDto acknowledgeAccessUpdated(String resultToken) {
+        Instant now = Instant.now();
+        ProjectGitHubAccessRequest accessRequest = requireCompletedAccessRequestByResultToken(resultToken, now);
+        accessRequest.setResultAcknowledgedAt(now);
+        accessRequest.setResultTokenHash(null);
+        accessRequest.setResultExpiresAt(null);
+        accessRequest.setUpdatedAt(now);
+        projectGitHubAccessRequestRepository.save(accessRequest);
+        return new GitHubAccessUpdatedAcknowledgeDto(accessRequest.getProjectId());
     }
 
     @Transactional
@@ -368,6 +429,27 @@ public class GitHubAppIntegrationService {
         upsertProjectInstallationAuthorization(projectId, installationId, now);
     }
 
+    private String buildGithubAuthorizeUrlAndStoreState(ProjectGitHubAccessRequest accessRequest, Instant now) {
+        String appInstallUrl = trimToNull(gitHubProperties.getAppInstallUrl());
+        if (appInstallUrl == null) {
+            throw new ValidationException(
+                "GITHUB_APP_INSTALL_URL",
+                "GitHub App install URL is not configured."
+            );
+        }
+
+        String state = generateOpaqueToken();
+        accessRequest.setGithubStateHash(sha256Base64(state));
+        accessRequest.setUpdatedAt(now);
+        projectGitHubAccessRequestRepository.save(accessRequest);
+
+        return UriComponentsBuilder
+            .fromUriString(appInstallUrl)
+            .queryParam("state", state)
+            .build(true)
+            .toUriString();
+    }
+
     private void refreshAccessibleRepositoriesSnapshot(Long installationId) {
         try {
             gitHubAppAuthService.fetchInstallationRepositories(installationId, 1, 1);
@@ -457,10 +539,7 @@ public class GitHubAppIntegrationService {
         return accessRequest;
     }
 
-    private ProjectGitHubAccessRequest requirePendingAccessRequestByToken(
-        String requestToken,
-        Instant now
-    ) {
+    private ProjectGitHubAccessRequest requirePendingAccessRequestByToken(String requestToken, Instant now) {
         String normalizedToken = trimToNull(requestToken);
         if (normalizedToken == null) {
             throw new ValidationException("token", ACCESS_REQUEST_INVALID_MESSAGE);
@@ -475,6 +554,29 @@ public class GitHubAppIntegrationService {
         }
         if (accessRequest.getExpiresAt() == null || now.isAfter(accessRequest.getExpiresAt())) {
             markRequestExpired(accessRequest, now);
+            throw new ValidationException("token", ACCESS_REQUEST_INVALID_MESSAGE);
+        }
+
+        return accessRequest;
+    }
+
+    private ProjectGitHubAccessRequest requireCompletedAccessRequestByResultToken(String resultToken, Instant now) {
+        String normalizedToken = trimToNull(resultToken);
+        if (normalizedToken == null) {
+            throw new ValidationException("token", ACCESS_REQUEST_INVALID_MESSAGE);
+        }
+
+        ProjectGitHubAccessRequest accessRequest = projectGitHubAccessRequestRepository
+            .findByResultTokenHash(sha256Base64(normalizedToken))
+            .orElseThrow(() -> new ValidationException("token", ACCESS_REQUEST_INVALID_MESSAGE));
+
+        if (!ACCESS_REQUEST_STATUS_COMPLETED.equals(accessRequest.getStatus()) || accessRequest.getUsedAt() == null) {
+            throw new ValidationException("token", ACCESS_REQUEST_INVALID_MESSAGE);
+        }
+        if (accessRequest.getResultTokenHash() == null) {
+            throw new ValidationException("token", ACCESS_REQUEST_INVALID_MESSAGE);
+        }
+        if (accessRequest.getResultExpiresAt() == null || now.isAfter(accessRequest.getResultExpiresAt())) {
             throw new ValidationException("token", ACCESS_REQUEST_INVALID_MESSAGE);
         }
 
@@ -496,6 +598,14 @@ public class GitHubAppIntegrationService {
             );
         }
         return config.getExpiresInMinutes();
+    }
+
+    private int installationRepositoriesSummaryPageSize() {
+        GitHubProperties.InstallationRepositories config = gitHubProperties.getInstallationRepositories();
+        if (config == null || config.getMaxPageSize() < 1) {
+            return 100;
+        }
+        return Math.min(config.getMaxPageSize(), 100);
     }
 
     private String generateOpaqueToken() {
@@ -680,6 +790,72 @@ public class GitHubAppIntegrationService {
         return value == null || value.isBlank() ? fallback : value;
     }
 
-    public record SetupCallbackResult(UUID projectId, Long installationId, boolean requestFlowCompleted) {
+    private String resolveFullName(GitHubAppAuthService.GitHubInstallationRepositoryContext repository) {
+        String fullName = trimToNull(repository.fullName());
+        if (fullName != null) {
+            return fullName;
+        }
+
+        String owner = trimToNull(repository.ownerLogin());
+        String name = trimToNull(repository.repositoryName());
+        if (owner != null && name != null) {
+            return owner + "/" + name;
+        }
+        return nullable(name, nullable(owner, "repository"));
+    }
+
+    private String resolveRepositoryUrl(GitHubAppAuthService.GitHubInstallationRepositoryContext repository) {
+        String htmlUrl = trimToNull(repository.htmlUrl());
+        if (htmlUrl != null) {
+            return htmlUrl;
+        }
+        String fullName = resolveFullName(repository);
+        return "https://github.com/" + fullName;
+    }
+
+    private String deriveRepositoryName(String repositoryUrl) {
+        if (repositoryUrl == null || repositoryUrl.isBlank()) {
+            return "repository";
+        }
+        try {
+            java.net.URI uri = java.net.URI.create(repositoryUrl.trim());
+            String path = uri.getPath();
+            if (path == null || path.isBlank()) {
+                return "repository";
+            }
+            String[] segments = path.split("/");
+            for (int i = segments.length - 1; i >= 0; i--) {
+                String segment = trimToNull(segments[i]);
+                if (segment != null) {
+                    return segment;
+                }
+            }
+        } catch (IllegalArgumentException ignored) {
+            // ignore parse failures and fall back
+        }
+        return "repository";
+    }
+
+    private String deriveOwnerFromFullName(String fullName) {
+        if (fullName == null || fullName.isBlank()) {
+            return null;
+        }
+        int separatorIndex = fullName.indexOf('/');
+        if (separatorIndex < 1) {
+            return null;
+        }
+        return fullName.substring(0, separatorIndex).trim();
+    }
+
+    private String defaultBranch() {
+        return nullable(trimToNull(gitHubProperties.getDefaultBranch()), "main");
+    }
+
+    public record SetupCallbackResult(
+        UUID projectId,
+        Long installationId,
+        boolean requestFlowCompleted,
+        String resultToken
+    ) {
     }
 }

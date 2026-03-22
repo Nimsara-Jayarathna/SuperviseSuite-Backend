@@ -167,15 +167,21 @@ class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional(readOnly = true)
     public ProjectGitHubPreviewDto getGitHubPreview(UUID projectId, String repositoryUrl) {
+        ProjectGitHubAccessMetadata accessMetadata = resolveProjectGitHubAccessMetadata(projectId);
         ProjectRepository repository = resolveLinkedRepository(projectId, repositoryUrl);
+        ProjectGitHubPreviewDto preview;
         if (repository == null || repository.getRepositoryUrl() == null || repository.getRepositoryUrl().isBlank()) {
-            return new ProjectGitHubPreviewDto(
+            preview = new ProjectGitHubPreviewDto(
                 false,
                 List.of(),
                 new ProjectGitHubPreviewDto.ActivitySummary(0, null, STATUS_IDLE),
                 List.of(),
                 List.of()
             );
+            preview.setAuthorizedInstallationId(accessMetadata.authorizedInstallationId());
+            preview.setAccessibleRepositoryCount(accessMetadata.accessibleRepositoryCount());
+            preview.setAccessScope(accessMetadata.accessScope());
+            return preview;
         }
 
         long totalCommits = repository.getId() == null ? 0 : projectRepositoryCommitRepository.countByRepositoryId(repository.getId());
@@ -223,7 +229,7 @@ class ProjectServiceImpl implements ProjectService {
             repository.getLastSyncedAt()
         );
 
-        return new ProjectGitHubPreviewDto(
+        preview = new ProjectGitHubPreviewDto(
             true,
             List.of(repositoryItem),
             new ProjectGitHubPreviewDto.ActivitySummary(
@@ -234,6 +240,10 @@ class ProjectServiceImpl implements ProjectService {
             contributorsPreview,
             recentCommitsPreview
         );
+        preview.setAuthorizedInstallationId(accessMetadata.authorizedInstallationId());
+        preview.setAccessibleRepositoryCount(accessMetadata.accessibleRepositoryCount());
+        preview.setAccessScope(accessMetadata.accessScope());
+        return preview;
     }
 
     @Override
@@ -775,6 +785,61 @@ class ProjectServiceImpl implements ProjectService {
         }
     }
 
+    private ProjectGitHubAccessMetadata resolveProjectGitHubAccessMetadata(UUID projectId) {
+        ProjectGitHubInstallationAuthorization authorization = projectGitHubInstallationAuthorizationRepository
+            .findTopByProjectIdOrderByAuthorizedAtDesc(projectId)
+            .orElse(null);
+
+        if (authorization == null || authorization.getInstallationId() == null || authorization.getInstallationId() < 1) {
+            return new ProjectGitHubAccessMetadata(null, null, "NOT_AUTHORIZED");
+        }
+
+        Long installationId = authorization.getInstallationId();
+        try {
+            GitHubAppAuthService.GitHubInstallationRepositoriesPageContext page =
+                gitHubAppAuthService.fetchInstallationRepositories(installationId, 1, 1);
+            int accessibleRepositoryCount = resolveAccessibleRepositoryCount(page);
+            String accessScope = resolveAccessScope(accessibleRepositoryCount);
+            return new ProjectGitHubAccessMetadata(installationId, accessibleRepositoryCount, accessScope);
+        } catch (RuntimeException exception) {
+            LOGGER.warn(
+                "Unable to resolve GitHub access scope for projectId={} installationId={}: {}",
+                projectId,
+                installationId,
+                nullable(exception.getMessage(), "unavailable")
+            );
+            return new ProjectGitHubAccessMetadata(installationId, null, "ACCESS_UNAVAILABLE");
+        }
+    }
+
+    private int resolveAccessibleRepositoryCount(GitHubAppAuthService.GitHubInstallationRepositoriesPageContext page) {
+        if (page == null) {
+            return 0;
+        }
+
+        Long totalCount = page.totalCount();
+        if (totalCount == null) {
+            return page.repositories() == null ? 0 : page.repositories().size();
+        }
+        if (totalCount <= 0) {
+            return 0;
+        }
+        return totalCount > Integer.MAX_VALUE ? Integer.MAX_VALUE : totalCount.intValue();
+    }
+
+    private String resolveAccessScope(Integer accessibleRepositoryCount) {
+        if (accessibleRepositoryCount == null) {
+            return "ACCESS_UNAVAILABLE";
+        }
+        if (accessibleRepositoryCount < 1) {
+            return "NO_REPOSITORIES";
+        }
+        if (accessibleRepositoryCount == 1) {
+            return "SINGLE_REPOSITORY";
+        }
+        return "MULTIPLE_REPOSITORIES";
+    }
+
     private ProjectGitHubInstallationAuthorization requireProjectInstallationAuthorization(
         UUID projectId,
         Long installationId,
@@ -1149,5 +1214,12 @@ class ProjectServiceImpl implements ProjectService {
             throw new ValidationException("GITHUB_DEFAULT_BRANCH", "GITHUB_DEFAULT_BRANCH is not configured.");
         }
         return configured.trim();
+    }
+
+    private record ProjectGitHubAccessMetadata(
+        Long authorizedInstallationId,
+        Integer accessibleRepositoryCount,
+        String accessScope
+    ) {
     }
 }

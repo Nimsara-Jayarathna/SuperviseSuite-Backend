@@ -5,6 +5,9 @@ import java.util.List;
 
 public class ProjectGitHubPreviewDto {
     private boolean repositoryLinked;
+    private Long authorizedInstallationId;
+    private Integer accessibleRepositoryCount;
+    private String accessScope;
     private List<RepositoryItem> repositories;
     private ActivitySummary activitySummary;
     private List<ContributorPreviewItem> contributorsPreview;
@@ -33,6 +36,30 @@ public class ProjectGitHubPreviewDto {
 
     public void setRepositoryLinked(boolean repositoryLinked) {
         this.repositoryLinked = repositoryLinked;
+    }
+
+    public Long getAuthorizedInstallationId() {
+        return authorizedInstallationId;
+    }
+
+    public void setAuthorizedInstallationId(Long authorizedInstallationId) {
+        this.authorizedInstallationId = authorizedInstallationId;
+    }
+
+    public Integer getAccessibleRepositoryCount() {
+        return accessibleRepositoryCount;
+    }
+
+    public void setAccessibleRepositoryCount(Integer accessibleRepositoryCount) {
+        this.accessibleRepositoryCount = accessibleRepositoryCount;
+    }
+
+    public String getAccessScope() {
+        return accessScope;
+    }
+
+    public void setAccessScope(String accessScope) {
+        this.accessScope = accessScope;
     }
 
     public List<RepositoryItem> getRepositories() {

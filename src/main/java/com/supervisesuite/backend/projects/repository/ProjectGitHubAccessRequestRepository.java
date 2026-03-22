@@ -10,4 +10,6 @@ public interface ProjectGitHubAccessRequestRepository extends JpaRepository<Proj
     Optional<ProjectGitHubAccessRequest> findByTokenHash(String tokenHash);
 
     Optional<ProjectGitHubAccessRequest> findByGithubStateHash(String githubStateHash);
+
+    Optional<ProjectGitHubAccessRequest> findByResultTokenHash(String resultTokenHash);
 }

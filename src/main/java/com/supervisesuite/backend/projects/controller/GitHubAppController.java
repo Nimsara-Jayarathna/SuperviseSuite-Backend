@@ -7,6 +7,8 @@ import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.config.FrontendProperties;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
 import com.supervisesuite.backend.projects.dto.GitHubWebhookResultDto;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -54,10 +56,16 @@ public class GitHubAppController {
         @RequestParam(name = "installation_id") Long installationId,
         @RequestParam(name = "state", required = false) String state
     ) {
-        SetupState legacyState = parseStateSafely(state);
         try {
             GitHubAppIntegrationService.SetupCallbackResult result =
                 gitHubAppIntegrationService.handleSetupCallback(installationId, state);
+            if (
+                result.requestFlowCompleted() &&
+                result.resultToken() != null &&
+                !result.resultToken().isBlank()
+            ) {
+                return redirectTo(buildAccessUpdatedRedirect(result.resultToken(), "success"));
+            }
             return redirectTo(buildProjectRedirect(
                 result.projectId() == null ? null : result.projectId().toString(),
                 "overview",
@@ -67,7 +75,11 @@ public class GitHubAppController {
             ));
         } catch (Exception exception) {
             LOGGER.warn("GitHub setup callback failed: {}", exception.getMessage(), exception);
-            return redirectTo(buildProjectRedirect(legacyState.projectId(), "overview", "failed", null, false));
+            SetupState legacyState = parseStateSafely(state);
+            if (legacyState.projectId() != null) {
+                return redirectTo(buildProjectRedirect(legacyState.projectId(), "overview", "failed", null, false));
+            }
+            return redirectTo(buildAccessUpdatedRedirect(null, "failed"));
         }
     }
 
@@ -98,6 +110,24 @@ public class GitHubAppController {
     ) {
         GitHubAccessRequestContinueDto data = gitHubAppIntegrationService.continueProjectAccessRequest(token);
         return apiResponseFactory.ok("GitHub access request continuation prepared.", data, request);
+    }
+
+    @GetMapping("/access-updated/summary")
+    public ResponseEntity<ApiResponse<GitHubAccessUpdatedSummaryDto>> getAccessUpdatedSummary(
+        @RequestParam(name = "token") String token,
+        HttpServletRequest request
+    ) {
+        GitHubAccessUpdatedSummaryDto data = gitHubAppIntegrationService.getAccessUpdatedSummary(token);
+        return apiResponseFactory.ok("GitHub access update summary loaded.", data, request);
+    }
+
+    @PostMapping("/access-updated/acknowledge")
+    public ResponseEntity<ApiResponse<GitHubAccessUpdatedAcknowledgeDto>> acknowledgeAccessUpdated(
+        @RequestParam(name = "token") String token,
+        HttpServletRequest request
+    ) {
+        GitHubAccessUpdatedAcknowledgeDto data = gitHubAppIntegrationService.acknowledgeAccessUpdated(token);
+        return apiResponseFactory.ok("GitHub access update acknowledged.", data, request);
     }
 
     private SetupState parseStateSafely(String state) {
@@ -153,6 +183,24 @@ public class GitHubAppController {
         }
         if (githubAccessUpdated) {
             builder.queryParam("githubAccessUpdated", "true");
+        }
+        return builder.build(true).toUri();
+    }
+
+    private URI buildAccessUpdatedRedirect(String resultToken, String status) {
+        String baseUrl = frontendProperties.getBaseUrl();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            throw new IllegalStateException("FRONTEND_BASE_URL is not configured.");
+        }
+
+        UriComponentsBuilder builder = UriComponentsBuilder
+            .fromUriString(baseUrl.trim())
+            .pathSegment("github", "access-updated");
+        if (resultToken != null && !resultToken.isBlank()) {
+            builder.queryParam("token", resultToken);
+        }
+        if (status != null && !status.isBlank()) {
+            builder.queryParam("status", status);
         }
         return builder.build(true).toUri();
     }

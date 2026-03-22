@@ -10,6 +10,8 @@ public interface ProjectGitHubInstallationAuthorizationRepository
 
     Optional<ProjectGitHubInstallationAuthorization> findByProjectIdAndInstallationId(UUID projectId, Long installationId);
 
+    Optional<ProjectGitHubInstallationAuthorization> findTopByProjectIdOrderByAuthorizedAtDesc(UUID projectId);
+
     void deleteByProjectId(UUID projectId);
 
     void deleteByInstallationId(Long installationId);
