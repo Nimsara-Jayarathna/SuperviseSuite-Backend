@@ -111,6 +111,39 @@ Commit range: `43ff515` -> `5952bec`
 - Installation linkage is asserted after setup before success continuation.
 - Repository update/removal path and app linkage were aligned around a single active repository linkage per project.
 
+## Post-Branch Updates (2026-03-22): Project-Scoped Authorization + Explicit Repo Selection
+
+### Why this follow-up was needed
+
+- Callback-time auto-linking based only on setup state was too early and brittle.
+- One installation needed to be reusable across multiple projects with explicit per-project repository selection.
+- Supervisors needed a secure "request more repository access" flow with single-use tokens.
+
+### What was changed
+
+- Setup callback behavior was refined:
+  - callback stores installation + project authorization scope
+  - callback no longer auto-links repository to project
+  - repository linkage is now explicit via supervisor endpoint
+- Added project authorization scope table:
+  - `project_github_installation_authorizations` (`V7`)
+- Added access-request token flow:
+  - `project_github_access_requests` (`V8`) + result-token fields (`V9`)
+  - hashed token/state persistence with expiry and single-use lifecycle
+  - public callback helper endpoints:
+    - `GET /api/github/access-requests/validate`
+    - `POST /api/github/access-requests/continue`
+    - `GET /api/github/access-updated/summary`
+    - `POST /api/github/access-updated/acknowledge`
+- Added explicit supervisor repository-link endpoint:
+  - `POST /api/supervisor/projects/{projectId}/github/link`
+- Added paginated installation repository endpoint:
+  - `GET /api/supervisor/projects/{projectId}/github/installations/{installationId}/repositories?page=&size=`
+  - backed by configurable page size defaults/caps
+- Added scheduled maintenance jobs:
+  - expired access-request cleanup (fixed delay)
+  - linked repository refresh (cron + zone + batch size)
+
 ## Changed Files (`dev...HEAD`)
 
 - `.env.example`

@@ -22,6 +22,12 @@ All endpoints in this document:
 - `GET /api/supervisor/projects/{projectId}/github`
 - `GET /api/supervisor/projects/{projectId}/github/activity?page=...&size=...`
 - `GET /api/supervisor/projects/{projectId}/github/contributors?page=...&size=...`
+- `GET /api/supervisor/projects/{projectId}/github/installations/{installationId}/repositories?page=...&size=...`
+- `POST /api/supervisor/projects/{projectId}/github/access-requests`
+- `GET /api/supervisor/projects/{projectId}/github/access-requests/validate?token=...`
+- `POST /api/supervisor/projects/{projectId}/github/access-requests/continue?token=...`
+- `POST /api/supervisor/projects/{projectId}/github/link`
+- `POST /api/supervisor/projects/{projectId}/github/access/remove`
 - `POST /api/supervisor/projects/{projectId}/github/refresh`
 - `POST /api/supervisor/projects/{projectId}/members`
 - `POST /api/supervisor/projects/{projectId}/milestones`
@@ -89,6 +95,9 @@ Returns one supervisor-owned project detail record.
   - `id`, `title`, `summary`, `lifecycleStatus`, `batch`, `semester`, `milestoneDate`, `progressPercent`, `healthNote`, `repositoryUrl`, `lastActivityAt`
 - GitHub preview block:
   - `github.repositoryLinked`
+  - `github.authorizedInstallationId`
+  - `github.accessibleRepositoryCount`
+  - `github.accessScope`
   - `github.repositories[]` (`id`, `name`, `url`, `defaultBranch`, `lastSyncedAt`)
   - `github.activitySummary` (`totalCommits`, `lastActivityAt`, `status`)
   - `github.contributorsPreview[]` (top 4)
@@ -251,6 +260,99 @@ Content-Type: application/json
 
 ---
 
+## GET /api/supervisor/projects/{projectId}/github/installations/{installationId}/repositories?page=...&size=...
+
+Returns paginated repositories currently accessible under a GitHub App installation authorized for this project.
+
+### Query params
+
+- `page` (1-based, default `1`, must be > 0)
+- `size` (optional; default and cap are resolved from backend config)
+
+### Response fields
+
+- `items[]`:
+  - `repositoryId`, `name`, `fullName`, `url`, `ownerLogin`, `defaultBranch`
+- `page`, `size`, `returnedCount`, `totalCount`
+- `hasNext`, `hasPrevious`, `nextPage`
+
+### Rules
+
+- project must belong to authenticated supervisor
+- installation must be active/usable
+- installation must be explicitly authorized for this project
+
+---
+
+## POST /api/supervisor/projects/{projectId}/github/access-requests
+
+Creates a short-lived project-scoped access-request link/token used before redirecting to GitHub.
+
+### Response fields
+
+- `projectId`
+- `requestToken`
+- `requestUrl` (relative FE route such as `/github/request-access?token=...`)
+- `expiresAt`
+
+---
+
+## GET /api/supervisor/projects/{projectId}/github/access-requests/validate?token=...
+
+Supervisor-authenticated validation endpoint for project-scoped access-request token.
+
+### Response fields
+
+- `projectId`
+- `projectTitle`
+- `status` (`PENDING`)
+- `expiresAt`
+
+---
+
+## POST /api/supervisor/projects/{projectId}/github/access-requests/continue?token=...
+
+Supervisor-authenticated continuation endpoint that returns GitHub authorization/install URL.
+
+### Response fields
+
+- `projectId`
+- `githubAuthorizeUrl`
+
+---
+
+## POST /api/supervisor/projects/{projectId}/github/link
+
+Explicitly links one selected installation repository to this project.
+
+### Request fields
+
+- `installationId` (required, > 0)
+- `repositoryId` (required, > 0)
+
+### Behavior
+
+- validates supervisor ownership and installation authorization
+- validates repository is accessible under selected installation
+- writes repository linkage into primary `project_repositories` row
+- attempts refresh sync after linking
+- returns linked repository details
+
+---
+
+## POST /api/supervisor/projects/{projectId}/github/access/remove
+
+Removes project-scoped GitHub installation authorization and linked repository/cache data.
+
+### Behavior
+
+- clears `project_github_installation_authorizations` rows for project
+- clears linked `project_repositories` + commit/contributor snapshots for project
+- clears project `repositoryUrl`
+- returns refreshed supervisor project detail payload
+
+---
+
 ## GET /api/supervisor/projects/{projectId}/github
 
 Returns read-only GitHub dashboard data for the project.
@@ -318,11 +420,12 @@ Triggers backend GitHub sync and updates DB cache for the linked repository.
 - Fetches metadata/commits via backend GitHub integration (installation-aware when linked).
 - Rebuilds commit + contributor snapshots.
 - Updates repository sync fields (`lastSyncedAt`, `syncStatus`, `lastSyncError`).
+- If GitHub installation authorization is removed/invalid, backend clears project linkage/cache and returns validation error.
 - Returns `200 OK` with success message on completion.
 
 ### Status codes
 
-- `200 OK` - repository URL updated/cleared
+- `200 OK` - GitHub repository data refreshed
 - `400 BAD_REQUEST` - validation failure
 - `401 UNAUTHORIZED` - not authenticated
 - `403 FORBIDDEN` - authenticated but not supervisor role
