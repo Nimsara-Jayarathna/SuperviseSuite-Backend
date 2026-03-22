@@ -106,13 +106,13 @@ public class SupervisorController {
         HttpServletRequest request,
         @PathVariable String projectId,
         @RequestParam(name = "page", defaultValue = "1") int page,
-        @RequestParam(name = "size", defaultValue = "10") int size
+        @RequestParam(name = "size", required = false) Integer size
     ) {
         ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> data = supervisorService.getProjectGitHubActivityPage(
             authentication.getName(),
             projectId,
             page,
-            size
+            size == null ? 0 : size
         );
         return apiResponseFactory.ok("GitHub activity page loaded.", data, request);
     }
@@ -123,13 +123,13 @@ public class SupervisorController {
         HttpServletRequest request,
         @PathVariable String projectId,
         @RequestParam(name = "page", defaultValue = "1") int page,
-        @RequestParam(name = "size", defaultValue = "10") int size
+        @RequestParam(name = "size", required = false) Integer size
     ) {
         ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> data = supervisorService.getProjectGitHubContributorsPage(
             authentication.getName(),
             projectId,
             page,
-            size
+            size == null ? 0 : size
         );
         return apiResponseFactory.ok("GitHub contributors page loaded.", data, request);
     }

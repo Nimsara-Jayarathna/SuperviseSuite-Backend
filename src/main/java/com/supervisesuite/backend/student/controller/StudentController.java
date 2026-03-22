@@ -69,14 +69,14 @@ public class StudentController {
         Authentication authentication,
         @PathVariable String projectId,
         @RequestParam(name = "page", defaultValue = "1") int page,
-        @RequestParam(name = "size", defaultValue = "10") int size,
+        @RequestParam(name = "size", required = false) Integer size,
         HttpServletRequest request
     ) {
         ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> data = studentService.getProjectGitHubActivityPage(
             authentication.getName(),
             projectId,
             page,
-            size
+            size == null ? 0 : size
         );
         return apiResponseFactory.ok("GitHub activity page loaded.", data, request);
     }
@@ -86,14 +86,14 @@ public class StudentController {
         Authentication authentication,
         @PathVariable String projectId,
         @RequestParam(name = "page", defaultValue = "1") int page,
-        @RequestParam(name = "size", defaultValue = "10") int size,
+        @RequestParam(name = "size", required = false) Integer size,
         HttpServletRequest request
     ) {
         ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> data = studentService.getProjectGitHubContributorsPage(
             authentication.getName(),
             projectId,
             page,
-            size
+            size == null ? 0 : size
         );
         return apiResponseFactory.ok("GitHub contributors page loaded.", data, request);
     }
