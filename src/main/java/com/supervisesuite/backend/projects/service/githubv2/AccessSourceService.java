@@ -5,10 +5,12 @@ import com.supervisesuite.backend.projects.dto.GitHubAccessSourceDto;
 import com.supervisesuite.backend.projects.dto.GitHubAvailableRepositoriesDto;
 import com.supervisesuite.backend.projects.dto.GitHubRepositoryOptionDto;
 import com.supervisesuite.backend.projects.dto.ProjectRepositoryMetadataDto;
+import com.supervisesuite.backend.projects.entity.GitHubAppInstallation;
 import com.supervisesuite.backend.projects.entity.GitHubAccessSource;
 import com.supervisesuite.backend.projects.entity.GitHubRepositoryEntity;
 import com.supervisesuite.backend.projects.integration.github.GitHubAppAuthService;
 import com.supervisesuite.backend.projects.integration.github.GitHubClient;
+import com.supervisesuite.backend.projects.repository.GitHubAppInstallationRepository;
 import com.supervisesuite.backend.projects.repository.GitHubAccessSourceRepository;
 import com.supervisesuite.backend.projects.repository.GitHubRepositoryEntityRepository;
 import java.time.Instant;
@@ -21,21 +23,25 @@ import org.springframework.transaction.annotation.Transactional;
 public class AccessSourceService {
 
     private static final String GITHUB_REPOSITORY_URL_PATTERN = "^https://github\\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$";
+    private static final String INSTALLATION_STATUS_ACTIVE = "ACTIVE";
 
     private final GitHubIntegrationGuardService guardService;
     private final GitHubAccessSourceRepository accessSourceRepository;
     private final GitHubRepositoryEntityRepository gitHubRepositoryEntityRepository;
+    private final GitHubAppInstallationRepository gitHubAppInstallationRepository;
     private final GitHubClient gitHubClient;
 
     public AccessSourceService(
         GitHubIntegrationGuardService guardService,
         GitHubAccessSourceRepository accessSourceRepository,
         GitHubRepositoryEntityRepository gitHubRepositoryEntityRepository,
+        GitHubAppInstallationRepository gitHubAppInstallationRepository,
         GitHubClient gitHubClient
     ) {
         this.guardService = guardService;
         this.accessSourceRepository = accessSourceRepository;
         this.gitHubRepositoryEntityRepository = gitHubRepositoryEntityRepository;
+        this.gitHubAppInstallationRepository = gitHubAppInstallationRepository;
         this.gitHubClient = gitHubClient;
     }
 
@@ -106,6 +112,7 @@ public class AccessSourceService {
         }
 
         GitHubAppAuthService.GitHubInstallationContext installationContext = gitHubClient.fetchInstallationContext(installationId);
+        upsertInstallationRecord(installationId, installationContext);
 
         String ownerLogin = nullable(installationContext.accountLogin(), "unknown");
         String ownerTypeRaw = nullable(installationContext.accountType(), "Organization");
@@ -125,6 +132,31 @@ public class AccessSourceService {
         source.setCreatedAt(Instant.now());
         source.setIsActive(true);
         return accessSourceRepository.save(source);
+    }
+
+    private void upsertInstallationRecord(
+        Long installationId,
+        GitHubAppAuthService.GitHubInstallationContext installationContext
+    ) {
+        Instant now = Instant.now();
+
+        GitHubAppInstallation installation = gitHubAppInstallationRepository
+            .findByInstallationId(installationId)
+            .orElseGet(() -> {
+                GitHubAppInstallation created = new GitHubAppInstallation();
+                created.setInstallationId(installationId);
+                created.setCreatedAt(now);
+                created.setInstalledAt(now);
+                return created;
+            });
+
+        installation.setAccountId(installationContext.accountId());
+        installation.setAccountLogin(installationContext.accountLogin());
+        installation.setAccountType(installationContext.accountType());
+        installation.setStatus(INSTALLATION_STATUS_ACTIVE);
+        installation.setLastEventAt(now);
+        installation.setUpdatedAt(now);
+        gitHubAppInstallationRepository.save(installation);
     }
 
     @Transactional(readOnly = true)
