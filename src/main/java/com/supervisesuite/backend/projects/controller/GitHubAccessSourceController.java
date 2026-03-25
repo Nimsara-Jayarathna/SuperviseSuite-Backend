@@ -13,6 +13,7 @@ import com.supervisesuite.backend.projects.dto.GitHubInstallStartDto;
 import com.supervisesuite.backend.projects.dto.LinkGitHubRepositoriesRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import com.supervisesuite.backend.projects.dto.StartGitHubAccessSourceInstallRequest;
+import com.supervisesuite.backend.projects.dto.UpdateGitHubRepositoryDisplayNameRequest;
 import com.supervisesuite.backend.projects.entity.GitHubAccessSource;
 import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
 import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
@@ -232,6 +233,22 @@ public class GitHubAccessSourceController {
         String userId = requireAuthenticatedUserId(authentication);
         ProjectGitHubRepositoriesDto data = repositoryLinkService.selectPrimaryRepository(linkedRepositoryId, userId);
         return apiResponseFactory.ok("GitHub primary repository updated.", data, request);
+    }
+
+    @PostMapping("/repositories/{id}/display-name")
+    public ResponseEntity<ApiResponse<ProjectGitHubRepositoriesDto>> updateRepositoryDisplayName(
+        Authentication authentication,
+        @PathVariable("id") String linkedRepositoryId,
+        @Valid @RequestBody UpdateGitHubRepositoryDisplayNameRequest body,
+        HttpServletRequest request
+    ) {
+        String userId = requireAuthenticatedUserId(authentication);
+        ProjectGitHubRepositoriesDto data = repositoryLinkService.updateRepositoryDisplayName(
+            linkedRepositoryId,
+            userId,
+            body.getCustomName()
+        );
+        return apiResponseFactory.ok("GitHub repository display name updated.", data, request);
     }
 
     private URI buildProjectRedirect(

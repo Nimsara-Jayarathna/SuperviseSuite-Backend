@@ -361,6 +361,37 @@ public class RepositoryLinkService {
         return getProjectRepositories(link.getProjectId().toString(), authenticatedUserIdRaw);
     }
 
+    @Transactional
+    public ProjectGitHubRepositoriesDto updateRepositoryDisplayName(
+        String linkedRepositoryIdRaw,
+        String authenticatedUserIdRaw,
+        String customNameRaw
+    ) {
+        UUID linkedRepositoryId = guardService.parseUuid(linkedRepositoryIdRaw, "repositoryId");
+        UUID userId = guardService.parseUuid(authenticatedUserIdRaw, "authenticatedUserId");
+
+        ProjectRepositoryLink link = projectRepositoryLinkRepository
+            .findById(linkedRepositoryId)
+            .orElseThrow(() -> new ValidationException("repositoryId", "Linked repository not found."));
+        guardService.requireOwnedProject(link.getProjectId(), userId);
+
+        String normalizedCustomName = trimToNull(customNameRaw);
+        if (normalizedCustomName != null && normalizedCustomName.length() > 255) {
+            throw new ValidationException("customName", "Display name must not exceed 255 characters.");
+        }
+
+        if ((link.getCustomName() == null && normalizedCustomName == null)
+            || (link.getCustomName() != null && link.getCustomName().equals(normalizedCustomName))) {
+            return getProjectRepositories(link.getProjectId().toString(), authenticatedUserIdRaw);
+        }
+
+        link.setCustomName(normalizedCustomName);
+        link.setUpdatedAt(Instant.now());
+        projectRepositoryLinkRepository.save(link);
+
+        return getProjectRepositories(link.getProjectId().toString(), authenticatedUserIdRaw);
+    }
+
     @Transactional(readOnly = true)
     public ProjectGitHubRepositoriesDto getProjectRepositories(String projectIdRaw, String authenticatedUserIdRaw) {
         UUID projectId = guardService.parseUuid(projectIdRaw, "projectId");
