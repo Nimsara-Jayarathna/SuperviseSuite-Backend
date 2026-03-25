@@ -15,6 +15,7 @@ import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.service.ProjectService;
+import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
@@ -47,19 +48,23 @@ class StudentServiceImplTest {
     @Mock
     private ProjectService projectService;
 
-    private StudentServiceImpl service;
+    @Mock
+    private RepositoryLinkService repositoryLinkService;
+
+    private StudentServiceImpl studentService;
 
     private UUID studentId;
     private User student;
 
     @BeforeEach
     void setUp() {
-        service = new StudentServiceImpl(
+        studentService = new StudentServiceImpl(
             userRepository,
             projectMemberRepository,
             projectRepository,
             projectMilestoneRepository,
-            projectService
+            projectService,
+            repositoryLinkService
         );
 
         studentId = UUID.randomUUID();
@@ -77,7 +82,7 @@ class StudentServiceImplTest {
         when(projectMemberRepository.findByUserIdAndMemberRoleOrderByCreatedAtDesc(studentId, Roles.STUDENT))
             .thenReturn(List.of());
 
-        List<StudentProjectSummaryDto> result = service.getProjects(studentId.toString());
+        List<StudentProjectSummaryDto> result = studentService.getProjects(studentId.toString());
 
         assertThat(result).isEmpty();
     }
@@ -107,7 +112,7 @@ class StudentServiceImplTest {
         when(projectRepository.findByIdInAndDeletedAtIsNullOrderByCreatedAtDesc(org.mockito.ArgumentMatchers.anySet()))
             .thenReturn(List.of(projectOne, projectTwo));
 
-        List<StudentProjectSummaryDto> result = service.getProjects(studentId.toString());
+        List<StudentProjectSummaryDto> result = studentService.getProjects(studentId.toString());
 
         assertThat(result).hasSize(2);
         assertThat(result).extracting(StudentProjectSummaryDto::getTitle).containsExactly("Project One", "Project Two");
@@ -121,7 +126,7 @@ class StudentServiceImplTest {
         when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(studentId, projectId, Roles.STUDENT))
             .thenReturn(false);
 
-        assertThatThrownBy(() -> service.getProjectById(studentId.toString(), projectId.toString()))
+        assertThatThrownBy(() -> studentService.getProjectById(studentId.toString(), projectId.toString()))
             .isInstanceOf(EntityNotFoundException.class);
     }
 
@@ -136,18 +141,18 @@ class StudentServiceImplTest {
         when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(studentId, projectId, Roles.STUDENT))
             .thenReturn(true);
         when(projectRepository.findByIdAndDeletedAtIsNull(projectId)).thenReturn(Optional.of(project));
-        when(projectService.getGitHubActivityPage(projectId, project.getRepositoryUrl(), 2, 25)).thenReturn(page);
+        when(projectService.getGitHubActivityPage(projectId, null, 2, 25)).thenReturn(page);
 
         ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> result =
-            service.getProjectGitHubActivityPage(studentId.toString(), projectId.toString(), 2, 25);
+            studentService.getProjectGitHubActivityPage(studentId.toString(), projectId.toString(), 2, 25);
 
         assertThat(result).isSameAs(page);
-        verify(projectService).getGitHubActivityPage(projectId, project.getRepositoryUrl(), 2, 25);
+        verify(projectService).getGitHubActivityPage(projectId, null, 2, 25);
     }
 
     @Test
     void getProjects_invalidAuthenticatedUser_throwsUnauthorized() {
-        assertThatThrownBy(() -> service.getProjects("not-a-uuid"))
+        assertThatThrownBy(() -> studentService.getProjects("not-a-uuid"))
             .isInstanceOf(UnauthorizedException.class)
             .hasMessageContaining("Authentication required");
     }
@@ -168,7 +173,7 @@ class StudentServiceImplTest {
         project.setName(title);
         project.setStatus("ACTIVE");
         project.setCreatedAt(Instant.now());
-        project.setRepositoryUrl("https://github.com/acme/repo");
+        project.setCreatedAt(Instant.now());
         return project;
     }
 }

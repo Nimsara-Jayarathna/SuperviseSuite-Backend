@@ -34,4 +34,6 @@ public interface ProjectRepositoryLinkContributorRepository extends JpaRepositor
     );
 
     void deleteByProjectRepositoryLinkId(UUID projectRepositoryLinkId);
+
+    void deleteByRepositoryId(UUID projectRepositoryLinkId);
 }

@@ -6,6 +6,8 @@ import com.supervisesuite.backend.projects.dto.ProjectCommitDto;
 import com.supervisesuite.backend.projects.dto.ProjectRepositoryMetadataDto;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -82,6 +84,15 @@ class GitHubClientAdapter implements GitHubClient {
     @Override
     public List<ProjectCommitDto> fetchRecentCommits(String repositoryUrl, Long installationId) {
         return gitHubCommitClient.fetchRecentCommits(repositoryUrl, installationId);
+    }
+
+    @Override
+    public GitHubAppAuthService.GitHubInstallationRepositoriesPageContext fetchInstallationRepositoriesPage(
+        Long installationId,
+        int page,
+        int size
+    ) {
+        return gitHubAppAuthService.fetchInstallationRepositories(installationId, page, size);
     }
 
     private String trimToNull(String value) {

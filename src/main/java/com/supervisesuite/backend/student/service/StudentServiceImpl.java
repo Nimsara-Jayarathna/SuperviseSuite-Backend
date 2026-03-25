@@ -15,6 +15,8 @@ import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import com.supervisesuite.backend.projects.service.ProjectService;
+import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -33,18 +35,22 @@ class StudentServiceImpl implements StudentService {
     private final ProjectRepository projectRepository;
     private final ProjectMilestoneRepository projectMilestoneRepository;
     private final ProjectService projectService;
+    private final RepositoryLinkService repositoryLinkService;
+
     StudentServiceImpl(
          UserRepository userRepository,
          ProjectMemberRepository projectMemberRepository,
          ProjectRepository projectRepository,
          ProjectMilestoneRepository projectMilestoneRepository,
-         ProjectService projectService
-) {
+         ProjectService projectService,
+         RepositoryLinkService repositoryLinkService
+    ) {
          this.userRepository = userRepository;
          this.projectMemberRepository = projectMemberRepository;
          this.projectRepository = projectRepository;
          this.projectMilestoneRepository = projectMilestoneRepository;
          this.projectService = projectService;
+         this.repositoryLinkService = repositoryLinkService;
     }
 
     @Override
@@ -115,6 +121,9 @@ class StudentServiceImpl implements StudentService {
             }
         }
 
+        ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
+        String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
+
         return new StudentProjectDetailDto(
             project.getId(),
             project.getName(),
@@ -126,8 +135,7 @@ class StudentServiceImpl implements StudentService {
             project.getLastActivityAt(),
             project.getProgressPercent(),
             project.getHealthNote(),
-            project.getRepositoryUrl(),
-            projectService.getGitHubPreview(project.getId(), project.getRepositoryUrl()),
+            projectService.getGitHubPreview(project.getId(), effectiveUrl),
             leader,
             members,
             milestones
@@ -152,7 +160,10 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedU
     Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
         .orElseThrow(EntityNotFoundException::new);
 
-    return projectService.getGitHubDashboard(project.getId(), project.getRepositoryUrl());
+    ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
+    String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
+
+    return projectService.getGitHubDashboard(project.getId(), effectiveUrl);
 }
 
     @Override
@@ -178,7 +189,10 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedU
         Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
             .orElseThrow(EntityNotFoundException::new);
 
-        return projectService.getGitHubActivityPage(project.getId(), project.getRepositoryUrl(), page, size);
+        ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
+        String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
+
+        return projectService.getGitHubActivityPage(project.getId(), effectiveUrl, page, size);
     }
 
     @Override
@@ -204,7 +218,10 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedU
         Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
             .orElseThrow(EntityNotFoundException::new);
 
-        return projectService.getGitHubContributorsPage(project.getId(), project.getRepositoryUrl(), page, size);
+        ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
+        String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
+
+        return projectService.getGitHubContributorsPage(project.getId(), effectiveUrl, page, size);
     }
 
     private User resolveStudent(String authenticatedUserId) {

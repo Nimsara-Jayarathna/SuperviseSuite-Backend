@@ -68,10 +68,7 @@ class SupervisorServiceImplTest {
             request
         );
 
-        Project reloaded = projectRepository.findById(project.getId()).orElseThrow();
-
-        assertThat(reloaded.getRepositoryUrl()).isEqualTo("https://github.com/facebook/react");
-        assertThat(result.getRepositoryUrl()).isEqualTo("https://github.com/facebook/react");
+        assertThat(result.getGithub().getRepositoryUrl()).isEqualTo("https://github.com/facebook/react");
     }
 
     @Test
@@ -93,10 +90,7 @@ class SupervisorServiceImplTest {
             request
         );
 
-        Project reloaded = projectRepository.findById(project.getId()).orElseThrow();
-
-        assertThat(reloaded.getRepositoryUrl()).isNull();
-        assertThat(result.getRepositoryUrl()).isNull();
+        assertThat(result.getGithub().getRepositoryUrl()).isNull();
     }
 
     @Test
@@ -186,7 +180,6 @@ class SupervisorServiceImplTest {
         project.setBatch("2025");
         project.setSemester("Y3S2");
         project.setSupervisor(supervisor);
-        project.setRepositoryUrl(repositoryUrl);
         project.setUpdatedAt(updatedAt);
         project.setLastActivityAt(lastActivityAt);
         return projectRepository.save(project);

@@ -18,4 +18,10 @@ public interface GitHubClient {
     ProjectRepositoryMetadataDto fetchRepositoryMetadata(String repositoryUrl, Long installationId);
 
     List<ProjectCommitDto> fetchRecentCommits(String repositoryUrl, Long installationId);
+
+    GitHubAppAuthService.GitHubInstallationRepositoriesPageContext fetchInstallationRepositoriesPage(
+        Long installationId,
+        int page,
+        int size
+    );
 }

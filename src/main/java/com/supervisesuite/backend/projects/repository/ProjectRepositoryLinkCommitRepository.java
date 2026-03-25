@@ -23,4 +23,5 @@ public interface ProjectRepositoryLinkCommitRepository extends JpaRepository<Pro
     List<ProjectRepositoryLinkCommit> findByProjectRepositoryLinkId(UUID projectRepositoryLinkId);
 
     void deleteByProjectRepositoryLinkId(UUID projectRepositoryLinkId);
+    void deleteByRepositoryId(UUID repositoryId);
 }

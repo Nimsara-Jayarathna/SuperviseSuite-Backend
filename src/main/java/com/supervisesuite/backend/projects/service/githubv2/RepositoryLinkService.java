@@ -7,7 +7,9 @@ import com.supervisesuite.backend.projects.dto.GitHubAccessSourceDto;
 import com.supervisesuite.backend.projects.dto.GitHubAvailableRepositoriesDto;
 import com.supervisesuite.backend.projects.dto.GitHubRepositoryOptionDto;
 import com.supervisesuite.backend.projects.dto.LinkGitHubRepositoriesRequest;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.ProjectRepositoryLinkDto;
 import com.supervisesuite.backend.projects.entity.GitHubAccessSource;
 import com.supervisesuite.backend.projects.entity.GitHubRepositoryEntity;
@@ -16,11 +18,13 @@ import com.supervisesuite.backend.projects.entity.ProjectRepositoryLink;
 import com.supervisesuite.backend.projects.integration.github.GitHubAppAuthService;
 import com.supervisesuite.backend.projects.integration.github.GitHubClient;
 import com.supervisesuite.backend.projects.repository.GitHubAccessSourceRepository;
+import com.supervisesuite.backend.projects.repository.GitHubAppInstallationRepository;
 import com.supervisesuite.backend.projects.repository.GitHubRepositoryEntityRepository;
-import com.supervisesuite.backend.projects.repository.ProjectRepository;
+import com.supervisesuite.backend.projects.repository.ProjectGitHubInstallationAuthorizationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkCommitRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkContributorRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -29,6 +33,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
 public class RepositoryLinkService {
@@ -37,10 +42,11 @@ public class RepositoryLinkService {
     private final AccessSourceService accessSourceService;
     private final GitHubAccessSourceRepository accessSourceRepository;
     private final GitHubRepositoryEntityRepository gitHubRepositoryEntityRepository;
+    private final GitHubAppInstallationRepository gitHubAppInstallationRepository;
+    private final ProjectGitHubInstallationAuthorizationRepository projectGitHubInstallationAuthorizationRepository;
     private final ProjectRepositoryLinkRepository projectRepositoryLinkRepository;
     private final ProjectRepositoryLinkCommitRepository projectRepositoryLinkCommitRepository;
     private final ProjectRepositoryLinkContributorRepository projectRepositoryLinkContributorRepository;
-    private final ProjectRepository projectRepository;
     private final GitHubSyncService gitHubSyncService;
     private final GitHubClient gitHubClient;
     private final GitHubProperties gitHubProperties;
@@ -50,10 +56,11 @@ public class RepositoryLinkService {
         AccessSourceService accessSourceService,
         GitHubAccessSourceRepository accessSourceRepository,
         GitHubRepositoryEntityRepository gitHubRepositoryEntityRepository,
+        GitHubAppInstallationRepository gitHubAppInstallationRepository,
+        ProjectGitHubInstallationAuthorizationRepository projectGitHubInstallationAuthorizationRepository,
         ProjectRepositoryLinkRepository projectRepositoryLinkRepository,
         ProjectRepositoryLinkCommitRepository projectRepositoryLinkCommitRepository,
         ProjectRepositoryLinkContributorRepository projectRepositoryLinkContributorRepository,
-        ProjectRepository projectRepository,
         GitHubSyncService gitHubSyncService,
         GitHubClient gitHubClient,
         GitHubProperties gitHubProperties
@@ -62,10 +69,11 @@ public class RepositoryLinkService {
         this.accessSourceService = accessSourceService;
         this.accessSourceRepository = accessSourceRepository;
         this.gitHubRepositoryEntityRepository = gitHubRepositoryEntityRepository;
+        this.gitHubAppInstallationRepository = gitHubAppInstallationRepository;
+        this.projectGitHubInstallationAuthorizationRepository = projectGitHubInstallationAuthorizationRepository;
         this.projectRepositoryLinkRepository = projectRepositoryLinkRepository;
         this.projectRepositoryLinkCommitRepository = projectRepositoryLinkCommitRepository;
         this.projectRepositoryLinkContributorRepository = projectRepositoryLinkContributorRepository;
-        this.projectRepository = projectRepository;
         this.gitHubSyncService = gitHubSyncService;
         this.gitHubClient = gitHubClient;
         this.gitHubProperties = gitHubProperties;
@@ -196,10 +204,7 @@ public class RepositoryLinkService {
             index++;
         }
 
-        if (selectedPrimaryLinkId != null) {
-            setPrimary(projectId, selectedPrimaryLinkId);
-        }
-        syncProjectRepositoryUrl(projectId);
+        ensureSinglePrimaryRepository(projectId);
 
         return getProjectRepositories(projectId.toString(), authenticatedUserIdRaw);
     }
@@ -222,7 +227,6 @@ public class RepositoryLinkService {
         projectRepositoryLinkRepository.delete(link);
         cleanupAccessSourceIfOrphaned(projectId, sourceId);
         ensureSinglePrimaryRepository(projectId);
-        syncProjectRepositoryUrl(projectId);
 
         return getProjectRepositories(projectId.toString(), authenticatedUserIdRaw);
     }
@@ -267,7 +271,6 @@ public class RepositoryLinkService {
             // Sync status is persisted in GitHubSyncService.
         }
 
-        syncProjectRepositoryUrl(link.getProjectId());
         return getProjectRepositories(link.getProjectId().toString(), authenticatedUserIdRaw);
     }
 
@@ -294,11 +297,9 @@ public class RepositoryLinkService {
         link.setUpdatedAt(now);
         projectRepositoryLinkRepository.save(link);
 
-        projectRepositoryLinkCommitRepository.deleteByProjectRepositoryLinkId(link.getId());
         projectRepositoryLinkContributorRepository.deleteByProjectRepositoryLinkId(link.getId());
 
         ensureSinglePrimaryRepository(link.getProjectId());
-        syncProjectRepositoryUrl(link.getProjectId());
 
         return getProjectRepositories(link.getProjectId().toString(), authenticatedUserIdRaw);
     }
@@ -318,9 +319,18 @@ public class RepositoryLinkService {
         guardService.requireOwnedProject(source.getProjectId(), userId);
 
         UUID projectId = source.getProjectId();
+        
+        // Delete all repository links associated with this access source for this project
+        List<UUID> repositoryIds = gitHubRepositoryEntityRepository.findByAccessSourceIdOrderByFullNameAsc(source.getId())
+            .stream()
+            .map(GitHubRepositoryEntity::getId)
+            .toList();
+        if (!repositoryIds.isEmpty()) {
+            projectRepositoryLinkRepository.deleteByProjectIdAndGithubRepositoryIdIn(projectId, repositoryIds);
+        }
+        
         accessSourceRepository.delete(source);
         ensureSinglePrimaryRepository(projectId);
-        syncProjectRepositoryUrl(projectId);
 
         return getProjectRepositories(projectId.toString(), authenticatedUserIdRaw);
     }
@@ -340,7 +350,6 @@ public class RepositoryLinkService {
         }
 
         setPrimary(link.getProjectId(), link.getId());
-        syncProjectRepositoryUrl(link.getProjectId());
         return getProjectRepositories(link.getProjectId().toString(), authenticatedUserIdRaw);
     }
 
@@ -431,11 +440,11 @@ public class RepositoryLinkService {
         }
 
         int pageSize = Math.max(1, gitHubProperties.getInstallationRepositories().getMaxPageSize());
-        List<GitHubAppAuthService.GitHubInstallationRepositoryContext> repositories = gitHubClient
-            .fetchInstallationRepositories(source.getInstallationId(), 10, pageSize);
+        GitHubAppAuthService.GitHubInstallationRepositoriesPageContext context = gitHubClient
+            .fetchInstallationRepositoriesPage(source.getInstallationId(), 1, pageSize);
 
         Instant now = Instant.now();
-        for (GitHubAppAuthService.GitHubInstallationRepositoryContext repository : repositories) {
+        for (GitHubAppAuthService.GitHubInstallationRepositoryContext repository : context.repositories()) {
             if (repository == null || repository.repositoryId() == null) {
                 continue;
             }
@@ -530,32 +539,7 @@ public class RepositoryLinkService {
         }
     }
 
-    private void syncProjectRepositoryUrl(UUID projectId) {
-        Project project = projectRepository.findByIdAndDeletedAtIsNull(projectId).orElse(null);
-        if (project == null) {
-            return;
-        }
 
-        String repositoryUrl = null;
-        ProjectRepositoryLink primaryLink = projectRepositoryLinkRepository
-            .findByProjectIdAndIsPrimaryTrueAndIsEnabledTrue(projectId)
-            .orElse(null);
-        if (primaryLink != null) {
-            GitHubRepositoryEntity repositoryEntity = gitHubRepositoryEntityRepository
-                .findById(primaryLink.getGithubRepositoryId())
-                .orElse(null);
-            if (repositoryEntity != null) {
-                repositoryUrl = nullable(repositoryEntity.getHtmlUrl(), null);
-                if (repositoryUrl == null && repositoryEntity.getFullName() != null) {
-                    repositoryUrl = "https://github.com/" + repositoryEntity.getFullName().trim();
-                }
-            }
-        }
-
-        project.setRepositoryUrl(trimToNull(repositoryUrl));
-        project.setUpdatedAt(Instant.now());
-        projectRepository.save(project);
-    }
 
     private GitHubRepositoryOptionDto toRepositoryOption(GitHubRepositoryEntity repository) {
         return new GitHubRepositoryOptionDto(
@@ -627,5 +611,155 @@ public class RepositoryLinkService {
             return null;
         }
         return value.trim();
+    }
+
+    @Transactional(readOnly = true)
+    public GitHubAppAuthService.GitHubInstallationRepositoriesPageContext fetchInstallationRepositories(
+        Long installationId,
+        int page,
+        int size
+    ) {
+        return gitHubClient.fetchInstallationRepositoriesPage(installationId, page, size);
+    }
+
+    @Transactional
+    public ProjectRepositoryLink linkRepository(
+        UUID projectId,
+        Long installationId,
+        Long repositoryId,
+        UUID supervisorUserId
+    ) {
+        GitHubAccessSource source = accessSourceRepository.findByProjectIdAndInstallationIdAndIsActiveTrue(projectId, installationId)
+            .orElseGet(() -> {
+                GitHubAccessSource newSource = new GitHubAccessSource();
+                newSource.setProjectId(projectId);
+                newSource.setInstallationId(installationId);
+                newSource.setAccessType(GitHubIntegrationV2Constants.ACCESS_TYPE_INSTALLATION);
+                newSource.setIsActive(true);
+                newSource.setCreatedAt(Instant.now());
+                newSource.setUpdatedAt(Instant.now());
+                return accessSourceRepository.save(newSource);
+            });
+
+        GitHubRepositoryEntity repositoryEntity = gitHubRepositoryEntityRepository.findByAccessSourceIdAndGithubRepoId(source.getId(), repositoryId)
+            .orElseGet(() -> {
+                GitHubRepositoryEntity newEntity = new GitHubRepositoryEntity();
+                newEntity.setAccessSourceId(source.getId());
+                newEntity.setGithubRepoId(repositoryId);
+                newEntity.setCreatedAt(Instant.now());
+                return gitHubRepositoryEntityRepository.save(newEntity);
+            });
+
+        ProjectRepositoryLink link = projectRepositoryLinkRepository.findByProjectIdAndGithubRepositoryId(projectId, repositoryEntity.getId())
+            .orElseGet(() -> {
+                ProjectRepositoryLink newLink = new ProjectRepositoryLink();
+                newLink.setProjectId(projectId);
+                newLink.setGithubRepositoryId(repositoryEntity.getId());
+                newLink.setGithubRepoId(repositoryId);
+                newLink.setGithubInstallationId(installationId);
+                newLink.setIsEnabled(true);
+                newLink.setLinkedAt(Instant.now());
+                newLink.setCreatedAt(Instant.now());
+                return newLink;
+            });
+
+        link.setUpdatedAt(Instant.now());
+        return projectRepositoryLinkRepository.save(link);
+    }
+
+    @Transactional
+    public ProjectRepositoryLink linkRepositoryByUrl(UUID projectId, String repositoryUrl, UUID supervisorUserId) {
+        GitHubAccessSource source = accessSourceRepository.findByProjectIdAndAccessTypeAndIsActiveTrue(projectId, GitHubIntegrationV2Constants.ACCESS_TYPE_PUBLIC_URL)
+            .orElseGet(() -> {
+                GitHubAccessSource newSource = new GitHubAccessSource();
+                newSource.setProjectId(projectId);
+                newSource.setAccessType(GitHubIntegrationV2Constants.ACCESS_TYPE_PUBLIC_URL);
+                newSource.setIsActive(true);
+                newSource.setCreatedAt(Instant.now());
+                newSource.setUpdatedAt(Instant.now());
+                return accessSourceRepository.save(newSource);
+            });
+
+        GitHubRepositoryEntity repositoryEntity = gitHubRepositoryEntityRepository.findByAccessSourceIdAndHtmlUrl(source.getId(), repositoryUrl)
+            .orElseGet(() -> {
+                GitHubRepositoryEntity newEntity = new GitHubRepositoryEntity();
+                newEntity.setAccessSourceId(source.getId());
+                newEntity.setHtmlUrl(repositoryUrl);
+                newEntity.setCreatedAt(Instant.now());
+                return gitHubRepositoryEntityRepository.save(newEntity);
+            });
+
+        ProjectRepositoryLink link = projectRepositoryLinkRepository.findByProjectIdAndGithubRepositoryId(projectId, repositoryEntity.getId())
+            .orElseGet(() -> {
+                ProjectRepositoryLink newLink = new ProjectRepositoryLink();
+                newLink.setProjectId(projectId);
+                newLink.setGithubRepositoryId(repositoryEntity.getId());
+                newLink.setIsEnabled(true);
+                newLink.setLinkedAt(Instant.now());
+                newLink.setCreatedAt(Instant.now());
+                return newLink;
+            });
+
+        link.setIsPrimary(true);
+        link.setUpdatedAt(Instant.now());
+        return projectRepositoryLinkRepository.save(link);
+    }
+
+    @Transactional
+    public void disconnectAllLinks(UUID projectId) {
+        projectRepositoryLinkRepository.deleteByProjectId(projectId);
+    }
+
+    @Transactional
+    public void linkManualRepository(UUID projectId, String repositoryUrl) {
+        disconnectAllLinks(projectId);
+        
+        ProjectRepositoryLink link = new ProjectRepositoryLink();
+        link.setId(UUID.randomUUID());
+        link.setProjectId(projectId);
+        link.setRepositoryUrl(repositoryUrl);
+        link.setCreatedAt(Instant.now());
+        link.setIsPrimary(true);
+        link.setAccessType(GitHubIntegrationV2Constants.ACCESS_TYPE_PUBLIC_URL);
+        
+        projectRepositoryLinkRepository.save(link);
+    }
+
+    @Transactional
+    public void disconnectRepository(UUID linkId) {
+        projectRepositoryLinkRepository.findById(linkId).ifPresent(link -> {
+            projectRepositoryLinkCommitRepository.deleteByProjectRepositoryLinkId(link.getId());
+            projectRepositoryLinkContributorRepository.deleteByProjectRepositoryLinkId(link.getId());
+            projectRepositoryLinkRepository.delete(link);
+        });
+    }
+
+    public ProjectGitHubAccessMetadata resolveLink(UUID projectId) {
+        List<ProjectRepositoryLink> links = projectRepositoryLinkRepository.findByProjectIdOrderByLinkedAtDesc(projectId);
+        if (links.isEmpty()) {
+            return new ProjectGitHubAccessMetadata(null, 0, "none", null);
+        }
+
+        ProjectRepositoryLink primary = links.stream()
+            .filter(link -> Boolean.TRUE.equals(link.getIsPrimary()))
+            .findFirst()
+            .orElse(links.get(0));
+
+        return new ProjectGitHubAccessMetadata(
+            primary.getGithubInstallationId(),
+            links.size(),
+            primary.getGithubInstallationId() != null ? "installation" : "public",
+            primary.getRepositoryUrl()
+        );
+    }
+
+    @Transactional
+    public void disconnectAllLinksByInstallationId(Long installationId) {
+        List<ProjectRepositoryLink> links = projectRepositoryLinkRepository.findByGithubInstallationId(installationId);
+        for (ProjectRepositoryLink link : links) {
+            projectRepositoryLinkCommitRepository.deleteByProjectRepositoryLinkId(link.getId());
+            projectRepositoryLinkContributorRepository.deleteByProjectRepositoryLinkId(link.getId());
+        }
+        projectRepositoryLinkRepository.deleteByGithubInstallationId(installationId);
     }
 }

@@ -17,7 +17,6 @@ public class StudentProjectDetailDto {
     private Instant lastActivityAt;
     private Integer progressPercent;
     private String healthNote;
-    private String repositoryUrl;
     private ProjectGitHubPreviewDto github;
     private Leader leader;
     private List<Member> members;
@@ -37,7 +36,6 @@ public class StudentProjectDetailDto {
         Instant lastActivityAt,
         Integer progressPercent,
         String healthNote,
-        String repositoryUrl,
         ProjectGitHubPreviewDto github,
         Leader leader,
         List<Member> members,
@@ -53,7 +51,6 @@ public class StudentProjectDetailDto {
         this.lastActivityAt = lastActivityAt;
         this.progressPercent = progressPercent;
         this.healthNote = healthNote;
-        this.repositoryUrl = repositoryUrl;
         this.github = github;
         this.leader = leader;
         this.members = members;
@@ -140,13 +137,7 @@ public class StudentProjectDetailDto {
         this.healthNote = healthNote;
     }
 
-    public String getRepositoryUrl() {
-        return repositoryUrl;
-    }
 
-    public void setRepositoryUrl(String repositoryUrl) {
-        this.repositoryUrl = repositoryUrl;
-    }
 
     public ProjectGitHubPreviewDto getGithub() {
         return github;

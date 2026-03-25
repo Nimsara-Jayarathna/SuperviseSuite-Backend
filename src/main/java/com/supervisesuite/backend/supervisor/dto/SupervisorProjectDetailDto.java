@@ -17,7 +17,6 @@ public class SupervisorProjectDetailDto {
     private LocalDate milestoneDate;
     private Integer progressPercent;
     private String healthNote;
-    private String repositoryUrl;
     private ProjectGitHubPreviewDto github;
     private ProjectGitHubRepositoriesDto githubRepositories;
     private Instant lastActivityAt;
@@ -38,7 +37,6 @@ public class SupervisorProjectDetailDto {
             LocalDate milestoneDate,
             Integer progressPercent,
             String healthNote,
-            String repositoryUrl,
             ProjectGitHubPreviewDto github,
             ProjectGitHubRepositoriesDto githubRepositories,
             Instant lastActivityAt,
@@ -54,7 +52,6 @@ public class SupervisorProjectDetailDto {
         this.milestoneDate = milestoneDate;
         this.progressPercent = progressPercent;
         this.healthNote = healthNote;
-        this.repositoryUrl = repositoryUrl;
         this.github = github;
         this.githubRepositories = githubRepositories;
         this.lastActivityAt = lastActivityAt;
@@ -133,14 +130,6 @@ public class SupervisorProjectDetailDto {
 
     public void setHealthNote(String healthNote) {
         this.healthNote = healthNote;
-    }
-
-    public String getRepositoryUrl() {
-        return repositoryUrl;
-    }
-
-    public void setRepositoryUrl(String repositoryUrl) {
-        this.repositoryUrl = repositoryUrl;
     }
 
     public Instant getLastActivityAt() {

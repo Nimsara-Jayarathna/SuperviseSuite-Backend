@@ -1,6 +1,7 @@
 package com.supervisesuite.backend.projects.repository;
 
 import com.supervisesuite.backend.projects.entity.GitHubRepositoryEntity;
+import com.supervisesuite.backend.projects.entity.ProjectRepositoryLink;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -10,4 +11,6 @@ public interface GitHubRepositoryEntityRepository extends JpaRepository<GitHubRe
     List<GitHubRepositoryEntity> findByAccessSourceIdOrderByFullNameAsc(UUID accessSourceId);
 
     Optional<GitHubRepositoryEntity> findByAccessSourceIdAndGithubRepoId(UUID accessSourceId, Long githubRepoId);
+
+    Optional<GitHubRepositoryEntity> findByAccessSourceIdAndHtmlUrl(UUID accessSourceId, String htmlUrl);
 }

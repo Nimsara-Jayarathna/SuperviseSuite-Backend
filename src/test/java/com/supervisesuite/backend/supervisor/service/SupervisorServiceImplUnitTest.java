@@ -250,8 +250,7 @@ class SupervisorServiceImplUnitTest {
                 projectId.toString(), request);
 
         assertThat(result).isSameAs(linked);
-        assertThat(project.getRepositoryUrl()).isEqualTo("https://github.com/acme/repo");
-        verify(projectRepository).save(project);
+        verify(projectService).linkProjectToInstallationRepository(projectId, 10L, 20L, supervisorId);
     }
 
     @Test
@@ -260,19 +259,20 @@ class SupervisorServiceImplUnitTest {
         Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
         project.setId(projectId);
         project.setSupervisor(supervisor);
-        project.setRepositoryUrl("https://github.com/acme/repo");
 
         when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
                 .thenReturn(Optional.of(project));
         when(projectRepository.save(project)).thenReturn(project);
-        when(projectService.getGitHubPreview(projectId, null))
-                .thenReturn(new com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto(
+        com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto preview = new com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto(
                         false,
                         List.of(),
                         new com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto.ActivitySummary(0, null,
                                 "idle"),
                         List.of(),
-                        List.of()));
+                        List.of());
+        preview.setRepositoryUrl(null);
+        when(projectService.getGitHubPreview(projectId, null))
+                .thenReturn(preview);
         when(projectMemberRepository.findByProjectIdOrderByCreatedAtAsc(projectId)).thenReturn(List.of());
         when(projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(projectId)).thenReturn(List.of());
         when(userRepository.findAllById(org.mockito.ArgumentMatchers.anyCollection())).thenReturn(List.of());
@@ -280,8 +280,8 @@ class SupervisorServiceImplUnitTest {
         SupervisorProjectDetailDto result = service.removeProjectGitHubAccessAuthorization(supervisorId.toString(),
                 projectId.toString());
 
-        assertThat(result.getRepositoryUrl()).isNull();
-        verify(projectService).clearGitHubLinkage(projectId);
+        assertThat(result.getGithub().getRepositoryUrl()).isNull();
+        verify(repositoryLinkService).disconnectAllLinks(projectId);
     }
 
     @Test

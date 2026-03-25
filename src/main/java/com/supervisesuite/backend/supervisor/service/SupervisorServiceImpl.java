@@ -56,6 +56,7 @@ import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
 
 @Service
 class SupervisorServiceImpl implements SupervisorService {
@@ -267,15 +268,14 @@ class SupervisorServiceImpl implements SupervisorService {
 
         Instant now = Instant.now();
         String normalizedRepositoryUrl = trimToNull(request.getRepositoryUrl());
-        project.setRepositoryUrl(normalizedRepositoryUrl);
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
 
         Project savedProject = projectRepository.save(project);
         if (normalizedRepositoryUrl == null) {
-            projectService.clearGitHubLinkage(savedProject.getId());
+            repositoryLinkService.disconnectAllLinks(savedProject.getId());
         } else {
-            projectService.switchToManualRepository(savedProject.getId(), normalizedRepositoryUrl);
+            repositoryLinkService.linkManualRepository(savedProject.getId(), normalizedRepositoryUrl);
         }
         return toProjectDetail(savedProject);
     }
@@ -485,7 +485,10 @@ class SupervisorServiceImpl implements SupervisorService {
                 .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
                 .orElseThrow(EntityNotFoundException::new);
 
-        return projectService.getGitHubDashboard(project.getId(), project.getRepositoryUrl());
+        ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
+        String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
+
+        return projectService.getGitHubDashboard(project.getId(), effectiveUrl);
     }
 
     @Override
@@ -502,7 +505,10 @@ class SupervisorServiceImpl implements SupervisorService {
                 .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
                 .orElseThrow(EntityNotFoundException::new);
 
-        return projectService.getGitHubActivityPage(project.getId(), project.getRepositoryUrl(), page, size);
+        ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
+        String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
+
+        return projectService.getGitHubActivityPage(project.getId(), effectiveUrl, page, size);
     }
 
     @Override
@@ -519,7 +525,10 @@ class SupervisorServiceImpl implements SupervisorService {
                 .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
                 .orElseThrow(EntityNotFoundException::new);
 
-        return projectService.getGitHubContributorsPage(project.getId(), project.getRepositoryUrl(), page, size);
+        ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
+        String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
+
+        return projectService.getGitHubContributorsPage(project.getId(), effectiveUrl, page, size);
     }
 
     @Override
@@ -650,7 +659,6 @@ class SupervisorServiceImpl implements SupervisorService {
                 supervisor.getId());
 
         Instant now = Instant.now();
-        project.setRepositoryUrl(linkedRepository.getUrl());
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
         projectRepository.save(project);
@@ -671,8 +679,7 @@ class SupervisorServiceImpl implements SupervisorService {
                 .orElseThrow(EntityNotFoundException::new);
 
         Instant now = Instant.now();
-        projectService.clearGitHubLinkage(project.getId());
-        project.setRepositoryUrl(null);
+        repositoryLinkService.disconnectAllLinks(project.getId());
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
         Project savedProject = projectRepository.save(project);
@@ -690,7 +697,10 @@ class SupervisorServiceImpl implements SupervisorService {
                 .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
                 .orElseThrow(EntityNotFoundException::new);
 
-        projectService.refreshGitHubData(project.getId(), project.getRepositoryUrl());
+        ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
+        String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
+
+        projectService.refreshGitHubData(project.getId(), effectiveUrl);
     }
 
     private SupervisorProjectDetailDto toProjectDetail(Project project) {
@@ -703,6 +713,9 @@ class SupervisorServiceImpl implements SupervisorService {
         } catch (Exception ignored) {
         }
 
+        ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
+        String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
+
         return new SupervisorProjectDetailDto(
                 project.getId(),
                 project.getName(),
@@ -713,8 +726,7 @@ class SupervisorServiceImpl implements SupervisorService {
                 project.getMilestoneDate(),
                 project.getProgressPercent(),
                 project.getHealthNote(),
-                project.getRepositoryUrl(),
-                projectService.getGitHubPreview(project.getId(), project.getRepositoryUrl()),
+                projectService.getGitHubPreview(project.getId(), effectiveUrl),
                 githubRepositories,
                 project.getLastActivityAt(),
                 toDetailLeader(project.getLeaderUserId()),

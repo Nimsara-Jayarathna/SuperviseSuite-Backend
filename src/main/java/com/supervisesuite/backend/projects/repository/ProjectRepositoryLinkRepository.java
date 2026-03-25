@@ -8,9 +8,21 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ProjectRepositoryLinkRepository extends JpaRepository<ProjectRepositoryLink, UUID> {
+    Optional<ProjectRepositoryLink> findByProjectIdAndGithubRepositoryId(UUID projectId, UUID githubRepositoryId);
+
     List<ProjectRepositoryLink> findByProjectIdOrderByLinkedAtDesc(UUID projectId);
 
     List<ProjectRepositoryLink> findByProjectIdAndIsEnabledTrueOrderByLinkedAtDesc(UUID projectId);
+
+    Optional<ProjectRepositoryLink> findByProjectIdAndRepositoryUrl(UUID projectId, String repositoryUrl);
+
+    Optional<ProjectRepositoryLink> findByProjectIdAndProviderAndRepositoryUrl(UUID projectId, String provider, String repositoryUrl);
+
+    List<ProjectRepositoryLink> findByProjectIdOrderByCreatedAtAsc(UUID projectId);
+
+    List<ProjectRepositoryLink> findByGithubInstallationId(Long githubInstallationId);
+
+    Optional<ProjectRepositoryLink> findTopByProjectIdOrderByCreatedAtAsc(UUID projectId);
 
     Optional<ProjectRepositoryLink> findByIdAndProjectId(UUID id, UUID projectId);
 
@@ -25,4 +37,12 @@ public interface ProjectRepositoryLinkRepository extends JpaRepository<ProjectRe
     long countByProjectId(UUID projectId);
 
     long countByProjectIdAndIsEnabledTrue(UUID projectId);
+
+    void deleteByProjectIdAndGithubRepositoryIdIn(UUID projectId, Collection<UUID> githubRepositoryIds);
+
+    List<ProjectRepositoryLink> findByIsEnabledTrueOrderByLastSyncedAtAsc(org.springframework.data.domain.Pageable pageable);
+
+    void deleteByProjectId(UUID projectId);
+
+    void deleteByGithubInstallationId(Long githubInstallationId);
 }

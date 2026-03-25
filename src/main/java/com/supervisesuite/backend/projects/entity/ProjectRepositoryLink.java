@@ -28,8 +28,18 @@ public class ProjectRepositoryLink {
     @Column(nullable = false)
     private UUID githubRepositoryId;
 
+    private Long githubInstallationId;
+
     @Column(nullable = false)
     private Long githubRepoId;
+
+    @Column(nullable = false)
+    private String repositoryUrl;
+
+    @Column(nullable = false)
+    private String repositoryName;
+
+    private String defaultBranch;
 
     private String customName;
 
@@ -48,6 +58,11 @@ public class ProjectRepositoryLink {
 
     @Column(columnDefinition = "TEXT")
     private String syncError;
+
+    private UUID linkedBySupervisorUserId;
+
+    @Column(nullable = false)
+    private String accessType;
 
     @Column(nullable = false)
     private Instant createdAt;

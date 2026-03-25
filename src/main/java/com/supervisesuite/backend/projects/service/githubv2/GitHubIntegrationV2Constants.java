@@ -3,6 +3,7 @@ package com.supervisesuite.backend.projects.service.githubv2;
 public final class GitHubIntegrationV2Constants {
 
     public static final String ACCESS_TYPE_PUBLIC_URL = "PUBLIC_URL";
+    public static final String ACCESS_TYPE_INSTALLATION = "INSTALLATION";
     public static final String ACCESS_TYPE_INSTALLATION_DIRECT = "INSTALLATION_DIRECT";
     public static final String ACCESS_TYPE_INSTALLATION_REQUESTED = "INSTALLATION_REQUESTED";
 
@@ -16,6 +17,8 @@ public final class GitHubIntegrationV2Constants {
     public static final String SYNC_STATUS_FAILED = "FAILED";
     public static final String SYNC_STATUS_PENDING = "PENDING";
     public static final String SYNC_STATUS_DISABLED = "DISABLED";
+
+    public static final String DEFAULT_BRANCH = "main";
 
     private GitHubIntegrationV2Constants() {
     }

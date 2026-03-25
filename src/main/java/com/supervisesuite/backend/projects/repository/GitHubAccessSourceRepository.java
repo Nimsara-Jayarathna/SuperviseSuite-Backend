@@ -14,4 +14,6 @@ public interface GitHubAccessSourceRepository extends JpaRepository<GitHubAccess
     Optional<GitHubAccessSource> findByIdAndIsActiveTrue(UUID id);
 
     Optional<GitHubAccessSource> findByProjectIdAndInstallationIdAndIsActiveTrue(UUID projectId, Long installationId);
+
+    Optional<GitHubAccessSource> findByProjectIdAndAccessTypeAndIsActiveTrue(UUID projectId, String accessType);
 }

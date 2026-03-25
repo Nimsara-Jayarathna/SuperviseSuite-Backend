@@ -52,6 +52,11 @@ public class GitHubSyncService {
     }
 
     @Transactional
+    public void syncRepository(UUID linkId) {
+        refreshRepository(linkId);
+    }
+
+    @Transactional
     public void refreshRepository(UUID linkId) {
         ProjectRepositoryLink link = projectRepositoryLinkRepository
             .findById(linkId)

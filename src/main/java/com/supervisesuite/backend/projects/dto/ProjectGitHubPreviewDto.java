@@ -12,6 +12,7 @@ public class ProjectGitHubPreviewDto {
     private ActivitySummary activitySummary;
     private List<ContributorPreviewItem> contributorsPreview;
     private List<RecentCommitPreviewItem> recentCommitsPreview;
+    private String repositoryUrl;
 
     public ProjectGitHubPreviewDto() {
     }
@@ -94,22 +95,34 @@ public class ProjectGitHubPreviewDto {
         this.recentCommitsPreview = recentCommitsPreview;
     }
 
+    public String getRepositoryUrl() {
+        return repositoryUrl;
+    }
+
+    public void setRepositoryUrl(String repositoryUrl) {
+        this.repositoryUrl = repositoryUrl;
+    }
+
     public static class RepositoryItem {
         private String id;
         private String name;
         private String url;
         private String defaultBranch;
         private Instant lastSyncedAt;
+        private Instant createdAt;
+        private Instant updatedAt;
 
         public RepositoryItem() {
         }
 
-        public RepositoryItem(String id, String name, String url, String defaultBranch, Instant lastSyncedAt) {
+        public RepositoryItem(String id, String name, String url, String defaultBranch, Instant lastSyncedAt, Instant createdAt, Instant updatedAt) {
             this.id = id;
             this.name = name;
             this.url = url;
             this.defaultBranch = defaultBranch;
             this.lastSyncedAt = lastSyncedAt;
+            this.createdAt = createdAt;
+            this.updatedAt = updatedAt;
         }
 
         public String getId() {
@@ -150,6 +163,22 @@ public class ProjectGitHubPreviewDto {
 
         public void setLastSyncedAt(Instant lastSyncedAt) {
             this.lastSyncedAt = lastSyncedAt;
+        }
+
+        public Instant getCreatedAt() {
+            return createdAt;
+        }
+
+        public void setCreatedAt(Instant createdAt) {
+            this.createdAt = createdAt;
+        }
+
+        public Instant getUpdatedAt() {
+            return updatedAt;
+        }
+
+        public void setUpdatedAt(Instant updatedAt) {
+            this.updatedAt = updatedAt;
         }
     }
 

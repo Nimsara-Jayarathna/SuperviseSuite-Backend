@@ -44,4 +44,6 @@ public class GitHubAccessSource {
 
     @Column(nullable = false)
     private Boolean isActive;
+
+    private Instant updatedAt;
 }

@@ -19,9 +19,9 @@ import com.supervisesuite.backend.projects.entity.ProjectGitHubInstallationAutho
 import com.supervisesuite.backend.projects.integration.github.GitHubAppAuthService;
 import com.supervisesuite.backend.projects.repository.GitHubAppInstallationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectGitHubAccessRequestRepository;
-import com.supervisesuite.backend.projects.repository.ProjectGitHubInstallationAuthorizationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
-import com.supervisesuite.backend.projects.repository.ProjectRepositoryCacheRepository;
+import com.supervisesuite.backend.projects.repository.ProjectGitHubInstallationAuthorizationRepository;
+import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -62,9 +62,9 @@ public class GitHubAppIntegrationService {
     private final GitHubAppInstallationRepository installationRepository;
     private final ProjectRepository projectRepository;
     private final ProjectGitHubInstallationAuthorizationRepository projectGitHubInstallationAuthorizationRepository;
-    private final ProjectRepositoryCacheRepository projectRepositoryCacheRepository;
     private final ProjectGitHubAccessRequestRepository projectGitHubAccessRequestRepository;
     private final GitHubProperties gitHubProperties;
+    private final RepositoryLinkService repositoryLinkService;
     private final ObjectMapper objectMapper;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -73,8 +73,8 @@ public class GitHubAppIntegrationService {
         GitHubAppInstallationRepository installationRepository,
         ProjectRepository projectRepository,
         ProjectGitHubInstallationAuthorizationRepository projectGitHubInstallationAuthorizationRepository,
-        ProjectRepositoryCacheRepository projectRepositoryCacheRepository,
         ProjectGitHubAccessRequestRepository projectGitHubAccessRequestRepository,
+        RepositoryLinkService repositoryLinkService,
         GitHubProperties gitHubProperties,
         ObjectMapper objectMapper
     ) {
@@ -82,8 +82,8 @@ public class GitHubAppIntegrationService {
         this.installationRepository = installationRepository;
         this.projectRepository = projectRepository;
         this.projectGitHubInstallationAuthorizationRepository = projectGitHubInstallationAuthorizationRepository;
-        this.projectRepositoryCacheRepository = projectRepositoryCacheRepository;
         this.projectGitHubAccessRequestRepository = projectGitHubAccessRequestRepository;
+        this.repositoryLinkService = repositoryLinkService;
         this.gitHubProperties = gitHubProperties;
         this.objectMapper = objectMapper;
     }
@@ -246,13 +246,6 @@ public class GitHubAppIntegrationService {
         return new SetupCallbackResult(projectId, installationId, accessRequest != null, resultToken);
     }
 
-    @Transactional(readOnly = true)
-    public String buildProjectSetupAuthorizeUrl(UUID projectId) {
-        throw new ValidationException(
-            "state",
-            "Legacy setup-start flow is disabled. Use /api/github/access-source/install/start."
-        );
-    }
 
     @Transactional
     public void handleSetupCallback(Long installationId, UUID projectId) {
@@ -633,20 +626,7 @@ public class GitHubAppIntegrationService {
     }
 
     private void clearInstallationLinkage(Long installationId, Instant now) {
-        List<com.supervisesuite.backend.projects.entity.ProjectRepository> repositories =
-            projectRepositoryCacheRepository.findByInstallationId(installationId);
-        if (repositories.isEmpty()) {
-            return;
-        }
-        for (com.supervisesuite.backend.projects.entity.ProjectRepository repository : repositories) {
-            repository.setInstallationId(null);
-            repository.setRepositoryExternalId(null);
-            repository.setOwnerLogin(null);
-            repository.setLinkedBySupervisorUserId(null);
-            repository.setLinkedAt(null);
-            repository.setUpdatedAt(now);
-        }
-        projectRepositoryCacheRepository.saveAll(repositories);
+        repositoryLinkService.disconnectAllLinksByInstallationId(installationId);
         projectGitHubInstallationAuthorizationRepository.deleteByInstallationId(installationId);
     }
 
