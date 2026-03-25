@@ -36,6 +36,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/github/setup").permitAll()
+                .requestMatchers("/api/github/access-source/callback").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/github/access-source/install/start").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/github/access-requests/validate").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/github/access-requests/continue").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/github/access-updated/summary").permitAll()
