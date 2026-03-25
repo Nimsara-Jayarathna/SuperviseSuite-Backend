@@ -16,6 +16,8 @@ import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageD
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryListingDto;
+import com.supervisesuite.backend.projects.dto.GitHubAvailableRepositoriesDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.projects.integration.github.GitHubInstallationDisconnectedException;
@@ -52,6 +54,7 @@ import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
 import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService;
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
+import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 
 @Service
@@ -82,6 +85,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final GitHubAppIntegrationService gitHubAppIntegrationService;
     private final SetupCallbackService setupCallbackService;
     private final RepositoryLinkService repositoryLinkService;
+    private final AccessSourceService accessSourceService;
 
     SupervisorServiceImpl(
             UserRepository userRepository,
@@ -91,7 +95,8 @@ class SupervisorServiceImpl implements SupervisorService {
             ProjectService projectService,
             GitHubAppIntegrationService gitHubAppIntegrationService,
             SetupCallbackService setupCallbackService,
-            RepositoryLinkService repositoryLinkService) {
+            RepositoryLinkService repositoryLinkService,
+            AccessSourceService accessSourceService) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
@@ -100,6 +105,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.gitHubAppIntegrationService = gitHubAppIntegrationService;
         this.setupCallbackService = setupCallbackService;
         this.repositoryLinkService = repositoryLinkService;
+        this.accessSourceService = accessSourceService;
     }
 
     @Override
@@ -531,6 +537,33 @@ class SupervisorServiceImpl implements SupervisorService {
                 .orElseThrow(EntityNotFoundException::new);
         return projectService.getInstallationRepositories(project.getId(), installationId, supervisor.getId(), page,
                 size);
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubRepositoryListingDto getProjectRepositoriesInventory(
+            String authenticatedUserId,
+            String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        
+        Project project = projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+        
+        List<com.supervisesuite.backend.projects.dto.GitHubAccessSourceDto> sources = accessSourceService.getProjectAccessSources(project.getId());
+        
+        List<GitHubAvailableRepositoriesDto> inventory = sources.stream()
+                .map(source -> {
+                    try {
+                        return repositoryLinkService.getAvailableRepositories(source.getId(), authenticatedUserId);
+                    } catch (Exception e) {
+                        return new GitHubAvailableRepositoriesDto(source.getId(), List.of(), 0);
+                    }
+                })
+                .toList();
+        
+        return new ProjectGitHubRepositoryListingDto(project.getId().toString(), inventory);
     }
 
     @Override

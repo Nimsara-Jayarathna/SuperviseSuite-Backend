@@ -19,6 +19,7 @@ import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryListingDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import java.util.List;
 
@@ -51,6 +52,11 @@ public interface SupervisorService {
         Long installationId,
         int page,
         Integer size
+    );
+
+    ProjectGitHubRepositoryListingDto getProjectRepositoriesInventory(
+        String authenticatedUserId,
+        String projectId
     );
 
     GitHubAccessRequestCreateDto createGitHubRepositoryAccessRequest(

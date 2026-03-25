@@ -20,6 +20,7 @@ import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService;
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
+import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.SupervisorDashboardDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
@@ -65,6 +66,9 @@ class SupervisorServiceImplUnitTest {
     @Mock
     private RepositoryLinkService repositoryLinkService;
 
+    @Mock
+    private AccessSourceService accessSourceService;
+
     private SupervisorServiceImpl service;
 
     private UUID supervisorId;
@@ -80,7 +84,8 @@ class SupervisorServiceImplUnitTest {
                 projectService,
                 gitHubAppIntegrationService,
                 setupCallbackService,
-                repositoryLinkService);
+                repositoryLinkService,
+                accessSourceService);
 
         supervisorId = UUID.randomUUID();
         supervisor = new User();

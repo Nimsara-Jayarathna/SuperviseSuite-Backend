@@ -6,6 +6,7 @@ import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
 import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryListingDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
@@ -159,6 +160,19 @@ public class SupervisorController {
             size
         );
         return apiResponseFactory.ok("GitHub installation repositories loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/github/repositories/inventory")
+    public ResponseEntity<ApiResponse<ProjectGitHubRepositoryListingDto>> getProjectRepositoriesInventory(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        ProjectGitHubRepositoryListingDto data = supervisorService.getProjectRepositoriesInventory(
+            authentication.getName(),
+            projectId
+        );
+        return apiResponseFactory.ok("Project repository inventory loaded.", data, request);
     }
 
     @PostMapping("/projects/{projectId}/github/access-requests")
