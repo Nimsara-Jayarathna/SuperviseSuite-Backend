@@ -51,6 +51,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
 import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService;
+import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
+
 @Service
 class SupervisorServiceImpl implements SupervisorService {
 
@@ -59,19 +62,17 @@ class SupervisorServiceImpl implements SupervisorService {
     private static final String CANCELLED_MILESTONE_STATUS = "CANCELLED";
     private static final String COMPLETED_MILESTONE_STATUS = "COMPLETED";
     private static final Set<String> ALLOWED_LIFECYCLE_STATUSES = Set.of(
-        "PLANNING",
-        "ACTIVE",
-        "AT_RISK",
-        "BEHIND",
-        "COMPLETED"
-    );
+            "PLANNING",
+            "ACTIVE",
+            "AT_RISK",
+            "BEHIND",
+            "COMPLETED");
     private static final Set<String> ALLOWED_MILESTONE_STATUSES = Set.of(
-        "PLANNED",
-        "IN_PROGRESS",
-        "COMPLETED",
-        "MISSED",
-        "CANCELLED"
-    );
+            "PLANNED",
+            "IN_PROGRESS",
+            "COMPLETED",
+            "MISSED",
+            "CANCELLED");
 
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;
@@ -80,31 +81,33 @@ class SupervisorServiceImpl implements SupervisorService {
     private final ProjectService projectService;
     private final GitHubAppIntegrationService gitHubAppIntegrationService;
     private final SetupCallbackService setupCallbackService;
+    private final RepositoryLinkService repositoryLinkService;
 
-SupervisorServiceImpl(
-    UserRepository userRepository,
-    ProjectRepository projectRepository,
-    ProjectMemberRepository projectMemberRepository,
-    ProjectMilestoneRepository projectMilestoneRepository,
-    ProjectService projectService,
-    GitHubAppIntegrationService gitHubAppIntegrationService,
-    SetupCallbackService setupCallbackService
-) {
-    this.userRepository = userRepository;
-    this.projectRepository = projectRepository;
-    this.projectMemberRepository = projectMemberRepository;
-    this.projectMilestoneRepository = projectMilestoneRepository;
-    this.projectService = projectService;
-    this.gitHubAppIntegrationService = gitHubAppIntegrationService;
-    this.setupCallbackService = setupCallbackService;
-}
+    SupervisorServiceImpl(
+            UserRepository userRepository,
+            ProjectRepository projectRepository,
+            ProjectMemberRepository projectMemberRepository,
+            ProjectMilestoneRepository projectMilestoneRepository,
+            ProjectService projectService,
+            GitHubAppIntegrationService gitHubAppIntegrationService,
+            SetupCallbackService setupCallbackService,
+            RepositoryLinkService repositoryLinkService) {
+        this.userRepository = userRepository;
+        this.projectRepository = projectRepository;
+        this.projectMemberRepository = projectMemberRepository;
+        this.projectMilestoneRepository = projectMilestoneRepository;
+        this.projectService = projectService;
+        this.gitHubAppIntegrationService = gitHubAppIntegrationService;
+        this.setupCallbackService = setupCallbackService;
+        this.repositoryLinkService = repositoryLinkService;
+    }
 
     @Override
     @Transactional(readOnly = true)
     public SupervisorDashboardDto getDashboard(String authenticatedUserId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         List<Project> projects = projectRepository
-            .findBySupervisorIdAndDeletedAtIsNullOrderByCreatedAtDesc(supervisor.getId());
+                .findBySupervisorIdAndDeletedAtIsNullOrderByCreatedAtDesc(supervisor.getId());
 
         int planningProjects = 0;
         int activeProjects = 0;
@@ -132,36 +135,34 @@ SupervisorServiceImpl(
 
             LocalDate milestoneDate = project.getMilestoneDate();
             if (milestoneDate != null
-                && !milestoneDate.isBefore(today)
-                && !milestoneDate.isAfter(milestoneWindowEnd)
-            ) {
+                    && !milestoneDate.isBefore(today)
+                    && !milestoneDate.isAfter(milestoneWindowEnd)) {
                 upcomingMilestonesCount++;
             }
         }
 
         List<SupervisorDashboardDto.ProjectItem> dashboardProjects = projects.stream()
-            .map(this::toDashboardProjectItem)
-            .toList();
+                .map(this::toDashboardProjectItem)
+                .toList();
 
         List<SupervisorDashboardDto.ProjectItem> recentProjects = projects.stream()
-            .sorted(Comparator
-                .comparing(Project::getLastActivityAt, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Project::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
-            .limit(5)
-            .map(this::toDashboardProjectItem)
-            .toList();
+                .sorted(Comparator
+                        .comparing(Project::getLastActivityAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Project::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(5)
+                .map(this::toDashboardProjectItem)
+                .toList();
 
         return new SupervisorDashboardDto(
-            projects.size(),
-            planningProjects,
-            activeProjects,
-            atRiskProjects,
-            behindProjects,
-            completedProjects,
-            upcomingMilestonesCount,
-            dashboardProjects,
-            recentProjects
-        );
+                projects.size(),
+                planningProjects,
+                activeProjects,
+                atRiskProjects,
+                behindProjects,
+                completedProjects,
+                upcomingMilestonesCount,
+                dashboardProjects,
+                recentProjects);
     }
 
     @Override
@@ -170,9 +171,9 @@ SupervisorServiceImpl(
         User supervisor = resolveSupervisor(authenticatedUserId);
 
         return projectRepository.findBySupervisorIdAndDeletedAtIsNullOrderByCreatedAtDesc(supervisor.getId())
-            .stream()
-            .map(this::toProjectSummary)
-            .toList();
+                .stream()
+                .map(this::toProjectSummary)
+                .toList();
     }
 
     @Override
@@ -182,8 +183,8 @@ SupervisorServiceImpl(
         UUID parsedProjectId = parseProjectId(projectId);
 
         Project project = projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
 
         return toProjectDetail(project);
     }
@@ -191,16 +192,15 @@ SupervisorServiceImpl(
     @Override
     @Transactional
     public SupervisorProjectDetailDto updateProject(
-        String authenticatedUserId,
-        String projectId,
-        UpdateSupervisorProjectRequest request
-    ) {
+            String authenticatedUserId,
+            String projectId,
+            UpdateSupervisorProjectRequest request) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
         Project project = projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
 
         String lifecycleStatus = validateLifecycleStatus(request.getLifecycleStatus());
 
@@ -225,16 +225,15 @@ SupervisorServiceImpl(
     @Override
     @Transactional
     public SupervisorProjectDetailDto updateProjectStatus(
-        String authenticatedUserId,
-        String projectId,
-        UpdateSupervisorProjectStatusRequest request
-    ) {
+            String authenticatedUserId,
+            String projectId,
+            UpdateSupervisorProjectStatusRequest request) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
         Project project = projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
 
         String lifecycleStatus = validateLifecycleStatus(request.getLifecycleStatus());
         Instant now = Instant.now();
@@ -250,16 +249,15 @@ SupervisorServiceImpl(
     @Override
     @Transactional
     public SupervisorProjectDetailDto updateRepository(
-        String authenticatedUserId,
-        String projectId,
-        UpdateRepositoryRequest request
-    ) {
+            String authenticatedUserId,
+            String projectId,
+            UpdateRepositoryRequest request) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
         Project project = projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
 
         Instant now = Instant.now();
         String normalizedRepositoryUrl = trimToNull(request.getRepositoryUrl());
@@ -279,16 +277,15 @@ SupervisorServiceImpl(
     @Override
     @Transactional
     public SupervisorProjectDetailDto addProjectMembers(
-        String authenticatedUserId,
-        String projectId,
-        AddSupervisorProjectMembersRequest request
-    ) {
+            String authenticatedUserId,
+            String projectId,
+            AddSupervisorProjectMembersRequest request) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
         Project project = projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
 
         List<User> studentsToAdd = resolveStudents(request.getStudentIds());
         for (User student : studentsToAdd) {
@@ -312,20 +309,19 @@ SupervisorServiceImpl(
     @Override
     @Transactional
     public SupervisorProjectDetailDto addProjectMilestone(
-        String authenticatedUserId,
-        String projectId,
-        AddSupervisorProjectMilestoneRequest request
-    ) {
+            String authenticatedUserId,
+            String projectId,
+            AddSupervisorProjectMilestoneRequest request) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
         Project project = projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
 
         Integer nextSequenceNo = projectMilestoneRepository.findTopByProjectIdOrderBySequenceNoDesc(project.getId())
-            .map(milestone -> milestone.getSequenceNo() + 1)
-            .orElse(1);
+                .map(milestone -> milestone.getSequenceNo() + 1)
+                .orElse(1);
 
         Instant now = Instant.now();
         ProjectMilestone milestone = new ProjectMilestone();
@@ -351,21 +347,20 @@ SupervisorServiceImpl(
     @Override
     @Transactional
     public SupervisorProjectDetailDto updateProjectMilestone(
-        String authenticatedUserId,
-        String projectId,
-        String milestoneId,
-        UpdateSupervisorProjectMilestoneRequest request
-    ) {
+            String authenticatedUserId,
+            String projectId,
+            String milestoneId,
+            UpdateSupervisorProjectMilestoneRequest request) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
         UUID parsedMilestoneId = parseMilestoneId(milestoneId);
 
         Project project = projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
 
         ProjectMilestone milestone = projectMilestoneRepository.findByIdAndProjectId(parsedMilestoneId, project.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .orElseThrow(EntityNotFoundException::new);
 
         String milestoneStatus = request.getStatus().trim().toUpperCase();
         if (!ALLOWED_MILESTONE_STATUSES.contains(milestoneStatus)) {
@@ -397,27 +392,26 @@ SupervisorServiceImpl(
         }
 
         return userRepository
-            .findTop10ByRoleAndEmailContainingIgnoreCaseOrderByEmailAsc(Roles.STUDENT, normalizedQuery)
-            .stream()
-            .map(this::toStudentSearchResult)
-            .toList();
+                .findTop10ByRoleAndEmailContainingIgnoreCaseOrderByEmailAsc(Roles.STUDENT, normalizedQuery)
+                .stream()
+                .map(this::toStudentSearchResult)
+                .toList();
     }
 
     @Override
     @Transactional
     public CreateSupervisorProjectResponse createProject(
-        String authenticatedUserId,
-        CreateSupervisorProjectRequest request
-    ) {
+            String authenticatedUserId,
+            CreateSupervisorProjectRequest request) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         List<User> students = resolveStudents(request.getStudentIds());
         List<CreateSupervisorProjectRequest.InitialMilestone> requestedMilestones = request.getMilestones();
 
         Instant now = Instant.now();
         LocalDate earliestMilestoneDate = requestedMilestones.stream()
-            .map(CreateSupervisorProjectRequest.InitialMilestone::getDueDate)
-            .min(Comparator.naturalOrder())
-            .orElseThrow();
+                .map(CreateSupervisorProjectRequest.InitialMilestone::getDueDate)
+                .min(Comparator.naturalOrder())
+                .orElseThrow();
 
         Project project = new Project();
         project.setCreatedAt(now);
@@ -435,7 +429,8 @@ SupervisorServiceImpl(
 
         Project savedProject = projectRepository.save(project);
 
-        projectMemberRepository.save(buildProjectMember(savedProject.getId(), supervisor.getId(), Roles.SUPERVISOR, now));
+        projectMemberRepository
+                .save(buildProjectMember(savedProject.getId(), supervisor.getId(), Roles.SUPERVISOR, now));
         for (User student : students) {
             projectMemberRepository.save(buildProjectMember(savedProject.getId(), student.getId(), Roles.STUDENT, now));
         }
@@ -461,47 +456,45 @@ SupervisorServiceImpl(
         Project updatedProject = projectRepository.save(savedProject);
 
         return new CreateSupervisorProjectResponse(
-            updatedProject.getId(),
-            updatedProject.getName(),
-            updatedProject.getDescription(),
-            updatedProject.getBatch(),
-            updatedProject.getSemester(),
-            updatedProject.getStatus(),
-            updatedProject.getProgressPercent(),
-            updatedProject.getMilestoneDate(),
-            students.stream().map(this::toStudentAssignment).toList(),
-            toCreateLeaderAssignment(updatedProject.getLeaderUserId()),
-            milestones
-        );
+                updatedProject.getId(),
+                updatedProject.getName(),
+                updatedProject.getDescription(),
+                updatedProject.getBatch(),
+                updatedProject.getSemester(),
+                updatedProject.getStatus(),
+                updatedProject.getProgressPercent(),
+                updatedProject.getMilestoneDate(),
+                students.stream().map(this::toStudentAssignment).toList(),
+                toCreateLeaderAssignment(updatedProject.getLeaderUserId()),
+                milestones);
     }
 
     @Override
-@Transactional(readOnly = true)
-    public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedUserId, String projectId) {
-    User supervisor = resolveSupervisor(authenticatedUserId);
-    UUID parsedProjectId = parseProjectId(projectId);
-
-    Project project = projectRepository
-        .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-        .orElseThrow(EntityNotFoundException::new);
-
-    return projectService.getGitHubDashboard(project.getId(), project.getRepositoryUrl());
-}
-
-    @Override
     @Transactional(readOnly = true)
-    public ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getProjectGitHubActivityPage(
-        String authenticatedUserId,
-        String projectId,
-        int page,
-        int size
-    ) {
+    public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
         Project project = projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+
+        return projectService.getGitHubDashboard(project.getId(), project.getRepositoryUrl());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getProjectGitHubActivityPage(
+            String authenticatedUserId,
+            String projectId,
+            int page,
+            int size) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
 
         return projectService.getGitHubActivityPage(project.getId(), project.getRepositoryUrl(), page, size);
     }
@@ -509,17 +502,16 @@ SupervisorServiceImpl(
     @Override
     @Transactional(readOnly = true)
     public ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getProjectGitHubContributorsPage(
-        String authenticatedUserId,
-        String projectId,
-        int page,
-        int size
-    ) {
+            String authenticatedUserId,
+            String projectId,
+            int page,
+            int size) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
         Project project = projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
 
         return projectService.getGitHubContributorsPage(project.getId(), project.getRepositoryUrl(), page, size);
     }
@@ -527,111 +519,102 @@ SupervisorServiceImpl(
     @Override
     @Transactional(readOnly = true)
     public GitHubInstallationRepositoryPageDto getGitHubInstallationRepositories(
-        String authenticatedUserId,
-        String projectId,
-        Long installationId,
-        int page,
-        Integer size
-    ) {
+            String authenticatedUserId,
+            String projectId,
+            Long installationId,
+            int page,
+            Integer size) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
         Project project = projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
-        return projectService.getInstallationRepositories(project.getId(), installationId, supervisor.getId(), page, size);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+        return projectService.getInstallationRepositories(project.getId(), installationId, supervisor.getId(), page,
+                size);
     }
 
     @Override
     @Transactional
     public GitHubAccessRequestCreateDto createGitHubRepositoryAccessRequest(
-        String authenticatedUserId,
-        String projectId
-    ) {
+            String authenticatedUserId,
+            String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
         projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
         return gitHubAppIntegrationService.createProjectAccessRequest(parsedProjectId, supervisor.getId());
     }
 
     @Override
     @Transactional
     public GitHubAccessRequestValidationDto validateGitHubRepositoryAccessRequest(
-        String authenticatedUserId,
-        String projectId,
-        String requestToken
-    ) {
+            String authenticatedUserId,
+            String projectId,
+            String requestToken) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
         projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
         return gitHubAppIntegrationService.validateProjectAccessRequest(
-            parsedProjectId,
-            supervisor.getId(),
-            requestToken
-        );
+                parsedProjectId,
+                supervisor.getId(),
+                requestToken);
     }
 
     @Override
     @Transactional
     public GitHubAccessRequestContinueDto continueGitHubRepositoryAccessRequest(
-        String authenticatedUserId,
-        String projectId,
-        String requestToken
-    ) {
+            String authenticatedUserId,
+            String projectId,
+            String requestToken) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
         projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
         return gitHubAppIntegrationService.continueProjectAccessRequest(
-            parsedProjectId,
-            supervisor.getId(),
-            requestToken
-        );
+                parsedProjectId,
+                supervisor.getId(),
+                requestToken);
     }
 
     @Override
     @Transactional(readOnly = true)
     public String buildGitHubSetupStartUrl(
-        String authenticatedUserId,
-        String projectId
-    ) {
+            String authenticatedUserId,
+            String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
         projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
 
         GitHubInstallStartDto setup = setupCallbackService.startDirectInstall(
-            parsedProjectId.toString(),
-            supervisor.getId().toString()
-        );
+                parsedProjectId.toString(),
+                supervisor.getId().toString());
         return setup.getGithubAuthorizeUrl();
     }
 
     @Override
     @Transactional
     public ProjectGitHubRepositoryLinkDto linkProjectGitHubRepository(
-        String authenticatedUserId,
-        String projectId,
-        LinkProjectGitHubRepositoryRequest request
-    ) {
+            String authenticatedUserId,
+            String projectId,
+            LinkProjectGitHubRepositoryRequest request) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
         Project project = projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
 
         ProjectGitHubRepositoryLinkDto linkedRepository = projectService.linkProjectToInstallationRepository(
-            project.getId(),
-            request.getInstallationId(),
-            request.getRepositoryId(),
-            supervisor.getId()
-        );
+                project.getId(),
+                request.getInstallationId(),
+                request.getRepositoryId(),
+                supervisor.getId());
 
         Instant now = Instant.now();
         project.setRepositoryUrl(linkedRepository.getUrl());
@@ -645,15 +628,14 @@ SupervisorServiceImpl(
     @Override
     @Transactional
     public SupervisorProjectDetailDto removeProjectGitHubAccessAuthorization(
-        String authenticatedUserId,
-        String projectId
-    ) {
+            String authenticatedUserId,
+            String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
         Project project = projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
 
         Instant now = Instant.now();
         projectService.clearGitHubLinkage(project.getId());
@@ -672,52 +654,61 @@ SupervisorServiceImpl(
         UUID parsedProjectId = parseProjectId(projectId);
 
         Project project = projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
 
         projectService.refreshGitHubData(project.getId(), project.getRepositoryUrl());
     }
 
     private SupervisorProjectDetailDto toProjectDetail(Project project) {
+        ProjectGitHubRepositoriesDto githubRepositories = null;
+        try {
+            githubRepositories = repositoryLinkService.getProjectRepositories(
+                project.getId().toString(),
+                project.getSupervisor().getId().toString()
+            );
+        } catch (Exception ignored) {
+        }
+
         return new SupervisorProjectDetailDto(
-            project.getId(),
-            project.getName(),
-            project.getDescription(),
-            project.getStatus(),
-            project.getBatch(),
-            project.getSemester(),
-            project.getMilestoneDate(),
-            project.getProgressPercent(),
-            project.getHealthNote(),
-            project.getRepositoryUrl(),
-            projectService.getGitHubPreview(project.getId(), project.getRepositoryUrl()),
-            project.getLastActivityAt(),
-            toDetailLeader(project.getLeaderUserId()),
-            getProjectMembers(project.getId()),
-            getProjectMilestones(project.getId())
-        );
+                project.getId(),
+                project.getName(),
+                project.getDescription(),
+                project.getStatus(),
+                project.getBatch(),
+                project.getSemester(),
+                project.getMilestoneDate(),
+                project.getProgressPercent(),
+                project.getHealthNote(),
+                project.getRepositoryUrl(),
+                projectService.getGitHubPreview(project.getId(), project.getRepositoryUrl()),
+                githubRepositories,
+                project.getLastActivityAt(),
+                toDetailLeader(project.getLeaderUserId()),
+                getProjectMembers(project.getId()),
+                getProjectMilestones(project.getId()));
     }
 
     private List<SupervisorProjectDetailDto.Member> getProjectMembers(UUID projectId) {
         List<ProjectMember> projectMembers = projectMemberRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
         List<UUID> memberIds = projectMembers.stream()
-            .map(ProjectMember::getUserId)
-            .toList();
+                .map(ProjectMember::getUserId)
+                .toList();
         Map<UUID, User> userById = new HashMap<>();
         userRepository.findAllById(memberIds).forEach(user -> userById.put(user.getId(), user));
 
         return projectMembers.stream()
-            .map(member -> toDetailMember(member, userById.get(member.getUserId())))
-            .filter(member -> member != null)
-            .toList();
+                .map(member -> toDetailMember(member, userById.get(member.getUserId())))
+                .filter(member -> member != null)
+                .toList();
     }
 
     private List<SupervisorProjectDetailDto.Milestone> getProjectMilestones(UUID projectId) {
         return projectMilestoneRepository
-            .findByProjectIdOrderBySequenceNoAsc(projectId)
-            .stream()
-            .map(this::toDetailMilestone)
-            .toList();
+                .findByProjectIdOrderBySequenceNoAsc(projectId)
+                .stream()
+                .map(this::toDetailMilestone)
+                .toList();
     }
 
     private User resolveSupervisor(String authenticatedUserId) {
@@ -729,7 +720,7 @@ SupervisorServiceImpl(
         }
 
         User supervisor = userRepository.findById(supervisorId)
-            .orElseThrow(() -> new UnauthorizedException("Authentication required."));
+                .orElseThrow(() -> new UnauthorizedException("Authentication required."));
 
         if (!Roles.SUPERVISOR.equals(supervisor.getRole())) {
             throw new UnauthorizedException("Authentication required.");
@@ -750,7 +741,7 @@ SupervisorServiceImpl(
         }
 
         boolean containsNonStudent = students.stream()
-            .anyMatch(user -> !Roles.STUDENT.equals(user.getRole()));
+                .anyMatch(user -> !Roles.STUDENT.equals(user.getRole()));
         if (containsNonStudent) {
             throw new ValidationException("studentIds", "Only student accounts can be assigned to a project.");
         }
@@ -759,11 +750,10 @@ SupervisorServiceImpl(
     }
 
     private ProjectMember buildProjectMember(
-        UUID projectId,
-        UUID userId,
-        String memberRole,
-        Instant createdAt
-    ) {
+            UUID projectId,
+            UUID userId,
+            String memberRole,
+            Instant createdAt) {
         ProjectMember member = new ProjectMember();
         member.setProjectId(projectId);
         member.setUserId(userId);
@@ -774,22 +764,20 @@ SupervisorServiceImpl(
 
     private StudentSearchResultDto toStudentSearchResult(User user) {
         return new StudentSearchResultDto(
-            user.getId(),
-            user.getFirstName(),
-            user.getLastName(),
-            user.getEmail(),
-            user.getRegistrationNumber()
-        );
+                user.getId(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getEmail(),
+                user.getRegistrationNumber());
     }
 
     private CreateSupervisorProjectResponse.StudentAssignment toStudentAssignment(User user) {
         return new CreateSupervisorProjectResponse.StudentAssignment(
-            user.getId(),
-            user.getFirstName(),
-            user.getLastName(),
-            user.getEmail(),
-            user.getRegistrationNumber()
-        );
+                user.getId(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getEmail(),
+                user.getRegistrationNumber());
     }
 
     private CreateSupervisorProjectResponse.StudentAssignment toCreateLeaderAssignment(UUID leaderUserId) {
@@ -797,47 +785,44 @@ SupervisorServiceImpl(
             return null;
         }
         return userRepository.findById(leaderUserId)
-            .map(this::toStudentAssignment)
-            .orElse(null);
+                .map(this::toStudentAssignment)
+                .orElse(null);
     }
 
     private CreateSupervisorProjectResponse.Milestone toCreateMilestone(ProjectMilestone milestone) {
         return new CreateSupervisorProjectResponse.Milestone(
-            milestone.getId(),
-            milestone.getTitle(),
-            milestone.getDescription(),
-            milestone.getDueDate(),
-            milestone.getStatus(),
-            milestone.getSequenceNo()
-        );
+                milestone.getId(),
+                milestone.getTitle(),
+                milestone.getDescription(),
+                milestone.getDueDate(),
+                milestone.getStatus(),
+                milestone.getSequenceNo());
     }
 
     private SupervisorProjectSummaryDto toProjectSummary(Project project) {
         return new SupervisorProjectSummaryDto(
-            project.getId(),
-            project.getName(),
-            project.getDescription(),
-            project.getStatus(),
-            project.getBatch(),
-            project.getSemester(),
-            project.getMilestoneDate(),
-            project.getProgressPercent(),
-            project.getHealthNote(),
-            projectMemberRepository.countByProjectId(project.getId())
-        );
+                project.getId(),
+                project.getName(),
+                project.getDescription(),
+                project.getStatus(),
+                project.getBatch(),
+                project.getSemester(),
+                project.getMilestoneDate(),
+                project.getProgressPercent(),
+                project.getHealthNote(),
+                projectMemberRepository.countByProjectId(project.getId()));
     }
 
     private SupervisorDashboardDto.ProjectItem toDashboardProjectItem(Project project) {
         return new SupervisorDashboardDto.ProjectItem(
-            project.getId(),
-            project.getName(),
-            project.getDescription(),
-            project.getStatus(),
-            project.getMilestoneDate(),
-            project.getLastActivityAt(),
-            project.getProgressPercent(),
-            project.getHealthNote()
-        );
+                project.getId(),
+                project.getName(),
+                project.getDescription(),
+                project.getStatus(),
+                project.getMilestoneDate(),
+                project.getLastActivityAt(),
+                project.getProgressPercent(),
+                project.getHealthNote());
     }
 
     private SupervisorProjectDetailDto.Member toDetailMember(ProjectMember member, User user) {
@@ -846,13 +831,12 @@ SupervisorServiceImpl(
         }
 
         return new SupervisorProjectDetailDto.Member(
-            user.getId(),
-            user.getFirstName(),
-            user.getLastName(),
-            user.getEmail(),
-            user.getRegistrationNumber(),
-            member.getMemberRole()
-        );
+                user.getId(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getEmail(),
+                user.getRegistrationNumber(),
+                member.getMemberRole());
     }
 
     private SupervisorProjectDetailDto.Leader toDetailLeader(UUID leaderUserId) {
@@ -860,29 +844,27 @@ SupervisorServiceImpl(
             return null;
         }
         return userRepository.findById(leaderUserId)
-            .map(this::toDetailLeader)
-            .orElse(null);
+                .map(this::toDetailLeader)
+                .orElse(null);
     }
 
     private SupervisorProjectDetailDto.Leader toDetailLeader(User user) {
         return new SupervisorProjectDetailDto.Leader(
-            user.getId(),
-            user.getFirstName(),
-            user.getLastName(),
-            user.getEmail(),
-            user.getRegistrationNumber()
-        );
+                user.getId(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getEmail(),
+                user.getRegistrationNumber());
     }
 
     private SupervisorProjectDetailDto.Milestone toDetailMilestone(ProjectMilestone milestone) {
         return new SupervisorProjectDetailDto.Milestone(
-            milestone.getId(),
-            milestone.getTitle(),
-            milestone.getDescription(),
-            milestone.getDueDate(),
-            milestone.getStatus(),
-            milestone.getSequenceNo()
-        );
+                milestone.getId(),
+                milestone.getTitle(),
+                milestone.getDescription(),
+                milestone.getDueDate(),
+                milestone.getStatus(),
+                milestone.getSequenceNo());
     }
 
     private UUID parseProjectId(String projectId) {
@@ -915,13 +897,12 @@ SupervisorServiceImpl(
         }
 
         boolean leaderIncluded = students.stream()
-            .map(User::getId)
-            .anyMatch(id -> Objects.equals(id, leaderStudentId));
+                .map(User::getId)
+                .anyMatch(id -> Objects.equals(id, leaderStudentId));
         if (!leaderIncluded) {
             throw new ValidationException(
-                "leaderStudentId",
-                "Leader must be one of the selected student members."
-            );
+                    "leaderStudentId",
+                    "Leader must be one of the selected student members.");
         }
 
         return leaderStudentId;
@@ -929,36 +910,35 @@ SupervisorServiceImpl(
 
     private void validateLeaderAssignment(UUID projectId, UUID leaderStudentId) {
         boolean isStudentMember = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
-            leaderStudentId,
-            projectId,
-            Roles.STUDENT
-        );
+                leaderStudentId,
+                projectId,
+                Roles.STUDENT);
         if (!isStudentMember) {
             throw new ValidationException(
-                "leaderStudentId",
-                "Leader must be an assigned student of this project."
-            );
+                    "leaderStudentId",
+                    "Leader must be an assigned student of this project.");
         }
     }
 
     private void refreshProjectProgressPercent(Project project) {
-        List<ProjectMilestone> milestones = projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(project.getId());
+        List<ProjectMilestone> milestones = projectMilestoneRepository
+                .findByProjectIdOrderBySequenceNoAsc(project.getId());
         project.setProgressPercent(calculateProgressPercent(milestones));
     }
 
     private int calculateProgressPercent(List<ProjectMilestone> milestones) {
         long activeMilestones = milestones.stream()
-            .filter(milestone -> !CANCELLED_MILESTONE_STATUS.equals(milestone.getStatus()))
-            .count();
+                .filter(milestone -> !CANCELLED_MILESTONE_STATUS.equals(milestone.getStatus()))
+                .count();
 
         if (activeMilestones == 0) {
             return 0;
         }
 
         long completedMilestones = milestones.stream()
-            .filter(milestone -> !CANCELLED_MILESTONE_STATUS.equals(milestone.getStatus()))
-            .filter(milestone -> COMPLETED_MILESTONE_STATUS.equals(milestone.getStatus()))
-            .count();
+                .filter(milestone -> !CANCELLED_MILESTONE_STATUS.equals(milestone.getStatus()))
+                .filter(milestone -> COMPLETED_MILESTONE_STATUS.equals(milestone.getStatus()))
+                .count();
 
         return (int) Math.round((completedMilestones * 100.0) / activeMilestones);
     }

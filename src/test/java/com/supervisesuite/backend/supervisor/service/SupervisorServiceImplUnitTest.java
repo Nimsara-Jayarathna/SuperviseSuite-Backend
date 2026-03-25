@@ -19,6 +19,7 @@ import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService;
+import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.SupervisorDashboardDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
@@ -61,6 +62,9 @@ class SupervisorServiceImplUnitTest {
     @Mock
     private SetupCallbackService setupCallbackService;
 
+    @Mock
+    private RepositoryLinkService repositoryLinkService;
+
     private SupervisorServiceImpl service;
 
     private UUID supervisorId;
@@ -69,14 +73,14 @@ class SupervisorServiceImplUnitTest {
     @BeforeEach
     void setUp() {
         service = new SupervisorServiceImpl(
-            userRepository,
-            projectRepository,
-            projectMemberRepository,
-            projectMilestoneRepository,
-            projectService,
-            gitHubAppIntegrationService,
-            setupCallbackService
-        );
+                userRepository,
+                projectRepository,
+                projectMemberRepository,
+                projectMilestoneRepository,
+                projectService,
+                gitHubAppIntegrationService,
+                setupCallbackService,
+                repositoryLinkService);
 
         supervisorId = UUID.randomUUID();
         supervisor = new User();
@@ -95,7 +99,7 @@ class SupervisorServiceImplUnitTest {
         Project completed = project("Done", "COMPLETED", LocalDate.now().plusDays(20));
 
         when(projectRepository.findBySupervisorIdAndDeletedAtIsNullOrderByCreatedAtDesc(supervisorId))
-            .thenReturn(List.of(planning, active, completed));
+                .thenReturn(List.of(planning, active, completed));
 
         SupervisorDashboardDto dashboard = service.getDashboard(supervisorId.toString());
 
@@ -122,12 +126,12 @@ class SupervisorServiceImplUnitTest {
         student.setRole(Roles.STUDENT);
 
         when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
-            .thenReturn(Optional.of(project));
+                .thenReturn(Optional.of(project));
         when(userRepository.findAllById(org.mockito.ArgumentMatchers.anyCollection())).thenReturn(List.of(student));
         when(projectMemberRepository.existsByUserIdAndProjectId(studentId, projectId)).thenReturn(true);
 
         assertThatThrownBy(() -> service.addProjectMembers(supervisorId.toString(), projectId.toString(), request))
-            .isInstanceOf(ValidationException.class);
+                .isInstanceOf(ValidationException.class);
     }
 
     @Test
@@ -151,17 +155,17 @@ class SupervisorServiceImplUnitTest {
         request.setStatus("UNKNOWN");
 
         when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
-            .thenReturn(Optional.of(project));
-        when(projectMilestoneRepository.findByIdAndProjectId(milestoneId, projectId)).thenReturn(Optional.of(milestone));
+                .thenReturn(Optional.of(project));
+        when(projectMilestoneRepository.findByIdAndProjectId(milestoneId, projectId))
+                .thenReturn(Optional.of(milestone));
 
         assertThatThrownBy(() -> service.updateProjectMilestone(
-            supervisorId.toString(),
-            projectId.toString(),
-            milestoneId.toString(),
-            request
-        ))
-            .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("Validation failed");
+                supervisorId.toString(),
+                projectId.toString(),
+                milestoneId.toString(),
+                request))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("Validation failed");
     }
 
     @Test
@@ -171,14 +175,15 @@ class SupervisorServiceImplUnitTest {
         project.setId(projectId);
         project.setSupervisor(supervisor);
 
-        GitHubAccessRequestCreateDto dto = new GitHubAccessRequestCreateDto(projectId, "token", "/github/request-access", Instant.now());
+        GitHubAccessRequestCreateDto dto = new GitHubAccessRequestCreateDto(projectId, "token",
+                "/github/request-access", Instant.now());
 
         when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
-            .thenReturn(Optional.of(project));
+                .thenReturn(Optional.of(project));
         when(gitHubAppIntegrationService.createProjectAccessRequest(projectId, supervisorId)).thenReturn(dto);
 
-        GitHubAccessRequestCreateDto result =
-            service.createGitHubRepositoryAccessRequest(supervisorId.toString(), projectId.toString());
+        GitHubAccessRequestCreateDto result = service.createGitHubRepositoryAccessRequest(supervisorId.toString(),
+                projectId.toString());
 
         assertThat(result).isSameAs(dto);
         verify(gitHubAppIntegrationService).createProjectAccessRequest(projectId, supervisorId);
@@ -193,16 +198,15 @@ class SupervisorServiceImplUnitTest {
 
         String authorizeUrl = "https://github.com/apps/supervisesuite/installations/new?state=test";
         GitHubInstallStartDto setup = new GitHubInstallStartDto(
-            projectId.toString(),
-            authorizeUrl,
-            "INSTALLATION_DIRECT",
-            Instant.now().plusSeconds(600)
-        );
+                projectId.toString(),
+                authorizeUrl,
+                "INSTALLATION_DIRECT",
+                Instant.now().plusSeconds(600));
 
         when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
-            .thenReturn(Optional.of(project));
+                .thenReturn(Optional.of(project));
         when(setupCallbackService.startDirectInstall(projectId.toString(), supervisorId.toString()))
-            .thenReturn(setup);
+                .thenReturn(setup);
 
         String result = service.buildGitHubSetupStartUrl(supervisorId.toString(), projectId.toString());
 
@@ -222,24 +226,23 @@ class SupervisorServiceImplUnitTest {
         request.setRepositoryId(20L);
 
         ProjectGitHubRepositoryLinkDto linked = new ProjectGitHubRepositoryLinkDto(
-            projectId,
-            10L,
-            20L,
-            "repo",
-            "acme/repo",
-            "https://github.com/acme/repo",
-            "acme",
-            "main",
-            Instant.now()
-        );
+                projectId,
+                10L,
+                20L,
+                "repo",
+                "acme/repo",
+                "https://github.com/acme/repo",
+                "acme",
+                "main",
+                Instant.now());
 
         when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
-            .thenReturn(Optional.of(project));
+                .thenReturn(Optional.of(project));
         when(projectService.linkProjectToInstallationRepository(projectId, 10L, 20L, supervisorId)).thenReturn(linked);
         when(projectRepository.save(project)).thenReturn(project);
 
-        ProjectGitHubRepositoryLinkDto result =
-            service.linkProjectGitHubRepository(supervisorId.toString(), projectId.toString(), request);
+        ProjectGitHubRepositoryLinkDto result = service.linkProjectGitHubRepository(supervisorId.toString(),
+                projectId.toString(), request);
 
         assertThat(result).isSameAs(linked);
         assertThat(project.getRepositoryUrl()).isEqualTo("https://github.com/acme/repo");
@@ -255,21 +258,22 @@ class SupervisorServiceImplUnitTest {
         project.setRepositoryUrl("https://github.com/acme/repo");
 
         when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
-            .thenReturn(Optional.of(project));
+                .thenReturn(Optional.of(project));
         when(projectRepository.save(project)).thenReturn(project);
-        when(projectService.getGitHubPreview(projectId, null)).thenReturn(new com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto(
-            false,
-            List.of(),
-            new com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto.ActivitySummary(0, null, "idle"),
-            List.of(),
-            List.of()
-        ));
+        when(projectService.getGitHubPreview(projectId, null))
+                .thenReturn(new com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto(
+                        false,
+                        List.of(),
+                        new com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto.ActivitySummary(0, null,
+                                "idle"),
+                        List.of(),
+                        List.of()));
         when(projectMemberRepository.findByProjectIdOrderByCreatedAtAsc(projectId)).thenReturn(List.of());
         when(projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(projectId)).thenReturn(List.of());
         when(userRepository.findAllById(org.mockito.ArgumentMatchers.anyCollection())).thenReturn(List.of());
 
-        SupervisorProjectDetailDto result =
-            service.removeProjectGitHubAccessAuthorization(supervisorId.toString(), projectId.toString());
+        SupervisorProjectDetailDto result = service.removeProjectGitHubAccessAuthorization(supervisorId.toString(),
+                projectId.toString());
 
         assertThat(result.getRepositoryUrl()).isNull();
         verify(projectService).clearGitHubLinkage(projectId);
@@ -277,13 +281,13 @@ class SupervisorServiceImplUnitTest {
 
     @Test
     void createGitHubRepositoryAccessRequest_projectNotOwned_throwsNotFound() {
-        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(UUID.fromString("00000000-0000-0000-0000-000000000001"), supervisorId))
-            .thenReturn(Optional.empty());
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"), supervisorId))
+                .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.createGitHubRepositoryAccessRequest(
-            supervisorId.toString(),
-            "00000000-0000-0000-0000-000000000001"
-        )).isInstanceOf(EntityNotFoundException.class);
+                supervisorId.toString(),
+                "00000000-0000-0000-0000-000000000001")).isInstanceOf(EntityNotFoundException.class);
     }
 
     private static Project project(String title, String status, LocalDate milestoneDate) {
