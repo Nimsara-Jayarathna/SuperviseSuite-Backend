@@ -9,6 +9,7 @@ import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
+import com.supervisesuite.backend.projects.dto.GitHubInstallStartDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.entity.Project;
@@ -17,6 +18,7 @@ import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
 import com.supervisesuite.backend.projects.service.ProjectService;
+import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.SupervisorDashboardDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
@@ -56,6 +58,9 @@ class SupervisorServiceImplUnitTest {
     @Mock
     private GitHubAppIntegrationService gitHubAppIntegrationService;
 
+    @Mock
+    private SetupCallbackService setupCallbackService;
+
     private SupervisorServiceImpl service;
 
     private UUID supervisorId;
@@ -69,7 +74,8 @@ class SupervisorServiceImplUnitTest {
             projectMemberRepository,
             projectMilestoneRepository,
             projectService,
-            gitHubAppIntegrationService
+            gitHubAppIntegrationService,
+            setupCallbackService
         );
 
         supervisorId = UUID.randomUUID();
@@ -186,15 +192,22 @@ class SupervisorServiceImplUnitTest {
         project.setSupervisor(supervisor);
 
         String authorizeUrl = "https://github.com/apps/supervisesuite/installations/new?state=test";
+        GitHubInstallStartDto setup = new GitHubInstallStartDto(
+            projectId.toString(),
+            authorizeUrl,
+            "INSTALLATION_DIRECT",
+            Instant.now().plusSeconds(600)
+        );
 
         when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
             .thenReturn(Optional.of(project));
-        when(gitHubAppIntegrationService.buildProjectSetupAuthorizeUrl(projectId)).thenReturn(authorizeUrl);
+        when(setupCallbackService.startDirectInstall(projectId.toString(), supervisorId.toString()))
+            .thenReturn(setup);
 
         String result = service.buildGitHubSetupStartUrl(supervisorId.toString(), projectId.toString());
 
         assertThat(result).isEqualTo(authorizeUrl);
-        verify(gitHubAppIntegrationService).buildProjectSetupAuthorizeUrl(projectId);
+        verify(setupCallbackService).startDirectInstall(projectId.toString(), supervisorId.toString());
     }
 
     @Test

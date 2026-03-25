@@ -4,26 +4,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
-import com.supervisesuite.backend.config.FrontendProperties;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
 import com.supervisesuite.backend.projects.dto.GitHubWebhookResultDto;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
+import com.supervisesuite.backend.projects.service.githubv2.WebhookService;
 import jakarta.servlet.http.HttpServletRequest;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,54 +32,20 @@ class GitHubAppControllerTest {
     private ApiResponseFactory apiResponseFactory;
 
     @Mock
+    private WebhookService webhookService;
+
+    @Mock
     private HttpServletRequest request;
 
     private GitHubAppController controller;
 
     @BeforeEach
     void setUp() {
-        FrontendProperties frontendProperties = new FrontendProperties();
-        frontendProperties.setBaseUrl("http://localhost:5173");
         controller = new GitHubAppController(
             gitHubAppIntegrationService,
-            apiResponseFactory,
-            frontendProperties,
-            new ObjectMapper()
+            webhookService,
+            apiResponseFactory
         );
-    }
-
-    @Test
-    void handleSetup_requestFlowCompleted_redirectsToAccessUpdatedPage() {
-        UUID projectId = UUID.randomUUID();
-        when(gitHubAppIntegrationService.handleSetupCallback(99L, "state-token"))
-            .thenReturn(new GitHubAppIntegrationService.SetupCallbackResult(projectId, 99L, true, "result-token"));
-
-        ResponseEntity<Void> response = controller.handleSetup(99L, "state-token");
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SEE_OTHER);
-        assertThat(response.getHeaders().getLocation()).isNotNull();
-        assertThat(response.getHeaders().getLocation().toString())
-            .contains("/github/access-updated")
-            .contains("token=result-token")
-            .contains("status=success");
-    }
-
-    @Test
-    void handleSetup_whenServiceFailsAndStateHasProjectId_redirectsToProjectFailure() {
-        UUID projectId = UUID.randomUUID();
-        String statePayload = "{\"projectId\":\"" + projectId + "\"}";
-        String encodedState = Base64.getUrlEncoder().encodeToString(statePayload.getBytes(StandardCharsets.UTF_8));
-
-        when(gitHubAppIntegrationService.handleSetupCallback(88L, encodedState))
-            .thenThrow(new RuntimeException("failed"));
-
-        ResponseEntity<Void> response = controller.handleSetup(88L, encodedState);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SEE_OTHER);
-        assertThat(response.getHeaders().getLocation()).isNotNull();
-        assertThat(response.getHeaders().getLocation().toString())
-            .contains("/supervisor/projects/" + projectId)
-            .contains("githubSetup=failed");
     }
 
     @Test
@@ -91,14 +53,14 @@ class GitHubAppControllerTest {
         GitHubWebhookResultDto data = new GitHubWebhookResultDto("installation", "created", 10L, "ACTIVE");
         ResponseEntity<ApiResponse<GitHubWebhookResultDto>> expected = ResponseEntity.ok(new ApiResponse<>());
 
-        when(gitHubAppIntegrationService.handleWebhook("installation", "sig", "{}")).thenReturn(data);
+        when(webhookService.handleWebhook("installation", "sig", "{}")).thenReturn(data);
         when(apiResponseFactory.ok("GitHub webhook processed.", data, request)).thenReturn(expected);
 
         ResponseEntity<ApiResponse<GitHubWebhookResultDto>> response =
             controller.handleWebhook("installation", "sig", "{}", request);
 
         assertThat(response).isSameAs(expected);
-        verify(gitHubAppIntegrationService).handleWebhook("installation", "sig", "{}");
+        verify(webhookService).handleWebhook("installation", "sig", "{}");
     }
 
     @Test
