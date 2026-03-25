@@ -470,16 +470,32 @@ public class RepositoryLinkService {
     }
 
     private void setPrimary(UUID projectId, UUID selectedPrimaryLinkId) {
-        List<ProjectRepositoryLink> links = projectRepositoryLinkRepository.findByProjectIdOrderByLinkedAtDesc(projectId);
         Instant now = Instant.now();
-        for (ProjectRepositoryLink link : links) {
-            boolean shouldBePrimary = Boolean.TRUE.equals(link.getIsEnabled()) && link.getId().equals(selectedPrimaryLinkId);
-            if (Boolean.TRUE.equals(link.getIsPrimary()) != shouldBePrimary) {
-                link.setIsPrimary(shouldBePrimary);
+
+        // 1. Demote any current primary links for this project (except the one to be promoted)
+        List<ProjectRepositoryLink> currentPrimaries = projectRepositoryLinkRepository.findByProjectIdAndIsPrimaryTrue(projectId)
+            .stream()
+            .filter(link -> !link.getId().equals(selectedPrimaryLinkId))
+            .toList();
+
+        if (!currentPrimaries.isEmpty()) {
+            for (ProjectRepositoryLink link : currentPrimaries) {
+                link.setIsPrimary(false);
                 link.setUpdatedAt(now);
                 projectRepositoryLinkRepository.save(link);
             }
+            // Flush to ensure demotions are registered in DB before any new promotion violates the unique constraint
+            projectRepositoryLinkRepository.flush();
         }
+
+        // 2. Promote the selected link to primary
+        projectRepositoryLinkRepository.findById(selectedPrimaryLinkId).ifPresent(link -> {
+            if (!Boolean.TRUE.equals(link.getIsPrimary())) {
+                link.setIsPrimary(true);
+                link.setUpdatedAt(now);
+                projectRepositoryLinkRepository.save(link);
+            }
+        });
     }
 
     private void ensureSinglePrimaryRepository(UUID projectId) {
@@ -710,9 +726,9 @@ public class RepositoryLinkService {
                 return newLink;
             });
 
-        link.setIsPrimary(true);
-        link.setUpdatedAt(Instant.now());
-        return projectRepositoryLinkRepository.save(link);
+        projectRepositoryLinkRepository.save(link);
+        setPrimary(projectId, link.getId());
+        return link;
     }
 
     @Transactional
