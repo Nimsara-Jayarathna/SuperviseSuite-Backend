@@ -8,6 +8,11 @@ spring:
   web:
     resources:
       add-mappings: false
+  devtools:
+    restart:
+      # Keep Flyway SQL migrations on the base classloader; avoids classpath
+      # inputstream issues after migration renames during local development.
+      additional-exclude: db/migration/**
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -57,6 +62,10 @@ app:
     commits-page-size: ${GITHUB_COMMITS_PAGE_SIZE:100}
     default-page-size: ${GITHUB_DEFAULT_PAGE_SIZE:10}
     max-page-size: ${GITHUB_MAX_PAGE_SIZE:100}
+    max-linked-repos-per-project: ${GITHUB_MAX_LINKED_REPOS_PER_PROJECT:5}
+    setup-state-ttl-seconds: ${GITHUB_SETUP_STATE_TTL_SECONDS:900}
+    setup-state-secret: ${GITHUB_SETUP_STATE_SECRET:${JWT_SECRET}}
+    sync-max-commit-pages: ${GITHUB_SYNC_MAX_COMMIT_PAGES:5}
     installation-repositories:
       default-page-size: ${GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE:100}
       max-page-size: ${GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE:100}
