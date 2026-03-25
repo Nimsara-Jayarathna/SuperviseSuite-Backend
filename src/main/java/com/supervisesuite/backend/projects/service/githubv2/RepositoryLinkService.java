@@ -129,9 +129,7 @@ public class RepositoryLinkService {
 
         long existingEnabledCount = projectRepositoryLinkRepository.countByProjectIdAndIsEnabledTrue(projectId);
         int maxEnabledAllowed = Math.max(1, gitHubProperties.getMaxEnabledReposPerProject());
-        if (existingEnabledCount + uniqueSelections.size() > maxEnabledAllowed) {
-            throw new ConflictException("Maximum enabled repositories per project exceeded.");
-        }
+        int availableEnableSlots = Math.max(0, maxEnabledAllowed - (int) existingEnabledCount);
 
         ProjectRepositoryLink currentPrimary = projectRepositoryLinkRepository
             .findByProjectIdAndIsPrimaryTrueAndIsEnabledTrue(projectId)
@@ -140,6 +138,7 @@ public class RepositoryLinkService {
         UUID selectedPrimaryLinkId = null;
 
         int index = 0;
+        int enabledAllocated = 0;
         for (Map.Entry<UUID, LinkGitHubRepositoriesRequest.Selection> entry : uniqueSelections.entrySet()) {
             UUID githubRepositoryId = entry.getKey();
             LinkGitHubRepositoriesRequest.Selection selection = entry.getValue();
@@ -163,13 +162,20 @@ public class RepositoryLinkService {
             link.setGithubRepoId(repositoryEntity.getGithubRepoId());
             link.setCustomName(trimToNull(selection.getCustomName()));
 
-            boolean isPrimary = explicitPrimary
+            boolean enableThisLink = enabledAllocated < availableEnableSlots;
+            if (enableThisLink) {
+                enabledAllocated++;
+            }
+
+            boolean isPrimary = enableThisLink && (explicitPrimary
                 ? Boolean.TRUE.equals(selection.getPrimary())
-                : currentPrimary == null && index == 0;
+                : currentPrimary == null && selectedPrimaryLinkId == null);
             link.setIsPrimary(isPrimary);
-            link.setIsEnabled(true);
+            link.setIsEnabled(enableThisLink);
             link.setLinkedAt(now);
-            link.setSyncStatus(GitHubIntegrationV2Constants.SYNC_STATUS_PENDING);
+            link.setSyncStatus(enableThisLink
+                ? GitHubIntegrationV2Constants.SYNC_STATUS_PENDING
+                : GitHubIntegrationV2Constants.SYNC_STATUS_DISABLED);
             link.setSyncError(null);
             link.setCreatedAt(now);
             link.setUpdatedAt(now);
@@ -179,10 +185,12 @@ public class RepositoryLinkService {
                 selectedPrimaryLinkId = link.getId();
             }
 
-            try {
-                gitHubSyncService.refreshRepository(link.getId());
-            } catch (RuntimeException ignored) {
-                // Sync status is persisted in GitHubSyncService.
+            if (enableThisLink) {
+                try {
+                    gitHubSyncService.refreshRepository(link.getId());
+                } catch (RuntimeException ignored) {
+                    // Sync status is persisted in GitHubSyncService.
+                }
             }
 
             index++;
