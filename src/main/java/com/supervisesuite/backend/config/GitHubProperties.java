@@ -92,6 +92,14 @@ public class GitHubProperties {
      */
     private int maxPageSize = 100;
 
+    private int maxLinkedReposPerProject = 5;
+
+    private int setupStateTtlSeconds = 900;
+
+    private String setupStateSecret;
+
+    private int syncMaxCommitPages = 5;
+
     /**
      * Page-size settings for installation repositories listing.
      */
