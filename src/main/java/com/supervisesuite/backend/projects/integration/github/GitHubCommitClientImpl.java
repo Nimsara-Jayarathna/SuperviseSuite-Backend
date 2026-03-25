@@ -53,8 +53,9 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
         try {
             List<ProjectCommitDto> commits = new ArrayList<>();
             int page = 1;
+            int maxPages = Math.max(1, gitHubProperties.getSyncMaxCommitPages());
 
-            while (true) {
+            while (page <= maxPages) {
                 final int currentPage = page;
                 int commitsPageSize = commitsPageSize();
                 List<JsonNode> response = restClient
