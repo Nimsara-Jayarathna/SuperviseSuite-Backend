@@ -3,15 +3,11 @@ package com.supervisesuite.backend.projects.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.supervisesuite.backend.common.error.DomainException;
-import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.config.GitHubProperties;
 import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
@@ -31,8 +27,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,9 +35,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectServiceImplTest {
-
-    @Mock
-    private com.supervisesuite.backend.projects.repository.ProjectRepository projectRepository;
 
     @Mock
     private GitHubCommitClient gitHubCommitClient;
@@ -99,7 +90,6 @@ class ProjectServiceImplTest {
             gitHubAppAuthService,
             gitHubAppInstallationRepository,
             projectGitHubInstallationAuthorizationRepository,
-            projectRepository,
             projectRepositoryLinkRepository,
             projectRepositoryLinkCommitRepository,
             projectRepositoryLinkContributorRepository,
@@ -232,7 +222,7 @@ class ProjectServiceImplTest {
         target.setLinkedBySupervisorUserId(supervisorUserId);
         target.setLinkedAt(Instant.now());
 
-        ProjectRepositoryLink legacy = repositoryRow(legacyId, projectId, "https://github.com/acme/legacy", 11L);
+        repositoryRow(legacyId, projectId, "https://github.com/acme/legacy", 11L);
 
         projectService.switchToManualRepository(projectId, manualUrl);
 
@@ -278,17 +268,4 @@ class ProjectServiceImplTest {
         return installation;
     }
 
-    private static ProjectGitHubInstallationAuthorization authorization(
-        UUID projectId,
-        Long installationId,
-        UUID supervisorUserId
-    ) {
-        ProjectGitHubInstallationAuthorization authorization = new ProjectGitHubInstallationAuthorization();
-        authorization.setProjectId(projectId);
-        authorization.setInstallationId(installationId);
-        authorization.setAuthorizedBySupervisorUserId(supervisorUserId);
-        authorization.setCreatedAt(Instant.now());
-        authorization.setAuthorizedAt(Instant.now());
-        return authorization;
-    }
 }

@@ -9,11 +9,9 @@ import com.supervisesuite.backend.projects.dto.GitHubRepositoryOptionDto;
 import com.supervisesuite.backend.projects.dto.LinkGitHubRepositoriesRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
-import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.ProjectRepositoryLinkDto;
 import com.supervisesuite.backend.projects.entity.GitHubAccessSource;
 import com.supervisesuite.backend.projects.entity.GitHubRepositoryEntity;
-import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectRepositoryLink;
 import com.supervisesuite.backend.projects.integration.github.GitHubAppAuthService;
 import com.supervisesuite.backend.projects.integration.github.GitHubClient;
@@ -24,7 +22,6 @@ import com.supervisesuite.backend.projects.repository.ProjectGitHubInstallationA
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkCommitRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkContributorRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkRepository;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -33,7 +30,6 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
 public class RepositoryLinkService {
@@ -145,7 +141,6 @@ public class RepositoryLinkService {
         boolean explicitPrimary = uniqueSelections.values().stream().anyMatch(selection -> Boolean.TRUE.equals(selection.getPrimary()));
         UUID selectedPrimaryLinkId = null;
 
-        int index = 0;
         int enabledAllocated = 0;
         for (Map.Entry<UUID, LinkGitHubRepositoriesRequest.Selection> entry : uniqueSelections.entrySet()) {
             UUID githubRepositoryId = entry.getKey();
@@ -185,6 +180,13 @@ public class RepositoryLinkService {
                 ? GitHubIntegrationV2Constants.SYNC_STATUS_PENDING
                 : GitHubIntegrationV2Constants.SYNC_STATUS_DISABLED);
             link.setSyncError(null);
+            link.setAccessType(source.getAccessType());
+            link.setRepositoryUrl(repositoryEntity.getHtmlUrl());
+            link.setRepositoryName(repositoryEntity.getFullName());
+            link.setGithubInstallationId(source.getInstallationId());
+            link.setDefaultBranch(repositoryEntity.getDefaultBranch());
+            link.setLinkedBySupervisorUserId(userId);
+
             link.setCreatedAt(now);
             link.setUpdatedAt(now);
             link = projectRepositoryLinkRepository.save(link);
@@ -201,7 +203,6 @@ public class RepositoryLinkService {
                 }
             }
 
-            index++;
         }
 
         ensureSinglePrimaryRepository(projectId);
@@ -657,6 +658,11 @@ public class RepositoryLinkService {
                 newLink.setGithubRepositoryId(repositoryEntity.getId());
                 newLink.setGithubRepoId(repositoryId);
                 newLink.setGithubInstallationId(installationId);
+                newLink.setAccessType(GitHubIntegrationV2Constants.ACCESS_TYPE_INSTALLATION);
+                newLink.setRepositoryUrl(repositoryEntity.getHtmlUrl());
+                newLink.setRepositoryName(repositoryEntity.getFullName());
+                newLink.setDefaultBranch(repositoryEntity.getDefaultBranch());
+                newLink.setLinkedBySupervisorUserId(supervisorUserId);
                 newLink.setIsEnabled(true);
                 newLink.setLinkedAt(Instant.now());
                 newLink.setCreatedAt(Instant.now());
@@ -694,6 +700,10 @@ public class RepositoryLinkService {
                 ProjectRepositoryLink newLink = new ProjectRepositoryLink();
                 newLink.setProjectId(projectId);
                 newLink.setGithubRepositoryId(repositoryEntity.getId());
+                newLink.setAccessType(GitHubIntegrationV2Constants.ACCESS_TYPE_PUBLIC_URL);
+                newLink.setRepositoryUrl(repositoryUrl);
+                newLink.setRepositoryName(deriveName(repositoryUrl)); // Fallback if entity is fresh
+                newLink.setLinkedBySupervisorUserId(supervisorUserId);
                 newLink.setIsEnabled(true);
                 newLink.setLinkedAt(Instant.now());
                 newLink.setCreatedAt(Instant.now());
@@ -718,9 +728,14 @@ public class RepositoryLinkService {
         link.setId(UUID.randomUUID());
         link.setProjectId(projectId);
         link.setRepositoryUrl(repositoryUrl);
+        link.setRepositoryName(deriveName(repositoryUrl));
         link.setCreatedAt(Instant.now());
+        link.setUpdatedAt(Instant.now());
+        link.setLinkedAt(Instant.now());
         link.setIsPrimary(true);
+        link.setIsEnabled(true);
         link.setAccessType(GitHubIntegrationV2Constants.ACCESS_TYPE_PUBLIC_URL);
+        link.setSyncStatus(GitHubIntegrationV2Constants.SYNC_STATUS_PENDING);
         
         projectRepositoryLinkRepository.save(link);
     }

@@ -16,7 +16,6 @@ public interface ProjectRepositoryLinkRepository extends JpaRepository<ProjectRe
 
     Optional<ProjectRepositoryLink> findByProjectIdAndRepositoryUrl(UUID projectId, String repositoryUrl);
 
-    Optional<ProjectRepositoryLink> findByProjectIdAndProviderAndRepositoryUrl(UUID projectId, String provider, String repositoryUrl);
 
     List<ProjectRepositoryLink> findByProjectIdOrderByCreatedAtAsc(UUID projectId);
 

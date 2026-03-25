@@ -1,12 +1,10 @@
 package com.supervisesuite.backend.projects.service;
 
-import com.supervisesuite.backend.common.error.DomainException;
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.config.GitHubProperties;
 import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryDto;
 import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
-import com.supervisesuite.backend.projects.dto.ProjectDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
@@ -33,12 +31,9 @@ import com.supervisesuite.backend.common.error.ErrorCode;
 import org.springframework.http.HttpStatus;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,20 +45,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class ProjectServiceImpl implements ProjectService {
+public class ProjectServiceImpl implements ProjectService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ProjectServiceImpl.class);
     private static final int DEFAULT_PAGE = 1;
     private static final String STATUS_ACTIVE = "active";
     private static final String STATUS_IDLE = "idle";
-    private static final String PROVIDER_GITHUB = "github";
 
     private final GitHubCommitClient gitHubCommitClient;
     private final ProjectGitHubDashboardMapper dashboardMapper;
     private final GitHubAppAuthService gitHubAppAuthService;
     private final GitHubAppInstallationRepository gitHubAppInstallationRepository;
     private final ProjectGitHubInstallationAuthorizationRepository projectGitHubInstallationAuthorizationRepository;
-    private final com.supervisesuite.backend.projects.repository.ProjectRepository projectRepository;
     private final ProjectRepositoryLinkRepository projectRepositoryLinkRepository;
     private final ProjectRepositoryLinkCommitRepository projectRepositoryLinkCommitRepository;
     private final ProjectRepositoryLinkContributorRepository projectRepositoryLinkContributorRepository;
@@ -71,13 +64,12 @@ class ProjectServiceImpl implements ProjectService {
     private final GitHubSyncService gitHubSyncService;
     private final GitHubProperties gitHubProperties;
 
-    ProjectServiceImpl(
+    public ProjectServiceImpl(
         GitHubCommitClient gitHubCommitClient,
         ProjectGitHubDashboardMapper dashboardMapper,
         GitHubAppAuthService gitHubAppAuthService,
         GitHubAppInstallationRepository gitHubAppInstallationRepository,
         ProjectGitHubInstallationAuthorizationRepository projectGitHubInstallationAuthorizationRepository,
-        com.supervisesuite.backend.projects.repository.ProjectRepository projectRepository,
         ProjectRepositoryLinkRepository projectRepositoryLinkRepository,
         ProjectRepositoryLinkCommitRepository projectRepositoryLinkCommitRepository,
         ProjectRepositoryLinkContributorRepository projectRepositoryLinkContributorRepository,
@@ -90,7 +82,6 @@ class ProjectServiceImpl implements ProjectService {
         this.gitHubAppAuthService = gitHubAppAuthService;
         this.gitHubAppInstallationRepository = gitHubAppInstallationRepository;
         this.projectGitHubInstallationAuthorizationRepository = projectGitHubInstallationAuthorizationRepository;
-        this.projectRepository = projectRepository;
         this.projectRepositoryLinkRepository = projectRepositoryLinkRepository;
         this.projectRepositoryLinkCommitRepository = projectRepositoryLinkCommitRepository;
         this.projectRepositoryLinkContributorRepository = projectRepositoryLinkContributorRepository;
