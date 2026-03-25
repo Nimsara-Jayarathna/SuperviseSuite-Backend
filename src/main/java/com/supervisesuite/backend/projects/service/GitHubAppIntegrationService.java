@@ -214,7 +214,7 @@ public class GitHubAppIntegrationService {
 
         Instant now = Instant.now();
         ProjectGitHubAccessRequest accessRequest = resolveAccessRequestForCallback(state, now);
-        UUID projectId = accessRequest != null ? accessRequest.getProjectId() : resolveLegacyProjectIdFromState(state);
+        UUID projectId = accessRequest == null ? null : accessRequest.getProjectId();
 
         if (projectId == null) {
             throw new ValidationException("state", "Project id is required to complete GitHub setup.");
@@ -248,21 +248,10 @@ public class GitHubAppIntegrationService {
 
     @Transactional(readOnly = true)
     public String buildProjectSetupAuthorizeUrl(UUID projectId) {
-        if (projectId == null) {
-            throw new ValidationException("projectId", "Project id is required.");
-        }
-
-        String statePayload = "{\"projectId\":\"" + projectId + "\"}";
-        String state = Base64
-            .getUrlEncoder()
-            .withoutPadding()
-            .encodeToString(statePayload.getBytes(StandardCharsets.UTF_8));
-
-        return UriComponentsBuilder
-            .fromUriString(requireGitHubAppInstallUrl())
-            .queryParam("state", state)
-            .build(true)
-            .toUriString();
+        throw new ValidationException(
+            "state",
+            "Legacy setup-start flow is disabled. Use /api/github/access-source/install/start."
+        );
     }
 
     @Transactional
@@ -508,32 +497,6 @@ public class GitHubAppIntegrationService {
         }
 
         return request;
-    }
-
-    private UUID resolveLegacyProjectIdFromState(String state) {
-        String normalizedState = trimToNull(state);
-        if (normalizedState == null) {
-            return null;
-        }
-
-        byte[] decoded;
-        try {
-            decoded = Base64.getUrlDecoder().decode(normalizedState);
-        } catch (IllegalArgumentException firstFailure) {
-            try {
-                decoded = Base64.getDecoder().decode(normalizedState);
-            } catch (IllegalArgumentException secondFailure) {
-                return null;
-            }
-        }
-
-        try {
-            JsonNode root = objectMapper.readTree(new String(decoded, StandardCharsets.UTF_8));
-            String projectIdRaw = textOrNull(root.path("projectId"));
-            return projectIdRaw == null ? null : UUID.fromString(projectIdRaw);
-        } catch (Exception exception) {
-            return null;
-        }
     }
 
     private ProjectGitHubAccessRequest requirePendingAccessRequestByToken(

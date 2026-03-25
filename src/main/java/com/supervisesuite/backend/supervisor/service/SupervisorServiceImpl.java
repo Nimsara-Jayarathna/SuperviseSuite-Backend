@@ -11,6 +11,7 @@ import com.supervisesuite.backend.projects.entity.ProjectMilestone;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
+import com.supervisesuite.backend.projects.dto.GitHubInstallStartDto;
 import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
@@ -49,6 +50,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
+import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService;
 @Service
 class SupervisorServiceImpl implements SupervisorService {
 
@@ -77,6 +79,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final ProjectMilestoneRepository projectMilestoneRepository;
     private final ProjectService projectService;
     private final GitHubAppIntegrationService gitHubAppIntegrationService;
+    private final SetupCallbackService setupCallbackService;
 
 SupervisorServiceImpl(
     UserRepository userRepository,
@@ -84,7 +87,8 @@ SupervisorServiceImpl(
     ProjectMemberRepository projectMemberRepository,
     ProjectMilestoneRepository projectMilestoneRepository,
     ProjectService projectService,
-    GitHubAppIntegrationService gitHubAppIntegrationService
+    GitHubAppIntegrationService gitHubAppIntegrationService,
+    SetupCallbackService setupCallbackService
 ) {
     this.userRepository = userRepository;
     this.projectRepository = projectRepository;
@@ -92,6 +96,7 @@ SupervisorServiceImpl(
     this.projectMilestoneRepository = projectMilestoneRepository;
     this.projectService = projectService;
     this.gitHubAppIntegrationService = gitHubAppIntegrationService;
+    this.setupCallbackService = setupCallbackService;
 }
 
     @Override
@@ -599,7 +604,12 @@ SupervisorServiceImpl(
         projectRepository
             .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
             .orElseThrow(EntityNotFoundException::new);
-        return gitHubAppIntegrationService.buildProjectSetupAuthorizeUrl(parsedProjectId);
+
+        GitHubInstallStartDto setup = setupCallbackService.startDirectInstall(
+            parsedProjectId.toString(),
+            supervisor.getId().toString()
+        );
+        return setup.getGithubAuthorizeUrl();
     }
 
     @Override
