@@ -1,6 +1,7 @@
 package com.supervisesuite.backend.projects.repository;
 
 import com.supervisesuite.backend.projects.entity.ProjectRepositoryLink;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,6 +15,8 @@ public interface ProjectRepositoryLinkRepository extends JpaRepository<ProjectRe
     Optional<ProjectRepositoryLink> findByProjectIdAndIsPrimaryTrue(UUID projectId);
 
     boolean existsByProjectIdAndGithubRepoId(UUID projectId, Long githubRepoId);
+
+    boolean existsByProjectIdAndGithubRepositoryIdIn(UUID projectId, Collection<UUID> githubRepositoryIds);
 
     long countByProjectId(UUID projectId);
 }

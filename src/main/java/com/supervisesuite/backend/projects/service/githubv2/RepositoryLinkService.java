@@ -187,18 +187,34 @@ public class RepositoryLinkService {
         guardService.requireOwnedProject(link.getProjectId(), userId);
 
         UUID projectId = link.getProjectId();
-        boolean wasPrimary = Boolean.TRUE.equals(link.getIsPrimary());
+        UUID sourceId = gitHubRepositoryEntityRepository.findById(link.getGithubRepositoryId())
+            .map(GitHubRepositoryEntity::getAccessSourceId)
+            .orElse(null);
         projectRepositoryLinkRepository.delete(link);
+        cleanupAccessSourceIfOrphaned(projectId, sourceId);
+        ensureSinglePrimaryRepository(projectId);
+        syncProjectRepositoryUrl(projectId);
 
-        if (wasPrimary) {
-            List<ProjectRepositoryLink> remaining = projectRepositoryLinkRepository.findByProjectIdOrderByLinkedAtDesc(projectId);
-            if (!remaining.isEmpty()) {
-                ProjectRepositoryLink first = remaining.get(0);
-                first.setIsPrimary(true);
-                first.setUpdatedAt(Instant.now());
-                projectRepositoryLinkRepository.save(first);
-            }
-        }
+        return getProjectRepositories(projectId.toString(), authenticatedUserIdRaw);
+    }
+
+    @Transactional
+    public ProjectGitHubRepositoriesDto disconnectAccessSource(
+        String sourceIdRaw,
+        String authenticatedUserIdRaw
+    ) {
+        UUID sourceId = guardService.parseUuid(sourceIdRaw, "sourceId");
+        UUID userId = guardService.parseUuid(authenticatedUserIdRaw, "authenticatedUserId");
+
+        GitHubAccessSource source = accessSourceRepository
+            .findByIdAndIsActiveTrue(sourceId)
+            .orElseThrow(() -> new ValidationException("sourceId", "GitHub access source not found."));
+
+        guardService.requireOwnedProject(source.getProjectId(), userId);
+
+        UUID projectId = source.getProjectId();
+        accessSourceRepository.delete(source);
+        ensureSinglePrimaryRepository(projectId);
         syncProjectRepositoryUrl(projectId);
 
         return getProjectRepositories(projectId.toString(), authenticatedUserIdRaw);
@@ -310,6 +326,48 @@ public class RepositoryLinkService {
                 link.setUpdatedAt(now);
                 projectRepositoryLinkRepository.save(link);
             }
+        }
+    }
+
+    private void ensureSinglePrimaryRepository(UUID projectId) {
+        List<ProjectRepositoryLink> links = projectRepositoryLinkRepository.findByProjectIdOrderByLinkedAtDesc(projectId);
+        if (links.isEmpty()) {
+            return;
+        }
+
+        ProjectRepositoryLink currentPrimary = links.stream()
+            .filter(link -> Boolean.TRUE.equals(link.getIsPrimary()))
+            .findFirst()
+            .orElse(null);
+
+        if (currentPrimary == null) {
+            setPrimary(projectId, links.get(0).getId());
+            return;
+        }
+
+        long primaryCount = links.stream().filter(link -> Boolean.TRUE.equals(link.getIsPrimary())).count();
+        if (primaryCount > 1) {
+            setPrimary(projectId, currentPrimary.getId());
+        }
+    }
+
+    private void cleanupAccessSourceIfOrphaned(UUID projectId, UUID sourceId) {
+        if (sourceId == null) {
+            return;
+        }
+
+        List<UUID> sourceRepositoryIds = gitHubRepositoryEntityRepository
+            .findByAccessSourceIdOrderByFullNameAsc(sourceId)
+            .stream()
+            .map(GitHubRepositoryEntity::getId)
+            .toList();
+
+        boolean stillLinked = !sourceRepositoryIds.isEmpty() &&
+            projectRepositoryLinkRepository.existsByProjectIdAndGithubRepositoryIdIn(projectId, sourceRepositoryIds);
+
+        if (!stillLinked) {
+            accessSourceRepository.findByIdAndProjectIdAndIsActiveTrue(sourceId, projectId)
+                .ifPresent(accessSourceRepository::delete);
         }
     }
 

@@ -146,6 +146,17 @@ public class GitHubAccessSourceController {
         return apiResponseFactory.ok("GitHub access request created.", data, request);
     }
 
+    @DeleteMapping("/access-source/{id}")
+    public ResponseEntity<ApiResponse<ProjectGitHubRepositoriesDto>> disconnectAccessSource(
+        Authentication authentication,
+        @PathVariable("id") String sourceId,
+        HttpServletRequest request
+    ) {
+        String userId = requireAuthenticatedUserId(authentication);
+        ProjectGitHubRepositoriesDto data = repositoryLinkService.disconnectAccessSource(sourceId, userId);
+        return apiResponseFactory.ok("GitHub access source disconnected for project.", data, request);
+    }
+
     @GetMapping("/repositories/available")
     public ResponseEntity<ApiResponse<GitHubAvailableRepositoriesDto>> getAvailableRepositories(
         Authentication authentication,
