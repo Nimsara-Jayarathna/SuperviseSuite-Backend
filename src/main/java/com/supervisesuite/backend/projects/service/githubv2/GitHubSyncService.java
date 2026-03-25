@@ -1,5 +1,6 @@
 package com.supervisesuite.backend.projects.service.githubv2;
 
+import com.supervisesuite.backend.common.error.ConflictException;
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.projects.dto.ProjectCommitDto;
@@ -55,6 +56,9 @@ public class GitHubSyncService {
         ProjectRepositoryLink link = projectRepositoryLinkRepository
             .findById(linkId)
             .orElseThrow(() -> new ValidationException("repositoryId", "Linked repository was not found."));
+        if (!Boolean.TRUE.equals(link.getIsEnabled())) {
+            throw new ConflictException("Disabled repositories cannot be refreshed.");
+        }
 
         GitHubRepositoryEntity repositoryEntity = gitHubRepositoryEntityRepository
             .findById(link.getGithubRepositoryId())

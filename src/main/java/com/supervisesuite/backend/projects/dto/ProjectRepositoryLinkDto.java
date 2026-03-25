@@ -15,6 +15,7 @@ public class ProjectRepositoryLinkDto {
     private String defaultBranch;
     private String url;
     private Boolean primary;
+    private Boolean enabled;
     private Instant linkedAt;
     private Instant lastSyncedAt;
     private String syncStatus;
@@ -34,6 +35,7 @@ public class ProjectRepositoryLinkDto {
         String defaultBranch,
         String url,
         Boolean primary,
+        Boolean enabled,
         Instant linkedAt,
         Instant lastSyncedAt,
         String syncStatus
@@ -49,6 +51,7 @@ public class ProjectRepositoryLinkDto {
         this.defaultBranch = defaultBranch;
         this.url = url;
         this.primary = primary;
+        this.enabled = enabled;
         this.linkedAt = linkedAt;
         this.lastSyncedAt = lastSyncedAt;
         this.syncStatus = syncStatus;
@@ -140,6 +143,14 @@ public class ProjectRepositoryLinkDto {
 
     public void setPrimary(Boolean primary) {
         this.primary = primary;
+    }
+
+    public Boolean getEnabled() {
+        return enabled;
+    }
+
+    public void setEnabled(Boolean enabled) {
+        this.enabled = enabled;
     }
 
     public Instant getLinkedAt() {

@@ -6,6 +6,7 @@ public class ProjectGitHubRepositoriesDto {
 
     private String projectId;
     private Integer maxLinkedRepositories;
+    private Integer maxEnabledRepositories;
     private List<GitHubAccessSourceDto> accessSources;
     private List<ProjectRepositoryLinkDto> repositories;
 
@@ -15,11 +16,13 @@ public class ProjectGitHubRepositoriesDto {
     public ProjectGitHubRepositoriesDto(
         String projectId,
         Integer maxLinkedRepositories,
+        Integer maxEnabledRepositories,
         List<GitHubAccessSourceDto> accessSources,
         List<ProjectRepositoryLinkDto> repositories
     ) {
         this.projectId = projectId;
         this.maxLinkedRepositories = maxLinkedRepositories;
+        this.maxEnabledRepositories = maxEnabledRepositories;
         this.accessSources = accessSources;
         this.repositories = repositories;
     }
@@ -38,6 +41,14 @@ public class ProjectGitHubRepositoriesDto {
 
     public void setMaxLinkedRepositories(Integer maxLinkedRepositories) {
         this.maxLinkedRepositories = maxLinkedRepositories;
+    }
+
+    public Integer getMaxEnabledRepositories() {
+        return maxEnabledRepositories;
+    }
+
+    public void setMaxEnabledRepositories(Integer maxEnabledRepositories) {
+        this.maxEnabledRepositories = maxEnabledRepositories;
     }
 
     public List<GitHubAccessSourceDto> getAccessSources() {

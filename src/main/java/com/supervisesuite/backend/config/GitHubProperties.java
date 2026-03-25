@@ -94,6 +94,11 @@ public class GitHubProperties {
 
     private int maxLinkedReposPerProject = 5;
 
+    /**
+     * Maximum linked repositories that can stay enabled at once in a project.
+     */
+    private int maxEnabledReposPerProject = 5;
+
     private int setupStateTtlSeconds = 900;
 
     private String setupStateSecret;

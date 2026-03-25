@@ -18,6 +18,8 @@ import com.supervisesuite.backend.projects.integration.github.GitHubClient;
 import com.supervisesuite.backend.projects.repository.GitHubAccessSourceRepository;
 import com.supervisesuite.backend.projects.repository.GitHubRepositoryEntityRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
+import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkCommitRepository;
+import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkContributorRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkRepository;
 import java.time.Instant;
 import java.util.HashMap;
@@ -36,6 +38,8 @@ public class RepositoryLinkService {
     private final GitHubAccessSourceRepository accessSourceRepository;
     private final GitHubRepositoryEntityRepository gitHubRepositoryEntityRepository;
     private final ProjectRepositoryLinkRepository projectRepositoryLinkRepository;
+    private final ProjectRepositoryLinkCommitRepository projectRepositoryLinkCommitRepository;
+    private final ProjectRepositoryLinkContributorRepository projectRepositoryLinkContributorRepository;
     private final ProjectRepository projectRepository;
     private final GitHubSyncService gitHubSyncService;
     private final GitHubClient gitHubClient;
@@ -47,6 +51,8 @@ public class RepositoryLinkService {
         GitHubAccessSourceRepository accessSourceRepository,
         GitHubRepositoryEntityRepository gitHubRepositoryEntityRepository,
         ProjectRepositoryLinkRepository projectRepositoryLinkRepository,
+        ProjectRepositoryLinkCommitRepository projectRepositoryLinkCommitRepository,
+        ProjectRepositoryLinkContributorRepository projectRepositoryLinkContributorRepository,
         ProjectRepository projectRepository,
         GitHubSyncService gitHubSyncService,
         GitHubClient gitHubClient,
@@ -57,6 +63,8 @@ public class RepositoryLinkService {
         this.accessSourceRepository = accessSourceRepository;
         this.gitHubRepositoryEntityRepository = gitHubRepositoryEntityRepository;
         this.projectRepositoryLinkRepository = projectRepositoryLinkRepository;
+        this.projectRepositoryLinkCommitRepository = projectRepositoryLinkCommitRepository;
+        this.projectRepositoryLinkContributorRepository = projectRepositoryLinkContributorRepository;
         this.projectRepository = projectRepository;
         this.gitHubSyncService = gitHubSyncService;
         this.gitHubClient = gitHubClient;
@@ -84,7 +92,13 @@ public class RepositoryLinkService {
             .map(this::toRepositoryOption)
             .toList();
 
-        return new GitHubAvailableRepositoriesDto(source.getId().toString(), repositories, repositories.size());
+        int totalCount = repositories.size();
+        int maxPerSource = Math.max(1, gitHubProperties.getMaxLinkedReposPerProject());
+        if (repositories.size() > maxPerSource) {
+            repositories = repositories.subList(0, maxPerSource);
+        }
+
+        return new GitHubAvailableRepositoriesDto(source.getId().toString(), repositories, totalCount);
     }
 
     @Transactional
@@ -113,8 +127,14 @@ public class RepositoryLinkService {
             throw new ConflictException("Maximum linked repositories per project exceeded.");
         }
 
+        long existingEnabledCount = projectRepositoryLinkRepository.countByProjectIdAndIsEnabledTrue(projectId);
+        int maxEnabledAllowed = Math.max(1, gitHubProperties.getMaxEnabledReposPerProject());
+        if (existingEnabledCount + uniqueSelections.size() > maxEnabledAllowed) {
+            throw new ConflictException("Maximum enabled repositories per project exceeded.");
+        }
+
         ProjectRepositoryLink currentPrimary = projectRepositoryLinkRepository
-            .findByProjectIdAndIsPrimaryTrue(projectId)
+            .findByProjectIdAndIsPrimaryTrueAndIsEnabledTrue(projectId)
             .orElse(null);
         boolean explicitPrimary = uniqueSelections.values().stream().anyMatch(selection -> Boolean.TRUE.equals(selection.getPrimary()));
         UUID selectedPrimaryLinkId = null;
@@ -147,6 +167,7 @@ public class RepositoryLinkService {
                 ? Boolean.TRUE.equals(selection.getPrimary())
                 : currentPrimary == null && index == 0;
             link.setIsPrimary(isPrimary);
+            link.setIsEnabled(true);
             link.setLinkedAt(now);
             link.setSyncStatus(GitHubIntegrationV2Constants.SYNC_STATUS_PENDING);
             link.setSyncError(null);
@@ -199,6 +220,82 @@ public class RepositoryLinkService {
     }
 
     @Transactional
+    public ProjectGitHubRepositoriesDto enableRepository(String linkedRepositoryIdRaw, String authenticatedUserIdRaw) {
+        UUID linkedRepositoryId = guardService.parseUuid(linkedRepositoryIdRaw, "repositoryId");
+        UUID userId = guardService.parseUuid(authenticatedUserIdRaw, "authenticatedUserId");
+
+        ProjectRepositoryLink link = projectRepositoryLinkRepository
+            .findById(linkedRepositoryId)
+            .orElseThrow(() -> new ValidationException("repositoryId", "Linked repository not found."));
+        guardService.requireOwnedProject(link.getProjectId(), userId);
+
+        if (Boolean.TRUE.equals(link.getIsEnabled())) {
+            return getProjectRepositories(link.getProjectId().toString(), authenticatedUserIdRaw);
+        }
+
+        long enabledCount = projectRepositoryLinkRepository.countByProjectIdAndIsEnabledTrue(link.getProjectId());
+        int maxEnabledAllowed = Math.max(1, gitHubProperties.getMaxEnabledReposPerProject());
+        if (enabledCount >= maxEnabledAllowed) {
+            throw new ConflictException("Maximum enabled repositories per project exceeded.");
+        }
+
+        Instant now = Instant.now();
+        link.setIsEnabled(true);
+        link.setSyncStatus(GitHubIntegrationV2Constants.SYNC_STATUS_PENDING);
+        link.setSyncError(null);
+        link.setUpdatedAt(now);
+        projectRepositoryLinkRepository.save(link);
+
+        ProjectRepositoryLink currentPrimary = projectRepositoryLinkRepository
+            .findByProjectIdAndIsPrimaryTrueAndIsEnabledTrue(link.getProjectId())
+            .orElse(null);
+        if (currentPrimary == null) {
+            setPrimary(link.getProjectId(), link.getId());
+        }
+
+        try {
+            gitHubSyncService.refreshRepository(link.getId());
+        } catch (RuntimeException ignored) {
+            // Sync status is persisted in GitHubSyncService.
+        }
+
+        syncProjectRepositoryUrl(link.getProjectId());
+        return getProjectRepositories(link.getProjectId().toString(), authenticatedUserIdRaw);
+    }
+
+    @Transactional
+    public ProjectGitHubRepositoriesDto disableRepository(String linkedRepositoryIdRaw, String authenticatedUserIdRaw) {
+        UUID linkedRepositoryId = guardService.parseUuid(linkedRepositoryIdRaw, "repositoryId");
+        UUID userId = guardService.parseUuid(authenticatedUserIdRaw, "authenticatedUserId");
+
+        ProjectRepositoryLink link = projectRepositoryLinkRepository
+            .findById(linkedRepositoryId)
+            .orElseThrow(() -> new ValidationException("repositoryId", "Linked repository not found."));
+        guardService.requireOwnedProject(link.getProjectId(), userId);
+
+        if (!Boolean.TRUE.equals(link.getIsEnabled())) {
+            return getProjectRepositories(link.getProjectId().toString(), authenticatedUserIdRaw);
+        }
+
+        Instant now = Instant.now();
+        link.setIsEnabled(false);
+        link.setIsPrimary(false);
+        link.setLastSyncedAt(null);
+        link.setSyncStatus(GitHubIntegrationV2Constants.SYNC_STATUS_DISABLED);
+        link.setSyncError(null);
+        link.setUpdatedAt(now);
+        projectRepositoryLinkRepository.save(link);
+
+        projectRepositoryLinkCommitRepository.deleteByProjectRepositoryLinkId(link.getId());
+        projectRepositoryLinkContributorRepository.deleteByProjectRepositoryLinkId(link.getId());
+
+        ensureSinglePrimaryRepository(link.getProjectId());
+        syncProjectRepositoryUrl(link.getProjectId());
+
+        return getProjectRepositories(link.getProjectId().toString(), authenticatedUserIdRaw);
+    }
+
+    @Transactional
     public ProjectGitHubRepositoriesDto disconnectAccessSource(
         String sourceIdRaw,
         String authenticatedUserIdRaw
@@ -230,6 +327,9 @@ public class RepositoryLinkService {
             .orElseThrow(() -> new ValidationException("repositoryId", "Linked repository not found."));
 
         guardService.requireOwnedProject(link.getProjectId(), userId);
+        if (!Boolean.TRUE.equals(link.getIsEnabled())) {
+            throw new ConflictException("Disabled repositories cannot be selected as primary.");
+        }
 
         setPrimary(link.getProjectId(), link.getId());
         syncProjectRepositoryUrl(link.getProjectId());
@@ -245,6 +345,9 @@ public class RepositoryLinkService {
             .findById(linkedRepositoryId)
             .orElseThrow(() -> new ValidationException("repositoryId", "Linked repository not found."));
         guardService.requireOwnedProject(link.getProjectId(), userId);
+        if (!Boolean.TRUE.equals(link.getIsEnabled())) {
+            throw new ConflictException("Disabled repositories cannot be refreshed.");
+        }
 
         gitHubSyncService.refreshRepository(linkedRepositoryId);
         return getProjectRepositories(link.getProjectId().toString(), authenticatedUserIdRaw);
@@ -277,6 +380,7 @@ public class RepositoryLinkService {
         return new ProjectGitHubRepositoriesDto(
             projectId.toString(),
             Math.max(1, gitHubProperties.getMaxLinkedReposPerProject()),
+            Math.max(1, gitHubProperties.getMaxEnabledReposPerProject()),
             sources,
             repositoryDtos
         );
@@ -320,7 +424,7 @@ public class RepositoryLinkService {
         List<ProjectRepositoryLink> links = projectRepositoryLinkRepository.findByProjectIdOrderByLinkedAtDesc(projectId);
         Instant now = Instant.now();
         for (ProjectRepositoryLink link : links) {
-            boolean shouldBePrimary = link.getId().equals(selectedPrimaryLinkId);
+            boolean shouldBePrimary = Boolean.TRUE.equals(link.getIsEnabled()) && link.getId().equals(selectedPrimaryLinkId);
             if (Boolean.TRUE.equals(link.getIsPrimary()) != shouldBePrimary) {
                 link.setIsPrimary(shouldBePrimary);
                 link.setUpdatedAt(now);
@@ -335,17 +439,33 @@ public class RepositoryLinkService {
             return;
         }
 
-        ProjectRepositoryLink currentPrimary = links.stream()
+        List<ProjectRepositoryLink> enabledLinks = links.stream()
+            .filter(link -> Boolean.TRUE.equals(link.getIsEnabled()))
+            .toList();
+
+        if (enabledLinks.isEmpty()) {
+            Instant now = Instant.now();
+            for (ProjectRepositoryLink link : links) {
+                if (Boolean.TRUE.equals(link.getIsPrimary())) {
+                    link.setIsPrimary(false);
+                    link.setUpdatedAt(now);
+                    projectRepositoryLinkRepository.save(link);
+                }
+            }
+            return;
+        }
+
+        ProjectRepositoryLink currentPrimary = enabledLinks.stream()
             .filter(link -> Boolean.TRUE.equals(link.getIsPrimary()))
             .findFirst()
             .orElse(null);
 
         if (currentPrimary == null) {
-            setPrimary(projectId, links.get(0).getId());
+            setPrimary(projectId, enabledLinks.get(0).getId());
             return;
         }
 
-        long primaryCount = links.stream().filter(link -> Boolean.TRUE.equals(link.getIsPrimary())).count();
+        long primaryCount = enabledLinks.stream().filter(link -> Boolean.TRUE.equals(link.getIsPrimary())).count();
         if (primaryCount > 1) {
             setPrimary(projectId, currentPrimary.getId());
         }
@@ -378,7 +498,9 @@ public class RepositoryLinkService {
         }
 
         String repositoryUrl = null;
-        ProjectRepositoryLink primaryLink = projectRepositoryLinkRepository.findByProjectIdAndIsPrimaryTrue(projectId).orElse(null);
+        ProjectRepositoryLink primaryLink = projectRepositoryLinkRepository
+            .findByProjectIdAndIsPrimaryTrueAndIsEnabledTrue(projectId)
+            .orElse(null);
         if (primaryLink != null) {
             GitHubRepositoryEntity repositoryEntity = gitHubRepositoryEntityRepository
                 .findById(primaryLink.getGithubRepositoryId())
@@ -430,6 +552,7 @@ public class RepositoryLinkService {
             repository == null ? null : repository.getDefaultBranch(),
             repository == null ? null : repository.getHtmlUrl(),
             link.getIsPrimary(),
+            link.getIsEnabled(),
             link.getLinkedAt(),
             link.getLastSyncedAt(),
             link.getSyncStatus()

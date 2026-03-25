@@ -63,6 +63,7 @@ app:
     default-page-size: ${GITHUB_DEFAULT_PAGE_SIZE:10}
     max-page-size: ${GITHUB_MAX_PAGE_SIZE:100}
     max-linked-repos-per-project: ${GITHUB_MAX_LINKED_REPOS_PER_PROJECT:5}
+    max-enabled-repos-per-project: ${GITHUB_MAX_ENABLED_REPOS_PER_PROJECT:${GITHUB_MAX_LINKED_REPOS_PER_PROJECT:5}}
     setup-state-ttl-seconds: ${GITHUB_SETUP_STATE_TTL_SECONDS:900}
     setup-state-secret: ${GITHUB_SETUP_STATE_SECRET:${JWT_SECRET}}
     sync-max-commit-pages: ${GITHUB_SYNC_MAX_COMMIT_PAGES:5}

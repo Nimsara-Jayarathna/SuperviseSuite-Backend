@@ -37,6 +37,9 @@ public class ProjectRepositoryLink {
     private Boolean isPrimary;
 
     @Column(nullable = false)
+    private Boolean isEnabled;
+
+    @Column(nullable = false)
     private Instant linkedAt;
 
     private Instant lastSyncedAt;

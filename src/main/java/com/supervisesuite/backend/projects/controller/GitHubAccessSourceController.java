@@ -190,6 +190,28 @@ public class GitHubAccessSourceController {
         return apiResponseFactory.ok("GitHub repository unlinked.", data, request);
     }
 
+    @PostMapping("/repositories/{id}/enable")
+    public ResponseEntity<ApiResponse<ProjectGitHubRepositoriesDto>> enableRepository(
+        Authentication authentication,
+        @PathVariable("id") String linkedRepositoryId,
+        HttpServletRequest request
+    ) {
+        String userId = requireAuthenticatedUserId(authentication);
+        ProjectGitHubRepositoriesDto data = repositoryLinkService.enableRepository(linkedRepositoryId, userId);
+        return apiResponseFactory.ok("GitHub repository enabled.", data, request);
+    }
+
+    @PostMapping("/repositories/{id}/disable")
+    public ResponseEntity<ApiResponse<ProjectGitHubRepositoriesDto>> disableRepository(
+        Authentication authentication,
+        @PathVariable("id") String linkedRepositoryId,
+        HttpServletRequest request
+    ) {
+        String userId = requireAuthenticatedUserId(authentication);
+        ProjectGitHubRepositoriesDto data = repositoryLinkService.disableRepository(linkedRepositoryId, userId);
+        return apiResponseFactory.ok("GitHub repository disabled.", data, request);
+    }
+
     @PostMapping("/repositories/{id}/refresh")
     public ResponseEntity<ApiResponse<ProjectGitHubRepositoriesDto>> refreshRepository(
         Authentication authentication,

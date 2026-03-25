@@ -10,13 +10,19 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ProjectRepositoryLinkRepository extends JpaRepository<ProjectRepositoryLink, UUID> {
     List<ProjectRepositoryLink> findByProjectIdOrderByLinkedAtDesc(UUID projectId);
 
+    List<ProjectRepositoryLink> findByProjectIdAndIsEnabledTrueOrderByLinkedAtDesc(UUID projectId);
+
     Optional<ProjectRepositoryLink> findByIdAndProjectId(UUID id, UUID projectId);
 
     Optional<ProjectRepositoryLink> findByProjectIdAndIsPrimaryTrue(UUID projectId);
+
+    Optional<ProjectRepositoryLink> findByProjectIdAndIsPrimaryTrueAndIsEnabledTrue(UUID projectId);
 
     boolean existsByProjectIdAndGithubRepoId(UUID projectId, Long githubRepoId);
 
     boolean existsByProjectIdAndGithubRepositoryIdIn(UUID projectId, Collection<UUID> githubRepositoryIds);
 
     long countByProjectId(UUID projectId);
+
+    long countByProjectIdAndIsEnabledTrue(UUID projectId);
 }
