@@ -2,6 +2,8 @@
 
 Core SuperviseSuite backend built with Spring Boot. Provides REST APIs for authentication/authorization, user and project management, and project membership/assignment workflows. Owns the main database model and supports future expansion for analytics, reporting, and external tool connectivity.
 
+Current scope includes GitHub integration v2 (SCRUM-81): project-scoped authorization, explicit repository linking, request-access continuation flow, callback-result acknowledgement, and repository-link based sync/preview APIs.
+
 ## API Documentation
 
 Current API references:
@@ -18,6 +20,12 @@ Backend fix documents:
 - `docs/backend/major-fixes-scrum-80-github-app-dashboard.md`
 - `docs/backend/major-fixes-scrum-81-multiple-github-repositories.md`
 - `docs/backend/recent-changes-2026-03-05.md`
+
+Database documentation:
+
+- `docs/database/README.md`
+- `docs/database/migrations.md`
+- `docs/database/schema-v1.md`
 
 ## Recent API Contract Update (March 2026)
 
@@ -143,6 +151,9 @@ GITHUB_REPOSITORY_REFRESH_BATCH_SIZE=50
     - adds `updated_at` to `github_access_sources` and backfills existing rows
   - `V15__align_github_access_request_v2_with_result_tracking.sql`
     - adds result-token tracking fields used by access-request callback confirmation flow
+- Database documentation for migration-by-migration context and effective schema:
+  - `docs/database/migrations.md`
+  - `docs/database/schema-v1.md`
 - Default safety: `baseline-on-migrate` is disabled.
 - Dev-only fallback exists in `application-dev.yaml` if you need one-time baseline for a legacy/local DB.
   - Run with dev profile only when required:
