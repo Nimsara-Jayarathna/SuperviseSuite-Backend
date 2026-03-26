@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ProjectRepositoryLinkRepository extends JpaRepository<ProjectRepositoryLink, UUID> {
     Optional<ProjectRepositoryLink> findByProjectIdAndGithubRepositoryId(UUID projectId, UUID githubRepositoryId);
+    Optional<ProjectRepositoryLink> findByProjectIdAndGithubRepoId(UUID projectId, Long githubRepoId);
 
     List<ProjectRepositoryLink> findByProjectIdOrderByLinkedAtDesc(UUID projectId);
 

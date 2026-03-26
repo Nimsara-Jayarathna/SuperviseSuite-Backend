@@ -337,7 +337,7 @@ public class RepositoryLinkService {
     }
 
     @Transactional
-    public ProjectGitHubRepositoriesDto selectPrimaryRepository(String linkedRepositoryIdRaw, String authenticatedUserIdRaw) {
+    public ProjectGitHubRepositoriesDto selectPrimaryGitHubRepository(String linkedRepositoryIdRaw, String authenticatedUserIdRaw) {
         UUID linkedRepositoryId = guardService.parseUuid(linkedRepositoryIdRaw, "repositoryId");
         UUID userId = guardService.parseUuid(authenticatedUserIdRaw, "authenticatedUserId");
 
@@ -711,7 +711,7 @@ public class RepositoryLinkService {
                 return gitHubRepositoryEntityRepository.save(newEntity);
             });
 
-        ProjectRepositoryLink link = projectRepositoryLinkRepository.findByProjectIdAndGithubRepositoryId(projectId, repositoryEntity.getId())
+        ProjectRepositoryLink link = projectRepositoryLinkRepository.findByProjectIdAndGithubRepoId(projectId, repositoryEntity.getGithubRepoId())
             .orElseGet(() -> {
                 ProjectRepositoryLink newLink = new ProjectRepositoryLink();
                 newLink.setProjectId(projectId);

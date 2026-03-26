@@ -33,7 +33,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -153,11 +152,14 @@ public class ProjectServiceImpl implements ProjectService {
 
         ProjectRepositoryLink link = null;
         if (normalizedUrl != null) {
-            link = projectRepositoryLinkRepository.findByProjectIdAndRepositoryUrl(projectId, normalizedUrl).orElse(null);
+            link = projectRepositoryLinkRepository.findByProjectIdAndRepositoryUrl(projectId, normalizedUrl)
+                .filter(l -> Boolean.TRUE.equals(l.getIsEnabled()))
+                .orElse(null);
         }
 
         if (link == null) {
-            link = projectRepositoryLinkRepository.findTopByProjectIdOrderByCreatedAtAsc(projectId).orElse(null);
+            link = projectRepositoryLinkRepository.findByProjectIdAndIsPrimaryTrueAndIsEnabledTrue(projectId)
+                .orElse(null);
         }
 
         ProjectGitHubPreviewDto preview;

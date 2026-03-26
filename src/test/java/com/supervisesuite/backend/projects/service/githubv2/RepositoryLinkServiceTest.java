@@ -83,7 +83,7 @@ class RepositoryLinkServiceTest {
         when(accessSourceService.getProjectAccessSources(projectId)).thenReturn(List.of());
         when(projectRepositoryLinkRepository.findByProjectIdOrderByLinkedAtDesc(projectId)).thenReturn(List.of(oldPrimary, newPrimary));
 
-        repositoryLinkService.selectPrimaryRepository(newPrimaryId.toString(), userId.toString());
+        repositoryLinkService.selectPrimaryGitHubRepository(newPrimaryId.toString(), userId.toString());
 
         org.mockito.InOrder inOrder = inOrder(projectRepositoryLinkRepository);
         
