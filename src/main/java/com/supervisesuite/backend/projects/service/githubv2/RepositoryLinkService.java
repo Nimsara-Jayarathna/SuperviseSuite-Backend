@@ -136,7 +136,6 @@ public class RepositoryLinkService {
         ProjectRepositoryLink currentPrimary = projectRepositoryLinkRepository
             .findByProjectIdAndIsPrimaryTrueAndIsEnabledTrue(projectId)
             .orElse(null);
-        boolean explicitPrimary = uniqueSelections.values().stream().anyMatch(selection -> Boolean.TRUE.equals(selection.getPrimary()));
         UUID selectedPrimaryLinkId = null;
 
         int enabledAllocated = 0;
@@ -168,10 +167,8 @@ public class RepositoryLinkService {
                 enabledAllocated++;
             }
 
-            boolean isPrimary = enableThisLink && (explicitPrimary
-                ? Boolean.TRUE.equals(selection.getPrimary())
-                : currentPrimary == null && selectedPrimaryLinkId == null);
-            link.setIsPrimary(isPrimary);
+            boolean requestedAsPrimary = Boolean.TRUE.equals(selection.getPrimary());
+            link.setIsPrimary(false);
             link.setIsEnabled(enableThisLink);
             link.setLinkedAt(now);
             link.setSyncStatus(enableThisLink
@@ -189,7 +186,7 @@ public class RepositoryLinkService {
             link.setUpdatedAt(now);
             link = projectRepositoryLinkRepository.save(link);
 
-            if (isPrimary) {
+            if (enableThisLink && requestedAsPrimary) {
                 selectedPrimaryLinkId = link.getId();
             }
 
@@ -202,8 +199,11 @@ public class RepositoryLinkService {
             }
 
         }
-
-        ensureSinglePrimaryRepository(projectId);
+        if (selectedPrimaryLinkId != null) {
+            setPrimary(projectId, selectedPrimaryLinkId);
+        } else if (currentPrimary == null) {
+            ensureSinglePrimaryRepository(projectId);
+        }
         consumeSingleUseInstallationSourceIfApplicable(source);
 
         return getProjectRepositories(projectId.toString(), authenticatedUserIdRaw);
