@@ -231,7 +231,7 @@ public class GitHubAccessSourceController {
         HttpServletRequest request
     ) {
         String userId = requireAuthenticatedUserId(authentication);
-        ProjectGitHubRepositoriesDto data = repositoryLinkService.selectPrimaryRepository(linkedRepositoryId, userId);
+        ProjectGitHubRepositoriesDto data = repositoryLinkService.selectPrimaryGitHubRepository(linkedRepositoryId, userId);
         return apiResponseFactory.ok("GitHub primary repository updated.", data, request);
     }
 
