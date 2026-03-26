@@ -84,6 +84,7 @@ public class GitHubSyncService {
 
             applyRepositoryMetadata(repositoryEntity, metadata);
             gitHubRepositoryEntityRepository.save(repositoryEntity);
+            applyLinkMetadata(link, repositoryEntity, metadata);
 
             upsertCommits(link.getId(), commits, now);
             upsertContributors(link.getId(), now);
@@ -128,6 +129,39 @@ public class GitHubSyncService {
 
         if (hasText(metadata.getDefaultBranch())) {
             repositoryEntity.setDefaultBranch(metadata.getDefaultBranch().trim());
+        }
+    }
+
+    private void applyLinkMetadata(
+        ProjectRepositoryLink link,
+        GitHubRepositoryEntity repositoryEntity,
+        ProjectRepositoryMetadataDto metadata
+    ) {
+        if (link == null || repositoryEntity == null) {
+            return;
+        }
+
+        if (metadata != null && metadata.getExternalRepositoryId() != null) {
+            link.setGithubRepoId(metadata.getExternalRepositoryId());
+        }
+
+        if (hasText(metadata == null ? null : metadata.getDefaultBranch())) {
+            link.setDefaultBranch(metadata.getDefaultBranch().trim());
+        } else if (hasText(repositoryEntity.getDefaultBranch())) {
+            link.setDefaultBranch(repositoryEntity.getDefaultBranch().trim());
+        }
+
+        if (hasText(metadata == null ? null : metadata.getUrl())) {
+            link.setRepositoryUrl(metadata.getUrl().trim());
+        } else if (hasText(repositoryEntity.getHtmlUrl())) {
+            link.setRepositoryUrl(repositoryEntity.getHtmlUrl().trim());
+        }
+
+        if (hasText(repositoryEntity.getFullName())) {
+            link.setRepositoryName(repositoryEntity.getFullName().trim());
+        } else if (hasText(metadata == null ? null : metadata.getOwnerLogin())
+            && hasText(metadata == null ? null : metadata.getName())) {
+            link.setRepositoryName(metadata.getOwnerLogin().trim() + "/" + metadata.getName().trim());
         }
     }
 
