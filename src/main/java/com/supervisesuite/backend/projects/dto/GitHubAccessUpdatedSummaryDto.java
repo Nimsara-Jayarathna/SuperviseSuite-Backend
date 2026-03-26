@@ -8,6 +8,8 @@ public class GitHubAccessUpdatedSummaryDto {
     private UUID projectId;
     private String projectTitle;
     private Long installationId;
+    private String sourceId;
+    private String flowType;
     private String accessScope;
     private Integer accessibleRepositoryCount;
     private List<GitHubInstallationRepositoryDto> repositories;
@@ -26,6 +28,26 @@ public class GitHubAccessUpdatedSummaryDto {
         this.projectId = projectId;
         this.projectTitle = projectTitle;
         this.installationId = installationId;
+        this.accessScope = accessScope;
+        this.accessibleRepositoryCount = accessibleRepositoryCount;
+        this.repositories = repositories;
+    }
+
+    public GitHubAccessUpdatedSummaryDto(
+        UUID projectId,
+        String projectTitle,
+        Long installationId,
+        String sourceId,
+        String flowType,
+        String accessScope,
+        Integer accessibleRepositoryCount,
+        List<GitHubInstallationRepositoryDto> repositories
+    ) {
+        this.projectId = projectId;
+        this.projectTitle = projectTitle;
+        this.installationId = installationId;
+        this.sourceId = sourceId;
+        this.flowType = flowType;
         this.accessScope = accessScope;
         this.accessibleRepositoryCount = accessibleRepositoryCount;
         this.repositories = repositories;
@@ -61,6 +83,22 @@ public class GitHubAccessUpdatedSummaryDto {
 
     public void setAccessScope(String accessScope) {
         this.accessScope = accessScope;
+    }
+
+    public String getSourceId() {
+        return sourceId;
+    }
+
+    public void setSourceId(String sourceId) {
+        this.sourceId = sourceId;
+    }
+
+    public String getFlowType() {
+        return flowType;
+    }
+
+    public void setFlowType(String flowType) {
+        this.flowType = flowType;
     }
 
     public Integer getAccessibleRepositoryCount() {

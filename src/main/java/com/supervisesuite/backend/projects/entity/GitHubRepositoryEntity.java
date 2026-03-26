@@ -15,24 +15,32 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "project_repository_contributors")
-public class ProjectRepositoryContributor {
+@Table(name = "github_repositories")
+public class GitHubRepositoryEntity {
 
     @Id
     @GeneratedValue
     private UUID id;
 
     @Column(nullable = false)
-    private UUID repositoryId;
+    private UUID accessSourceId;
 
     @Column(nullable = false)
-    private String contributorName;
+    private Long githubRepoId;
 
     @Column(nullable = false)
-    private Integer commitCount;
-
-    private Instant lastContributionAt;
+    private String fullName;
 
     @Column(nullable = false)
-    private Instant updatedAt;
+    private String name;
+
+    private String defaultBranch;
+
+    @Column(columnDefinition = "TEXT")
+    private String htmlUrl;
+
+    private String ownerLogin;
+
+    @Column(nullable = false)
+    private Instant createdAt;
 }

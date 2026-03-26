@@ -6,11 +6,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.supervisesuite.backend.config.GitHubProperties;
-import com.supervisesuite.backend.projects.entity.Project;
-import com.supervisesuite.backend.projects.entity.ProjectRepository;
+import com.supervisesuite.backend.projects.entity.ProjectRepositoryLink;
 import com.supervisesuite.backend.projects.repository.ProjectGitHubAccessRequestRepository;
-import com.supervisesuite.backend.projects.repository.ProjectRepositoryCacheRepository;
-import com.supervisesuite.backend.projects.service.ProjectService;
+import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkRepository;
+import com.supervisesuite.backend.projects.service.githubv2.GitHubSyncService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -19,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageImpl;
 
 @ExtendWith(MockitoExtension.class)
 class GitHubMaintenanceSchedulerTest {
@@ -28,13 +26,10 @@ class GitHubMaintenanceSchedulerTest {
     private ProjectGitHubAccessRequestRepository projectGitHubAccessRequestRepository;
 
     @Mock
-    private ProjectRepositoryCacheRepository projectRepositoryCacheRepository;
+    private ProjectRepositoryLinkRepository projectRepositoryLinkRepository;
 
     @Mock
-    private com.supervisesuite.backend.projects.repository.ProjectRepository projectRepository;
-
-    @Mock
-    private ProjectService projectService;
+    private GitHubSyncService gitHubSyncService;
 
     private GitHubProperties properties;
     private GitHubMaintenanceScheduler scheduler;
@@ -46,9 +41,8 @@ class GitHubMaintenanceSchedulerTest {
         scheduler = new GitHubMaintenanceScheduler(
             properties,
             projectGitHubAccessRequestRepository,
-            projectRepositoryCacheRepository,
-            projectRepository,
-            projectService
+            projectRepositoryLinkRepository,
+            gitHubSyncService
         );
     }
 
@@ -77,7 +71,7 @@ class GitHubMaintenanceSchedulerTest {
     }
 
     @Test
-    void refreshLinkedGitHubRepositories_onlyRefreshesActiveProjects() {
+    void refreshLinkedGitHubRepositories_executesSyncForAllLinks() {
         GitHubProperties.RepositoryRefresh refresh = new GitHubProperties.RepositoryRefresh();
         refresh.setEnabled(true);
         refresh.setBatchSize(10);
@@ -86,36 +80,24 @@ class GitHubMaintenanceSchedulerTest {
         UUID activeProjectId = UUID.randomUUID();
         UUID deletedProjectId = UUID.randomUUID();
 
-        ProjectRepository activeRepository = repository(activeProjectId, "https://github.com/acme/active");
-        ProjectRepository deletedRepository = repository(deletedProjectId, "https://github.com/acme/deleted");
+        ProjectRepositoryLink activeLink = link(activeProjectId, "https://github.com/acme/active");
+        ProjectRepositoryLink deletedLink = link(deletedProjectId, "https://github.com/acme/deleted");
 
-        when(projectRepositoryCacheRepository.findByProviderIgnoreCaseAndIsPrimaryTrueAndRepositoryUrlIsNotNull(
-            any(),
-            any()
-        )).thenReturn(new PageImpl<>(List.of(activeRepository, deletedRepository)));
-
-        Project activeProject = new Project();
-        activeProject.setId(activeProjectId);
-        activeProject.setCreatedAt(Instant.now());
-        activeProject.setName("Active");
-
-        when(projectRepository.findByIdInAndDeletedAtIsNullOrderByCreatedAtDesc(List.of(activeProjectId, deletedProjectId)))
-            .thenReturn(List.of(activeProject));
+        when(projectRepositoryLinkRepository.findByIsEnabledTrueOrderByLastSyncedAtAsc(any()))
+            .thenReturn(List.of(activeLink, deletedLink));
 
         scheduler.refreshLinkedGitHubRepositories();
 
-        verify(projectService).refreshGitHubData(activeProjectId, "https://github.com/acme/active");
-        verify(projectService, never()).refreshGitHubData(deletedProjectId, "https://github.com/acme/deleted");
+        verify(gitHubSyncService).syncRepository(activeLink.getId());
+        verify(gitHubSyncService).syncRepository(deletedLink.getId());
     }
 
-    private static ProjectRepository repository(UUID projectId, String url) {
-        ProjectRepository repository = new ProjectRepository();
-        repository.setId(UUID.randomUUID());
-        repository.setProjectId(projectId);
-        repository.setProvider("github");
-        repository.setRepositoryUrl(url);
-        repository.setIsPrimary(true);
-        repository.setCreatedAt(Instant.now());
-        return repository;
+    private static ProjectRepositoryLink link(UUID projectId, String url) {
+        ProjectRepositoryLink link = new ProjectRepositoryLink();
+        link.setId(UUID.randomUUID());
+        link.setProjectId(projectId);
+        link.setRepositoryUrl(url);
+        link.setCreatedAt(Instant.now());
+        return link;
     }
 }

@@ -19,7 +19,10 @@ import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryListingDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto;
 import java.util.List;
 
 public interface SupervisorService {
@@ -29,11 +32,16 @@ public interface SupervisorService {
 
     SupervisorProjectDetailDto getProjectById(String authenticatedUserId, String projectId);
 
-    ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedUserId, String projectId);
+    ProjectGitHubDashboardDto getProjectGitHubDashboard(
+        String authenticatedUserId,
+        String projectId,
+        String linkedRepositoryId
+    );
 
     ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getProjectGitHubActivityPage(
         String authenticatedUserId,
         String projectId,
+        String linkedRepositoryId,
         int page,
         int size
     );
@@ -41,6 +49,7 @@ public interface SupervisorService {
     ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getProjectGitHubContributorsPage(
         String authenticatedUserId,
         String projectId,
+        String linkedRepositoryId,
         int page,
         int size
     );
@@ -51,6 +60,11 @@ public interface SupervisorService {
         Long installationId,
         int page,
         Integer size
+    );
+
+    ProjectGitHubRepositoryListingDto getProjectRepositoriesInventory(
+        String authenticatedUserId,
+        String projectId
     );
 
     GitHubAccessRequestCreateDto createGitHubRepositoryAccessRequest(
@@ -130,5 +144,15 @@ public interface SupervisorService {
     CreateSupervisorProjectResponse createProject(
         String authenticatedUserId,
         CreateSupervisorProjectRequest request
+    );
+
+    GitHubAccessUpdatedSummaryDto getGitHubAccessUpdatedSummary(
+        String authenticatedUserId,
+        String projectId
+    );
+
+    GitHubAccessUpdatedAcknowledgeDto acknowledgeGitHubAccessUpdated(
+        String authenticatedUserId,
+        String projectId
     );
 }

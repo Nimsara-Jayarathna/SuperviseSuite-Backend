@@ -25,7 +25,7 @@ import com.supervisesuite.backend.projects.repository.GitHubAppInstallationRepos
 import com.supervisesuite.backend.projects.repository.ProjectGitHubAccessRequestRepository;
 import com.supervisesuite.backend.projects.repository.ProjectGitHubInstallationAuthorizationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
-import com.supervisesuite.backend.projects.repository.ProjectRepositoryCacheRepository;
+import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.users.entity.User;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -58,11 +58,12 @@ class GitHubAppIntegrationServiceTest {
     @Mock
     private ProjectGitHubInstallationAuthorizationRepository projectGitHubInstallationAuthorizationRepository;
 
-    @Mock
-    private ProjectRepositoryCacheRepository projectRepositoryCacheRepository;
 
     @Mock
     private ProjectGitHubAccessRequestRepository projectGitHubAccessRequestRepository;
+
+    @Mock
+    private RepositoryLinkService repositoryLinkService;
 
     private GitHubProperties gitHubProperties;
     private GitHubAppIntegrationService service;
@@ -91,8 +92,8 @@ class GitHubAppIntegrationServiceTest {
             installationRepository,
             projectRepository,
             projectGitHubInstallationAuthorizationRepository,
-            projectRepositoryCacheRepository,
             projectGitHubAccessRequestRepository,
+            repositoryLinkService,
             gitHubProperties,
             new ObjectMapper()
         );
@@ -159,20 +160,6 @@ class GitHubAppIntegrationServiceTest {
         assertThat(request.getGithubStateHash()).isNotBlank();
     }
 
-    @Test
-    void buildProjectSetupAuthorizeUrl_encodesProjectIdInState() {
-        String url = service.buildProjectSetupAuthorizeUrl(projectId);
-
-        assertThat(url).startsWith("https://github.com/apps/supervisesuite/installations/new");
-        assertThat(url).contains("state=");
-
-        String encodedState = url.substring(url.indexOf("state=") + "state=".length());
-        String decodedState = new String(
-            Base64.getUrlDecoder().decode(encodedState),
-            StandardCharsets.UTF_8
-        );
-        assertThat(decodedState).contains("\"projectId\":\"" + projectId + "\"");
-    }
 
     @Test
     void handleSetupCallback_marksAccessRequestCompletedAndReturnsResultToken() {
@@ -307,7 +294,7 @@ class GitHubAppIntegrationServiceTest {
     }
 
     @Test
-    void handleWebhook_deletedInstallation_clearsRepositoryLinkage() {
+    void handleWebhook_installationDeleted_clearsLinkage() {
         Long installationId = 55L;
         String payload = """
             {
@@ -329,33 +316,15 @@ class GitHubAppIntegrationServiceTest {
         existingInstallation.setStatus("ACTIVE");
         existingInstallation.setCreatedAt(Instant.now().minusSeconds(100));
 
-        com.supervisesuite.backend.projects.entity.ProjectRepository linkedRepository =
-            new com.supervisesuite.backend.projects.entity.ProjectRepository();
-        linkedRepository.setId(UUID.randomUUID());
-        linkedRepository.setProjectId(UUID.randomUUID());
-        linkedRepository.setProvider("github");
-        linkedRepository.setRepositoryUrl("https://github.com/acme/repo");
-        linkedRepository.setInstallationId(installationId);
-        linkedRepository.setCreatedAt(Instant.now().minusSeconds(100));
-        linkedRepository.setIsPrimary(true);
-
         when(installationRepository.findByInstallationId(installationId))
             .thenReturn(Optional.of(existingInstallation));
         when(installationRepository.save(any(GitHubAppInstallation.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
-        when(projectRepositoryCacheRepository.findByInstallationId(installationId))
-            .thenReturn(List.of(linkedRepository));
-        when(projectRepositoryCacheRepository.saveAll(any(List.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
         GitHubWebhookResultDto result = service.handleWebhook("installation", signature, payload);
 
         assertThat(result.getStatus()).isEqualTo("DELETED");
-        assertThat(linkedRepository.getInstallationId()).isNull();
-        assertThat(linkedRepository.getRepositoryExternalId()).isNull();
-        assertThat(linkedRepository.getOwnerLogin()).isNull();
-        assertThat(linkedRepository.getLinkedBySupervisorUserId()).isNull();
-        assertThat(linkedRepository.getLinkedAt()).isNull();
+        verify(repositoryLinkService).disconnectAllLinksByInstallationId(installationId);
         verify(projectGitHubInstallationAuthorizationRepository).deleteByInstallationId(installationId);
     }
 

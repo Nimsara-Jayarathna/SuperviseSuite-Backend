@@ -1,6 +1,7 @@
 package com.supervisesuite.backend.student.dto;
 
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -17,8 +18,8 @@ public class StudentProjectDetailDto {
     private Instant lastActivityAt;
     private Integer progressPercent;
     private String healthNote;
-    private String repositoryUrl;
     private ProjectGitHubPreviewDto github;
+    private ProjectGitHubRepositoriesDto githubRepositories;
     private Leader leader;
     private List<Member> members;
     private List<Milestone> milestones;
@@ -37,8 +38,8 @@ public class StudentProjectDetailDto {
         Instant lastActivityAt,
         Integer progressPercent,
         String healthNote,
-        String repositoryUrl,
         ProjectGitHubPreviewDto github,
+        ProjectGitHubRepositoriesDto githubRepositories,
         Leader leader,
         List<Member> members,
         List<Milestone> milestones
@@ -53,8 +54,8 @@ public class StudentProjectDetailDto {
         this.lastActivityAt = lastActivityAt;
         this.progressPercent = progressPercent;
         this.healthNote = healthNote;
-        this.repositoryUrl = repositoryUrl;
         this.github = github;
+        this.githubRepositories = githubRepositories;
         this.leader = leader;
         this.members = members;
         this.milestones = milestones;
@@ -140,13 +141,7 @@ public class StudentProjectDetailDto {
         this.healthNote = healthNote;
     }
 
-    public String getRepositoryUrl() {
-        return repositoryUrl;
-    }
 
-    public void setRepositoryUrl(String repositoryUrl) {
-        this.repositoryUrl = repositoryUrl;
-    }
 
     public ProjectGitHubPreviewDto getGithub() {
         return github;
@@ -154,6 +149,14 @@ public class StudentProjectDetailDto {
 
     public void setGithub(ProjectGitHubPreviewDto github) {
         this.github = github;
+    }
+
+    public ProjectGitHubRepositoriesDto getGithubRepositories() {
+        return githubRepositories;
+    }
+
+    public void setGithubRepositories(ProjectGitHubRepositoriesDto githubRepositories) {
+        this.githubRepositories = githubRepositories;
     }
 
     public Leader getLeader() {

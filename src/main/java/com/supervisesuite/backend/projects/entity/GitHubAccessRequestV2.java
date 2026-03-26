@@ -15,28 +15,37 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "project_repository_commits")
-public class ProjectRepositoryCommit {
+@Table(name = "github_access_requests_v2")
+public class GitHubAccessRequestV2 {
 
     @Id
     @GeneratedValue
     private UUID id;
 
     @Column(nullable = false)
-    private UUID repositoryId;
+    private UUID projectId;
 
     @Column(nullable = false)
-    private String sha;
+    private UUID requestedByUserId;
 
-    @Column(columnDefinition = "TEXT", nullable = false)
-    private String message;
+    @Column(nullable = false)
+    private String tokenHash;
 
-    private String author;
+    @Column(nullable = false)
+    private Instant expiresAt;
 
-    private Instant committedAt;
+    private Instant usedAt;
 
-    private String commitType;
+    private String resultTokenHash;
+
+    private Instant resultExpiresAt;
+
+    private Instant resultAcknowledgedAt;
+
+    private Long installationId;
 
     @Column(nullable = false)
     private Instant createdAt;
+
+    private Instant updatedAt;
 }

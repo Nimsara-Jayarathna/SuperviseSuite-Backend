@@ -15,8 +15,8 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "project_repositories")
-public class ProjectRepository {
+@Table(name = "project_repository_links")
+public class ProjectRepositoryLink {
 
     @Id
     @GeneratedValue
@@ -26,34 +26,43 @@ public class ProjectRepository {
     private UUID projectId;
 
     @Column(nullable = false)
-    private String provider;
+    private UUID githubRepositoryId;
 
-    @Column(columnDefinition = "TEXT", nullable = false)
+    private Long githubInstallationId;
+
+    @Column(nullable = false)
+    private Long githubRepoId;
+
+    @Column(nullable = false)
     private String repositoryUrl;
 
-    private Long installationId;
-
-    private Long repositoryExternalId;
-
-    private String ownerLogin;
-
+    @Column(nullable = false)
     private String repositoryName;
 
     private String defaultBranch;
 
-    private UUID linkedBySupervisorUserId;
-
-    private Instant linkedAt;
+    private String customName;
 
     @Column(nullable = false)
     private Boolean isPrimary;
+
+    @Column(nullable = false)
+    private Boolean isEnabled;
+
+    @Column(nullable = false)
+    private Instant linkedAt;
 
     private Instant lastSyncedAt;
 
     private String syncStatus;
 
     @Column(columnDefinition = "TEXT")
-    private String lastSyncError;
+    private String syncError;
+
+    private UUID linkedBySupervisorUserId;
+
+    @Column(nullable = false)
+    private String accessType;
 
     @Column(nullable = false)
     private Instant createdAt;

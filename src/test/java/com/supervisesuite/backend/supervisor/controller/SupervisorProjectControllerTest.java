@@ -85,10 +85,10 @@ class SupervisorProjectControllerTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
-        assertThat(data.get("repositoryUrl")).isEqualTo(repositoryUrl);
-
-        Project reloaded = projectRepository.findById(project.getId()).orElseThrow();
-        assertThat(reloaded.getRepositoryUrl()).isEqualTo(repositoryUrl);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> github = (Map<String, Object>) data.get("github");
+        assertThat(github).isNotNull();
+        assertThat(github.get("repositoryUrl")).isEqualTo(repositoryUrl);
     }
 
     @Test
@@ -106,8 +106,10 @@ class SupervisorProjectControllerTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
-        assertThat(data).isNotNull();
-        assertThat(data.get("repositoryUrl")).isEqualTo(repositoryUrl);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> github = (Map<String, Object>) data.get("github");
+        assertThat(github).isNotNull();
+        assertThat(github.get("repositoryUrl")).isEqualTo(repositoryUrl);
     }
 
     @Test

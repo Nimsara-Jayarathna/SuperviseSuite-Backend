@@ -6,6 +6,7 @@ import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
 import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryListingDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
@@ -22,6 +23,8 @@ import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
+import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto;
 import com.supervisesuite.backend.supervisor.service.SupervisorService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -98,11 +101,13 @@ public class SupervisorController {
     public ResponseEntity<ApiResponse<ProjectGitHubDashboardDto>> getProjectGitHubDashboard(
         Authentication authentication,
         HttpServletRequest request,
-        @PathVariable String projectId
+        @PathVariable String projectId,
+        @RequestParam(name = "linkedRepositoryId", required = false) String linkedRepositoryId
     ) {
         ProjectGitHubDashboardDto data = supervisorService.getProjectGitHubDashboard(
             authentication.getName(),
-            projectId
+            projectId,
+            linkedRepositoryId
         );
         String message = data.isRepositoryLinked() ? "GitHub dashboard loaded." : "No repository connected.";
         return apiResponseFactory.ok(message, data, request);
@@ -113,12 +118,14 @@ public class SupervisorController {
         Authentication authentication,
         HttpServletRequest request,
         @PathVariable String projectId,
+        @RequestParam(name = "linkedRepositoryId", required = false) String linkedRepositoryId,
         @RequestParam(name = "page", defaultValue = "1") int page,
         @RequestParam(name = "size", required = false) Integer size
     ) {
         ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> data = supervisorService.getProjectGitHubActivityPage(
             authentication.getName(),
             projectId,
+            linkedRepositoryId,
             page,
             size == null ? 0 : size
         );
@@ -130,12 +137,14 @@ public class SupervisorController {
         Authentication authentication,
         HttpServletRequest request,
         @PathVariable String projectId,
+        @RequestParam(name = "linkedRepositoryId", required = false) String linkedRepositoryId,
         @RequestParam(name = "page", defaultValue = "1") int page,
         @RequestParam(name = "size", required = false) Integer size
     ) {
         ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> data = supervisorService.getProjectGitHubContributorsPage(
             authentication.getName(),
             projectId,
+            linkedRepositoryId,
             page,
             size == null ? 0 : size
         );
@@ -159,6 +168,19 @@ public class SupervisorController {
             size
         );
         return apiResponseFactory.ok("GitHub installation repositories loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/github/repositories/inventory")
+    public ResponseEntity<ApiResponse<ProjectGitHubRepositoryListingDto>> getProjectRepositoriesInventory(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        ProjectGitHubRepositoryListingDto data = supervisorService.getProjectRepositoriesInventory(
+            authentication.getName(),
+            projectId
+        );
+        return apiResponseFactory.ok("Project repository inventory loaded.", data, request);
     }
 
     @PostMapping("/projects/{projectId}/github/access-requests")
@@ -350,5 +372,31 @@ public class SupervisorController {
             body
         );
         return apiResponseFactory.ok("Milestone updated successfully.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/access-updated/summary")
+    public ResponseEntity<ApiResponse<GitHubAccessUpdatedSummaryDto>> getProjectAccessUpdatedSummary(
+        Authentication authentication,
+        @PathVariable String projectId,
+        HttpServletRequest request
+    ) {
+        GitHubAccessUpdatedSummaryDto data = supervisorService.getGitHubAccessUpdatedSummary(
+            authentication.getName(),
+            projectId
+        );
+        return apiResponseFactory.ok("Pending GitHub access summary loaded.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/access-updated/acknowledge")
+    public ResponseEntity<ApiResponse<GitHubAccessUpdatedAcknowledgeDto>> acknowledgeProjectAccessUpdated(
+        Authentication authentication,
+        @PathVariable String projectId,
+        HttpServletRequest request
+    ) {
+        GitHubAccessUpdatedAcknowledgeDto data = supervisorService.acknowledgeGitHubAccessUpdated(
+            authentication.getName(),
+            projectId
+        );
+        return apiResponseFactory.ok("GitHub access update acknowledged for project.", data, request);
     }
 }

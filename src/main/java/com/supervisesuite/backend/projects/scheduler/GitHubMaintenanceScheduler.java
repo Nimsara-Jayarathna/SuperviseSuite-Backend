@@ -1,15 +1,13 @@
 package com.supervisesuite.backend.projects.scheduler;
 
 import com.supervisesuite.backend.config.GitHubProperties;
-import com.supervisesuite.backend.projects.entity.ProjectRepository;
+import com.supervisesuite.backend.projects.entity.ProjectRepositoryLink;
 import com.supervisesuite.backend.projects.repository.ProjectGitHubAccessRequestRepository;
-import com.supervisesuite.backend.projects.repository.ProjectRepositoryCacheRepository;
-import com.supervisesuite.backend.projects.service.ProjectService;
+import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkRepository;
+import com.supervisesuite.backend.projects.service.githubv2.GitHubSyncService;
 import java.time.Instant;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -28,22 +26,19 @@ public class GitHubMaintenanceScheduler {
 
     private final GitHubProperties gitHubProperties;
     private final ProjectGitHubAccessRequestRepository projectGitHubAccessRequestRepository;
-    private final ProjectRepositoryCacheRepository projectRepositoryCacheRepository;
-    private final com.supervisesuite.backend.projects.repository.ProjectRepository projectRepository;
-    private final ProjectService projectService;
+    private final ProjectRepositoryLinkRepository projectRepositoryLinkRepository;
+    private final GitHubSyncService gitHubSyncService;
 
     public GitHubMaintenanceScheduler(
         GitHubProperties gitHubProperties,
         ProjectGitHubAccessRequestRepository projectGitHubAccessRequestRepository,
-        ProjectRepositoryCacheRepository projectRepositoryCacheRepository,
-        com.supervisesuite.backend.projects.repository.ProjectRepository projectRepository,
-        ProjectService projectService
+        ProjectRepositoryLinkRepository projectRepositoryLinkRepository,
+        GitHubSyncService gitHubSyncService
     ) {
         this.gitHubProperties = gitHubProperties;
         this.projectGitHubAccessRequestRepository = projectGitHubAccessRequestRepository;
-        this.projectRepositoryCacheRepository = projectRepositoryCacheRepository;
-        this.projectRepository = projectRepository;
-        this.projectService = projectService;
+        this.projectRepositoryLinkRepository = projectRepositoryLinkRepository;
+        this.gitHubSyncService = gitHubSyncService;
     }
 
     @Scheduled(
@@ -84,48 +79,31 @@ public class GitHubMaintenanceScheduler {
         }
 
         int batchSize = Math.max(1, config.getBatchSize());
-        List<ProjectRepository> candidateRepositories = projectRepositoryCacheRepository
-            .findByProviderIgnoreCaseAndIsPrimaryTrueAndRepositoryUrlIsNotNull(
-                PROVIDER_GITHUB,
-                PageRequest.of(0, batchSize, Sort.by(Sort.Direction.ASC, "updatedAt"))
-            )
-            .getContent();
+        List<ProjectRepositoryLink> candidateLinks = projectRepositoryLinkRepository
+            .findByIsEnabledTrueOrderByLastSyncedAtAsc(
+                PageRequest.of(0, batchSize)
+            );
 
-        if (candidateRepositories.isEmpty()) {
+        if (candidateLinks.isEmpty()) {
             LOGGER.info("GitHub repository refresh scheduler found no linked repositories to refresh.");
             return;
         }
-
-        Set<UUID> activeProjectIds = projectRepository
-            .findByIdInAndDeletedAtIsNullOrderByCreatedAtDesc(
-                candidateRepositories.stream().map(ProjectRepository::getProjectId).toList()
-            )
-            .stream()
-            .map(com.supervisesuite.backend.projects.entity.Project::getId)
-            .collect(Collectors.toSet());
 
         int attempted = 0;
         int succeeded = 0;
         int failed = 0;
 
-        for (ProjectRepository repository : candidateRepositories) {
-            if (repository.getProjectId() == null || repository.getRepositoryUrl() == null) {
-                continue;
-            }
-            if (!activeProjectIds.contains(repository.getProjectId())) {
-                continue;
-            }
-
+        for (ProjectRepositoryLink link : candidateLinks) {
             attempted++;
             try {
-                projectService.refreshGitHubData(repository.getProjectId(), repository.getRepositoryUrl());
+                gitHubSyncService.syncRepository(link.getId());
                 succeeded++;
             } catch (RuntimeException exception) {
                 failed++;
                 LOGGER.warn(
-                    "Scheduled GitHub refresh failed projectId={} repositoryUrl={}: {}",
-                    repository.getProjectId(),
-                    repository.getRepositoryUrl(),
+                    "Scheduled GitHub refresh failed linkId={} projectId={}: {}",
+                    link.getId(),
+                    link.getProjectId(),
                     exception.getMessage() == null ? "refresh failed" : exception.getMessage()
                 );
             }

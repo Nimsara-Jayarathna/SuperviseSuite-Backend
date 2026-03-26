@@ -1,5 +1,6 @@
 package com.supervisesuite.backend.config;
 
+import com.supervisesuite.backend.projects.service.githubv2.GitHubIntegrationV2Constants;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -55,7 +56,7 @@ public class GitHubProperties {
     /**
      * Default branch fallback used when provider metadata is missing.
      */
-    private String defaultBranch = "main";
+    private String defaultBranch = GitHubIntegrationV2Constants.DEFAULT_BRANCH;
 
     /**
      * Activity recency window (hours) for deriving active vs idle status.
@@ -91,6 +92,19 @@ public class GitHubProperties {
      * Upper bound for allowed page size in GitHub-related paginated APIs.
      */
     private int maxPageSize = 100;
+
+    private int maxLinkedReposPerProject = 5;
+
+    /**
+     * Maximum linked repositories that can stay enabled at once in a project.
+     */
+    private int maxEnabledReposPerProject = 5;
+
+    private int setupStateTtlSeconds = 900;
+
+    private String setupStateSecret;
+
+    private int syncMaxCommitPages = 5;
 
     /**
      * Page-size settings for installation repositories listing.

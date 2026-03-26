@@ -10,8 +10,10 @@ import java.util.UUID;
 public interface ProjectService {
     ProjectGitHubDashboardDto getGitHubDashboard(String repositoryUrl);
     ProjectGitHubDashboardDto getGitHubDashboard(UUID projectId, String repositoryUrl);
+    ProjectGitHubDashboardDto getGitHubDashboard(UUID projectId, String repositoryUrl, UUID linkedRepositoryId);
 
     ProjectGitHubPreviewDto getGitHubPreview(UUID projectId, String repositoryUrl);
+    ProjectGitHubPreviewDto getGitHubPreview(UUID projectId, String repositoryUrl, UUID linkedRepositoryId);
 
     ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getGitHubActivityPage(
         UUID projectId,
@@ -19,10 +21,24 @@ public interface ProjectService {
         int page,
         int size
     );
+    ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getGitHubActivityPage(
+        UUID projectId,
+        String repositoryUrl,
+        UUID linkedRepositoryId,
+        int page,
+        int size
+    );
 
     ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getGitHubContributorsPage(
         UUID projectId,
         String repositoryUrl,
+        int page,
+        int size
+    );
+    ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getGitHubContributorsPage(
+        UUID projectId,
+        String repositoryUrl,
+        UUID linkedRepositoryId,
         int page,
         int size
     );

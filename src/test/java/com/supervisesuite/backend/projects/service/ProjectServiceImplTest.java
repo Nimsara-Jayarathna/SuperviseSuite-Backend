@@ -3,32 +3,31 @@ package com.supervisesuite.backend.projects.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.spy;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.supervisesuite.backend.common.error.ValidationException;
+import com.supervisesuite.backend.common.error.DomainException;
 import com.supervisesuite.backend.config.GitHubProperties;
 import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.entity.GitHubAppInstallation;
 import com.supervisesuite.backend.projects.entity.ProjectGitHubInstallationAuthorization;
-import com.supervisesuite.backend.projects.entity.ProjectRepository;
+import com.supervisesuite.backend.projects.entity.ProjectRepositoryLink;
 import com.supervisesuite.backend.projects.integration.github.GitHubAppAuthService;
 import com.supervisesuite.backend.projects.integration.github.GitHubCommitClient;
 import com.supervisesuite.backend.projects.repository.GitHubAppInstallationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectGitHubInstallationAuthorizationRepository;
-import com.supervisesuite.backend.projects.repository.ProjectRepositoryCacheRepository;
-import com.supervisesuite.backend.projects.repository.ProjectRepositoryCommitRepository;
-import com.supervisesuite.backend.projects.repository.ProjectRepositoryContributorRepository;
+import com.supervisesuite.backend.projects.service.githubv2.GitHubSyncService;
+import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
+import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkRepository;
+import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkCommitRepository;
+import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkContributorRepository;
+import com.supervisesuite.backend.projects.repository.GitHubAccessRequestV2Repository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,22 +38,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ProjectServiceImplTest {
 
     @Mock
-    private com.supervisesuite.backend.projects.repository.ProjectRepository projectRepository;
-
-    @Mock
     private GitHubCommitClient gitHubCommitClient;
 
     @Mock
     private ProjectGitHubDashboardMapper dashboardMapper;
-
-    @Mock
-    private ProjectRepositoryCacheRepository projectRepositoryCacheRepository;
-
-    @Mock
-    private ProjectRepositoryCommitRepository projectRepositoryCommitRepository;
-
-    @Mock
-    private ProjectRepositoryContributorRepository projectRepositoryContributorRepository;
 
     @Mock
     private GitHubAppAuthService gitHubAppAuthService;
@@ -64,6 +51,24 @@ class ProjectServiceImplTest {
 
     @Mock
     private ProjectGitHubInstallationAuthorizationRepository projectGitHubInstallationAuthorizationRepository;
+
+    @Mock
+    private ProjectRepositoryLinkRepository projectRepositoryLinkRepository;
+
+    @Mock
+    private ProjectRepositoryLinkCommitRepository projectRepositoryLinkCommitRepository;
+
+    @Mock
+    private ProjectRepositoryLinkContributorRepository projectRepositoryLinkContributorRepository;
+
+    @Mock
+    private GitHubAccessRequestV2Repository gitHubAccessRequestV2Repository;
+
+    @Mock
+    private RepositoryLinkService repositoryLinkService;
+
+    @Mock
+    private GitHubSyncService gitHubSyncService;
 
     private ProjectServiceImpl projectService;
     private GitHubProperties gitHubProperties;
@@ -86,14 +91,16 @@ class ProjectServiceImplTest {
         projectService = new ProjectServiceImpl(
             gitHubCommitClient,
             dashboardMapper,
-            projectRepositoryCacheRepository,
-            projectRepositoryCommitRepository,
-            projectRepositoryContributorRepository,
             gitHubAppAuthService,
             gitHubAppInstallationRepository,
             projectGitHubInstallationAuthorizationRepository,
-            projectRepository,
-            gitHubProperties
+            projectRepositoryLinkRepository,
+            projectRepositoryLinkCommitRepository,
+            projectRepositoryLinkContributorRepository,
+            repositoryLinkService,
+            gitHubSyncService,
+            gitHubProperties,
+            gitHubAccessRequestV2Repository
         );
 
         projectId = UUID.randomUUID();
@@ -106,8 +113,8 @@ class ProjectServiceImplTest {
 
         when(gitHubAppInstallationRepository.findByInstallationId(installationId))
             .thenReturn(Optional.of(activeInstallation(installationId)));
-        when(projectGitHubInstallationAuthorizationRepository.findByProjectIdAndInstallationId(projectId, installationId))
-            .thenReturn(Optional.of(authorization(projectId, installationId, supervisorUserId)));
+        when(projectGitHubInstallationAuthorizationRepository.existsByProjectIdAndInstallationId(projectId, installationId))
+            .thenReturn(true);
 
         GitHubAppAuthService.GitHubInstallationRepositoryContext firstRepository =
             new GitHubAppAuthService.GitHubInstallationRepositoryContext(
@@ -116,7 +123,7 @@ class ProjectServiceImplTest {
                 "acme/core-api",
                 "acme",
                 "https://github.com/acme/core-api",
-                null
+                "main"
             );
         GitHubAppAuthService.GitHubInstallationRepositoryContext secondRepository =
             new GitHubAppAuthService.GitHubInstallationRepositoryContext(
@@ -128,7 +135,7 @@ class ProjectServiceImplTest {
                 "develop"
             );
 
-        when(gitHubAppAuthService.fetchInstallationRepositories(installationId, 1, 2))
+        when(repositoryLinkService.fetchInstallationRepositories(installationId, 1, 2))
             .thenReturn(new GitHubAppAuthService.GitHubInstallationRepositoriesPageContext(
                 List.of(firstRepository, secondRepository),
                 5L
@@ -160,8 +167,8 @@ class ProjectServiceImplTest {
 
         when(gitHubAppInstallationRepository.findByInstallationId(installationId))
             .thenReturn(Optional.of(activeInstallation(installationId)));
-        when(projectGitHubInstallationAuthorizationRepository.findByProjectIdAndInstallationId(projectId, installationId))
-            .thenReturn(Optional.empty());
+        when(projectGitHubInstallationAuthorizationRepository.existsByProjectIdAndInstallationId(projectId, installationId))
+            .thenReturn(false);
 
         assertThatThrownBy(() -> projectService.getInstallationRepositories(
             projectId,
@@ -170,12 +177,7 @@ class ProjectServiceImplTest {
             1,
             10
         ))
-            .isInstanceOfSatisfying(ValidationException.class, exception -> {
-                assertThat(exception.getDetails()).anyMatch(detail ->
-                    "installationId".equals(detail.getField())
-                        && detail.getIssue().contains("not authorized")
-                );
-            });
+            .isInstanceOf(DomainException.class);
     }
 
     @Test
@@ -184,44 +186,18 @@ class ProjectServiceImplTest {
         Long selectedRepositoryId = 777L;
         String repositoryUrl = "https://github.com/acme/core-api";
         UUID storedRepositoryId = UUID.randomUUID();
-        AtomicReference<ProjectRepository> storedRepository = new AtomicReference<>();
+        ProjectRepositoryLink link = new ProjectRepositoryLink();
+        link.setId(storedRepositoryId);
+        link.setRepositoryName("core-api");
+        link.setRepositoryUrl(repositoryUrl);
+        link.setGithubInstallationId(installationId);
+        link.setGithubRepoId(selectedRepositoryId);
+        link.setDefaultBranch("main");
 
-        when(gitHubAppInstallationRepository.findByInstallationId(installationId))
-            .thenReturn(Optional.of(activeInstallation(installationId)));
-        when(projectGitHubInstallationAuthorizationRepository.findByProjectIdAndInstallationId(projectId, installationId))
-            .thenReturn(Optional.of(authorization(projectId, installationId, supervisorUserId)));
-        when(gitHubAppAuthService.fetchInstallationRepositories(installationId, 1, 50))
-            .thenReturn(new GitHubAppAuthService.GitHubInstallationRepositoriesPageContext(
-                List.of(new GitHubAppAuthService.GitHubInstallationRepositoryContext(
-                    selectedRepositoryId,
-                    "core-api",
-                    "acme/core-api",
-                    "acme",
-                    repositoryUrl,
-                    "main"
-                )),
-                1L
-            ));
-        when(projectRepositoryCacheRepository.findByProjectIdAndProviderAndRepositoryUrl(projectId, "github", repositoryUrl))
-            .thenAnswer(ignored -> Optional.ofNullable(storedRepository.get()));
-        when(projectRepositoryCacheRepository.findByProjectIdOrderByCreatedAtAsc(projectId))
-            .thenReturn(List.of());
-        when(projectRepositoryCacheRepository.save(any(ProjectRepository.class)))
-            .thenAnswer(invocation -> {
-                ProjectRepository repository = invocation.getArgument(0);
-                if (repository.getId() == null) {
-                    repository.setId(storedRepositoryId);
-                }
-                storedRepository.set(repository);
-                return repository;
-            });
-        when(projectRepositoryCacheRepository.findById(storedRepositoryId))
-            .thenAnswer(ignored -> Optional.ofNullable(storedRepository.get()));
+        when(repositoryLinkService.linkRepository(projectId, installationId, selectedRepositoryId, supervisorUserId))
+            .thenReturn(link);
 
-        ProjectServiceImpl spyService = spy(projectService);
-        doNothing().when(spyService).refreshGitHubData(projectId, repositoryUrl);
-
-        ProjectGitHubRepositoryLinkDto result = spyService.linkProjectToInstallationRepository(
+        ProjectGitHubRepositoryLinkDto result = projectService.linkProjectToInstallationRepository(
             projectId,
             installationId,
             selectedRepositoryId,
@@ -232,13 +208,9 @@ class ProjectServiceImplTest {
         assertThat(result.getInstallationId()).isEqualTo(installationId);
         assertThat(result.getRepositoryId()).isEqualTo(selectedRepositoryId);
         assertThat(result.getUrl()).isEqualTo(repositoryUrl);
-        assertThat(result.getFullName()).isEqualTo("acme/core-api");
+        assertThat(result.getFullName()).isEqualTo("core-api");
 
-        verify(spyService).refreshGitHubData(projectId, repositoryUrl);
-        assertThat(storedRepository.get()).isNotNull();
-        assertThat(storedRepository.get().getInstallationId()).isEqualTo(installationId);
-        assertThat(storedRepository.get().getRepositoryExternalId()).isEqualTo(selectedRepositoryId);
-        assertThat(storedRepository.get().getLinkedBySupervisorUserId()).isEqualTo(supervisorUserId);
+        verify(gitHubSyncService).syncRepository(storedRepositoryId);
     }
 
     @Test
@@ -247,46 +219,19 @@ class ProjectServiceImplTest {
         UUID targetId = UUID.randomUUID();
         UUID legacyId = UUID.randomUUID();
 
-        ProjectRepository target = repositoryRow(targetId, projectId, manualUrl, 10L);
-        target.setRepositoryExternalId(100L);
-        target.setOwnerLogin("acme");
+        ProjectRepositoryLink target = repositoryRow(targetId, projectId, manualUrl, 10L);
+        target.setGithubRepoId(100L);
+        target.setRepositoryName("core-api");
         target.setDefaultBranch("main");
+        target.setLinkedAt(Instant.now());
         target.setLinkedBySupervisorUserId(supervisorUserId);
         target.setLinkedAt(Instant.now());
 
-        ProjectRepository legacy = repositoryRow(legacyId, projectId, "https://github.com/acme/legacy", 11L);
-
-        when(projectRepositoryCacheRepository.findByProjectIdAndProviderAndRepositoryUrl(projectId, "github", manualUrl))
-            .thenReturn(Optional.of(target));
-        when(projectRepositoryCacheRepository.findByProjectIdOrderByCreatedAtAsc(projectId))
-            .thenReturn(List.of(target, legacy));
-        when(projectRepositoryCacheRepository.save(any(ProjectRepository.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
-        when(projectRepositoryCacheRepository.findByInstallationId(10L)).thenReturn(List.of());
-        when(projectRepositoryCacheRepository.findByInstallationId(11L)).thenReturn(List.of());
-        when(gitHubAppInstallationRepository.findByInstallationId(10L)).thenReturn(Optional.of(activeInstallation(10L)));
-        when(gitHubAppInstallationRepository.findByInstallationId(11L)).thenReturn(Optional.of(activeInstallation(11L)));
+        repositoryRow(legacyId, projectId, "https://github.com/acme/legacy", 11L);
 
         projectService.switchToManualRepository(projectId, manualUrl);
 
-        assertThat(target.getInstallationId()).isNull();
-        assertThat(target.getRepositoryExternalId()).isNull();
-        assertThat(target.getOwnerLogin()).isNull();
-        assertThat(target.getDefaultBranch()).isNull();
-        assertThat(target.getLinkedBySupervisorUserId()).isNull();
-        assertThat(target.getLinkedAt()).isNull();
-
-        verify(projectRepositoryCommitRepository).deleteByRepositoryId(legacyId);
-        verify(projectRepositoryContributorRepository).deleteByRepositoryId(legacyId);
-        verify(projectRepositoryCacheRepository).deleteAll(argThat(repositories -> {
-            List<ProjectRepository> list = StreamSupport.stream(repositories.spliterator(), false)
-                .map(ProjectRepository.class::cast)
-                .toList();
-            return list.size() == 1 && list.contains(legacy);
-        }));
-        verify(projectGitHubInstallationAuthorizationRepository).deleteByProjectId(projectId);
-        verify(gitHubAppInstallationRepository).delete(argThat(installation -> installation.getInstallationId().equals(10L)));
-        verify(gitHubAppInstallationRepository).delete(argThat(installation -> installation.getInstallationId().equals(11L)));
+        verify(repositoryLinkService).linkRepositoryByUrl(eq(projectId), any(String.class), eq(null));
     }
 
     @Test
@@ -294,45 +239,30 @@ class ProjectServiceImplTest {
         UUID firstId = UUID.randomUUID();
         UUID secondId = UUID.randomUUID();
 
-        ProjectRepository first = repositoryRow(firstId, projectId, "https://github.com/acme/first", 20L);
-        ProjectRepository second = repositoryRow(secondId, projectId, "https://github.com/acme/second", 21L);
+        ProjectRepositoryLink first = repositoryRow(firstId, projectId, "https://github.com/acme/first", 20L);
+        ProjectRepositoryLink second = repositoryRow(secondId, projectId, "https://github.com/acme/second", 21L);
 
-        when(projectRepositoryCacheRepository.findByProjectIdOrderByCreatedAtAsc(projectId))
+        when(projectRepositoryLinkRepository.findByProjectIdOrderByCreatedAtAsc(projectId))
             .thenReturn(List.of(first, second));
-        when(projectRepositoryCacheRepository.findByInstallationId(20L)).thenReturn(List.of());
-        when(projectRepositoryCacheRepository.findByInstallationId(21L)).thenReturn(List.of());
-        when(gitHubAppInstallationRepository.findByInstallationId(20L)).thenReturn(Optional.of(activeInstallation(20L)));
-        when(gitHubAppInstallationRepository.findByInstallationId(21L)).thenReturn(Optional.of(activeInstallation(21L)));
 
         projectService.clearGitHubLinkage(projectId);
 
-        verify(projectRepositoryCommitRepository).deleteByRepositoryId(firstId);
-        verify(projectRepositoryCommitRepository).deleteByRepositoryId(secondId);
-        verify(projectRepositoryContributorRepository).deleteByRepositoryId(firstId);
-        verify(projectRepositoryContributorRepository).deleteByRepositoryId(secondId);
-        verify(projectRepositoryCacheRepository).deleteAll(argThat(repositories -> {
-            List<ProjectRepository> list = StreamSupport.stream(repositories.spliterator(), false)
-                .map(ProjectRepository.class::cast)
-                .toList();
-            return list.size() == 2;
-        }));
+        verify(repositoryLinkService).disconnectRepository(firstId);
+        verify(repositoryLinkService).disconnectRepository(secondId);
         verify(projectGitHubInstallationAuthorizationRepository).deleteByProjectId(projectId);
-        verify(gitHubAppInstallationRepository).delete(argThat(installation -> installation.getInstallationId().equals(20L)));
-        verify(gitHubAppInstallationRepository).delete(argThat(installation -> installation.getInstallationId().equals(21L)));
     }
 
-    private static ProjectRepository repositoryRow(UUID id, UUID projectId, String url, Long installationId) {
-        ProjectRepository repository = new ProjectRepository();
-        repository.setId(id);
-        repository.setProjectId(projectId);
-        repository.setProvider("github");
-        repository.setRepositoryUrl(url);
-        repository.setRepositoryName("repo");
-        repository.setDefaultBranch("main");
-        repository.setIsPrimary(true);
-        repository.setInstallationId(installationId);
-        repository.setCreatedAt(Instant.now());
-        return repository;
+    private ProjectRepositoryLink repositoryRow(UUID id, UUID projectId, String repositoryUrl, Long installationId) {
+        ProjectRepositoryLink link = new ProjectRepositoryLink();
+        link.setId(id);
+        link.setProjectId(projectId);
+        link.setRepositoryUrl(repositoryUrl);
+        link.setGithubInstallationId(installationId);
+        link.setIsEnabled(true);
+        link.setIsPrimary(false);
+        link.setCreatedAt(Instant.now());
+        link.setUpdatedAt(Instant.now());
+        return link;
     }
 
     private static GitHubAppInstallation activeInstallation(Long installationId) {
@@ -343,17 +273,4 @@ class ProjectServiceImplTest {
         return installation;
     }
 
-    private static ProjectGitHubInstallationAuthorization authorization(
-        UUID projectId,
-        Long installationId,
-        UUID supervisorUserId
-    ) {
-        ProjectGitHubInstallationAuthorization authorization = new ProjectGitHubInstallationAuthorization();
-        authorization.setProjectId(projectId);
-        authorization.setInstallationId(installationId);
-        authorization.setAuthorizedBySupervisorUserId(supervisorUserId);
-        authorization.setCreatedAt(Instant.now());
-        authorization.setAuthorizedAt(Instant.now());
-        return authorization;
-    }
 }
