@@ -1,151 +1,87 @@
-# Schema Reference
+# Schema Reference (Current Through V15)
 
-The schema is built by three Flyway migrations applied in order:
+This document reflects the effective schema after applying migrations `V1` to `V15`.
 
-- `V1__init_schema.sql` — core tables
-- `V2__auth_schema.sql` — auth fields and refresh tokens
-- `V3__project_domain_expansion.sql` — project domain expansion and milestones
-
----
-
-## V1 Tables
+## Core Tables
 
 ### `users`
 
-- `id` UUID primary key, `DEFAULT gen_random_uuid()`
-- `created_at` timestamptz, **not null**
-- `updated_at` timestamptz
-- `email` varchar(255), not null, unique
-- `role` varchar(64), not null — CHECK: `IN ('SUPERVISOR', 'STUDENT')`
+- Identity and role records for supervisors/students.
+- Includes auth/profile fields used by registration/login and role-based access.
 
 ### `projects`
 
-- `id` UUID primary key, `DEFAULT gen_random_uuid()`
-- `created_at` timestamptz, **not null**
-- `updated_at` timestamptz
-- `name` varchar(255), **not null**
-- `description` text
-- `status` varchar(64), **not null**
-- `supervisor_id` UUID, FK → `users.id`
-- `deleted_at` timestamptz (soft delete — null means active)
+- Supervisor-owned project record.
+- Includes lifecycle/progress/reporting fields (title, summary, batch/semester, lifecycle status, progress, health/milestone metadata).
+- Includes `leader_user_id` FK for project leader assignment.
 
 ### `project_members`
 
-- `id` UUID primary key, `DEFAULT gen_random_uuid()`
-- `created_at` timestamptz, **not null**
-- `updated_at` timestamptz
-- `user_id` UUID, not null, FK → `users.id` (delete cascade)
-- `project_id` UUID, not null, FK → `projects.id` (delete cascade)
-- unique constraint: `(user_id, project_id)`
+- Project membership rows (`user_id`, `project_id`, `member_role`).
+- Unique per `(user_id, project_id)`.
 
-## V1 Indexes
+### `project_milestones`
 
-- `idx_project_members_user_id` on `project_members(user_id)`
-- `idx_project_members_project_id` on `project_members(project_id)`
-- `idx_projects_supervisor_id` on `projects(supervisor_id)`
+- Ordered milestone list per project (`sequence_no`, status, due date, audit timestamps).
 
----
+### `refresh_tokens`
 
-## V2 Additions
+- Hashed refresh-token persistence for cookie-based auth sessions.
 
-### `users` (extended)
+## GitHub Integration (Current V2 Model)
 
-- `password_hash` varchar(255), nullable — populated on registration
-- `first_name` varchar(100), nullable
-- `last_name` varchar(100), nullable
-- `registration_number` varchar(20), nullable, unique — normalized to uppercase on registration
+### `github_app_installations`
 
-### `refresh_tokens` (new table)
+- Tracks GitHub App installations and account metadata.
 
-- `id` UUID primary key, `DEFAULT gen_random_uuid()`
-- `user_id` UUID, not null, FK → `users.id` (delete cascade)
-- `token_hash` varchar(255), not null, unique
-- `expires_at` timestamptz, not null
-- `revoked_at` timestamptz, nullable — null means still active
-- `created_at` timestamptz, not null
+### `github_access_sources`
 
----
+- Project-scoped source of GitHub access (installation/public/manual lineage).
 
-## V3 Changes
+### `github_repositories`
 
-### `projects` (expanded)
+- Repositories discoverable under an access source.
 
-- existing columns retained:
-  - `id`, `created_at`, `updated_at`, `supervisor_id`, `deleted_at`
-- renamed columns:
-  - `name` -> `title`
-  - `description` -> `summary`
-  - `status` -> `lifecycle_status`
-- new columns:
-  - `batch` varchar(32)
-  - `semester` varchar(64)
-  - `progress_percent` integer
-  - `health_note` text
-  - `milestone_date` date
-  - `last_activity_at` timestamptz
-  - `communication_url` text
-  - `repository_url` text
-  - `jira_project_key` varchar(32)
-  - `jira_board_url` text
-- constraints:
-  - `lifecycle_status` CHECK: `IN ('PLANNING', 'ACTIVE', 'AT_RISK', 'BEHIND', 'COMPLETED')`
-  - `progress_percent` CHECK: `0..100` when present
+### `project_repository_links`
 
-### `project_members` (expanded)
+- Explicit project-to-repository linkage table.
+- Contains linkage/sync status plus denormalized metadata:
+  - `repository_url`
+  - `repository_name`
+  - `default_branch`
+  - `github_installation_id`
+  - `access_type`
+  - `is_enabled` / `is_primary`
 
-- existing columns retained:
-  - `id`, `created_at`, `updated_at`, `user_id`, `project_id`
-- new column:
-  - `member_role` varchar(64), not null — CHECK: `IN ('SUPERVISOR', 'STUDENT')`
+### `project_repository_link_commits`
 
-### `project_milestones` (new table)
+- Commit snapshot cache per project repository link.
 
-- `id` UUID primary key, `DEFAULT gen_random_uuid()`
-- `project_id` UUID, not null, FK → `projects.id` (delete cascade)
-- `title` varchar(255), not null
-- `description` text
-- `due_date` date, not null
-- `status` varchar(64), not null
-- `sequence_no` integer, not null
-- `created_by` UUID, FK → `users.id`
-- `created_at` timestamptz, not null
-- `updated_at` timestamptz
-- constraints:
-  - `status` CHECK: `IN ('PLANNED', 'IN_PROGRESS', 'COMPLETED', 'MISSED', 'CANCELLED')`
-  - `sequence_no > 0`
-  - unique per project order: `(project_id, sequence_no)`
+### `project_repository_link_contributors`
 
----
+- Contributor summary snapshot per project repository link.
 
-## Current Backend Coverage
+### `github_setup_states`
 
-The database schema is ahead of the currently implemented backend read/write APIs.
+- Secure one-time setup state tracking (hashed JTI, expiry, used markers).
 
-### Implemented in the API today
+### `github_access_requests_v2`
 
-- Auth:
-  - register student
-  - login
-- Supervisor:
-  - dashboard summary read model
-  - project list summaries
-  - project detail read model
-  - student search by email
-  - project creation with first milestone
-  - project core-field updates
-  - project lifecycle status quick update
-  - add students to existing projects (add-only scope)
-  - add milestone
-  - update milestone
-- Student:
-  - assigned project list summaries
-  - assigned project detail read model
+- Project-scoped request-access tokens and callback-result tracking:
+  - request token hash + expiry/usage
+  - result token hash + expiry + acknowledgement timestamp
+  - linked installation id (when resolved)
 
-### Present in schema but not yet exposed as full workflow APIs
+## Legacy GitHub V1 Artifacts (Decommissioned)
 
-- meeting management
-- action items
-- file handling
-- integration management (GitHub, Jira, communication links as first-class workflows)
+The following were removed by `V12__decommission_v1_github_integration.sql` and are not part of the current schema:
 
-This means some tables/columns already exist for future work, but the frontend should only rely on currently implemented API contracts.
+- `projects.repository_url`
+- `project_repositories`
+- `project_repository_commits`
+- `project_repository_contributors`
+
+## Notes
+
+- For exact DDL, use migration files in `src/main/resources/db/migration`.
+- For chronological change history, use `docs/database/migrations.md`.
