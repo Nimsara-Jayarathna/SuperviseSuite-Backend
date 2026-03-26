@@ -104,7 +104,13 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional(readOnly = true)
     public ProjectGitHubDashboardDto getGitHubDashboard(UUID projectId, String repositoryUrl) {
-        ProjectGitHubPreviewDto preview = getGitHubPreview(projectId, repositoryUrl);
+        return getGitHubDashboard(projectId, repositoryUrl, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubDashboardDto getGitHubDashboard(UUID projectId, String repositoryUrl, UUID linkedRepositoryId) {
+        ProjectGitHubPreviewDto preview = getGitHubPreview(projectId, repositoryUrl, linkedRepositoryId);
         if (preview == null || !preview.isRepositoryLinked() || preview.getRepositories() == null || preview.getRepositories().isEmpty()) {
             return dashboardMapper.noRepository();
         }
@@ -151,20 +157,14 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional(readOnly = true)
     public ProjectGitHubPreviewDto getGitHubPreview(UUID projectId, String repositoryUrl) {
+        return getGitHubPreview(projectId, repositoryUrl, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubPreviewDto getGitHubPreview(UUID projectId, String repositoryUrl, UUID linkedRepositoryId) {
         ProjectGitHubAccessMetadata accessMetadata = resolveProjectGitHubAccessMetadata(projectId);
-        String normalizedUrl = normalizeRepositoryUrl(repositoryUrl);
-
-        ProjectRepositoryLink link = null;
-        if (normalizedUrl != null) {
-            link = projectRepositoryLinkRepository.findByProjectIdAndRepositoryUrl(projectId, normalizedUrl)
-                .filter(l -> Boolean.TRUE.equals(l.getIsEnabled()))
-                .orElse(null);
-        }
-
-        if (link == null) {
-            link = projectRepositoryLinkRepository.findByProjectIdAndIsPrimaryTrueAndIsEnabledTrue(projectId)
-                .orElse(null);
-        }
+        ProjectRepositoryLink link = resolveLink(projectId, repositoryUrl, linkedRepositoryId, true);
 
         ProjectGitHubPreviewDto preview;
         if (link == null) {
@@ -253,7 +253,19 @@ public class ProjectServiceImpl implements ProjectService {
         int page,
         int size
     ) {
-        ProjectRepositoryLink link = resolveLink(projectId, repositoryUrl);
+        return getGitHubActivityPage(projectId, repositoryUrl, null, page, size);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getGitHubActivityPage(
+        UUID projectId,
+        String repositoryUrl,
+        UUID linkedRepositoryId,
+        int page,
+        int size
+    ) {
+        ProjectRepositoryLink link = resolveLink(projectId, repositoryUrl, linkedRepositoryId, false);
         if (link == null) {
             int normalizedPage = normalizePage(page);
             int normalizedSize = normalizePageSize(size);
@@ -292,7 +304,19 @@ public class ProjectServiceImpl implements ProjectService {
         int page,
         int size
     ) {
-        ProjectRepositoryLink link = resolveLink(projectId, repositoryUrl);
+        return getGitHubContributorsPage(projectId, repositoryUrl, null, page, size);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getGitHubContributorsPage(
+        UUID projectId,
+        String repositoryUrl,
+        UUID linkedRepositoryId,
+        int page,
+        int size
+    ) {
+        ProjectRepositoryLink link = resolveLink(projectId, repositoryUrl, linkedRepositoryId, false);
         if (link == null) {
             int normalizedPage = normalizePage(page);
             int normalizedSize = normalizePageSize(size);
@@ -328,7 +352,7 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional(noRollbackFor = GitHubInstallationDisconnectedException.class)
     public void refreshGitHubData(UUID projectId, String repositoryUrl) {
-        ProjectRepositoryLink link = resolveLink(projectId, repositoryUrl);
+        ProjectRepositoryLink link = resolveLink(projectId, repositoryUrl, null, false);
         if (link == null) {
             throw new ValidationException("repositoryUrl", "No repository linked for this project.");
         }
@@ -470,10 +494,34 @@ public class ProjectServiceImpl implements ProjectService {
         projectGitHubInstallationAuthorizationRepository.deleteByProjectId(projectId);
     }
 
-    private ProjectRepositoryLink resolveLink(UUID projectId, String repositoryUrl) {
+    private ProjectRepositoryLink resolveLink(
+        UUID projectId,
+        String repositoryUrl,
+        UUID linkedRepositoryId,
+        boolean enabledOnly
+    ) {
+        if (linkedRepositoryId != null) {
+            return projectRepositoryLinkRepository.findByIdAndProjectId(linkedRepositoryId, projectId)
+                .filter(link -> !enabledOnly || Boolean.TRUE.equals(link.getIsEnabled()))
+                .orElse(null);
+        }
         String normalizedUrl = normalizeRepositoryUrl(repositoryUrl);
         if (normalizedUrl != null) {
-            return projectRepositoryLinkRepository.findByProjectIdAndRepositoryUrl(projectId, normalizedUrl).orElse(null);
+            return projectRepositoryLinkRepository.findByProjectIdAndRepositoryUrl(projectId, normalizedUrl)
+                .filter(link -> !enabledOnly || Boolean.TRUE.equals(link.getIsEnabled()))
+                .orElse(null);
+        }
+        if (enabledOnly) {
+            return projectRepositoryLinkRepository.findByProjectIdAndIsPrimaryTrueAndIsEnabledTrue(projectId)
+                .orElseGet(
+                    () -> projectRepositoryLinkRepository.findByProjectIdAndIsPrimaryTrue(projectId)
+                        .filter(link -> Boolean.TRUE.equals(link.getIsEnabled()))
+                        .orElseGet(
+                            () -> projectRepositoryLinkRepository.findTopByProjectIdOrderByCreatedAtAsc(projectId)
+                                .filter(link -> Boolean.TRUE.equals(link.getIsEnabled()))
+                                .orElse(null)
+                        )
+                );
         }
         return projectRepositoryLinkRepository.findByProjectIdAndIsPrimaryTrue(projectId)
             .orElseGet(() -> projectRepositoryLinkRepository.findTopByProjectIdOrderByCreatedAtAsc(projectId).orElse(null));

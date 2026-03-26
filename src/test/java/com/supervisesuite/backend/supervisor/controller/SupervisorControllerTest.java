@@ -75,13 +75,14 @@ class SupervisorControllerTest {
         data.setRepositoryLinked(false);
         ResponseEntity<ApiResponse<ProjectGitHubDashboardDto>> expected = ResponseEntity.ok(new ApiResponse<>());
 
-        when(supervisorService.getProjectGitHubDashboard("supervisor-id", "project-1")).thenReturn(data);
+        when(supervisorService.getProjectGitHubDashboard("supervisor-id", "project-1", null)).thenReturn(data);
         when(apiResponseFactory.ok("No repository connected.", data, request)).thenReturn(expected);
 
         ResponseEntity<ApiResponse<ProjectGitHubDashboardDto>> response = controller.getProjectGitHubDashboard(
             authentication,
             request,
-            "project-1"
+            "project-1",
+            null
         );
 
         assertThat(response).isSameAs(expected);
@@ -94,14 +95,14 @@ class SupervisorControllerTest {
         ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit>>> expected =
             ResponseEntity.ok(new ApiResponse<>());
 
-        when(supervisorService.getProjectGitHubActivityPage("supervisor-id", "project-1", 2, 0)).thenReturn(data);
+        when(supervisorService.getProjectGitHubActivityPage("supervisor-id", "project-1", null, 2, 0)).thenReturn(data);
         when(apiResponseFactory.ok("GitHub activity page loaded.", data, request)).thenReturn(expected);
 
         ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit>>> response =
-            controller.getProjectGitHubActivity(authentication, request, "project-1", 2, null);
+            controller.getProjectGitHubActivity(authentication, request, "project-1", null, 2, null);
 
         assertThat(response).isSameAs(expected);
-        verify(supervisorService).getProjectGitHubActivityPage("supervisor-id", "project-1", 2, 0);
+        verify(supervisorService).getProjectGitHubActivityPage("supervisor-id", "project-1", null, 2, 0);
     }
 
     @Test

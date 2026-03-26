@@ -32,11 +32,16 @@ public interface SupervisorService {
 
     SupervisorProjectDetailDto getProjectById(String authenticatedUserId, String projectId);
 
-    ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedUserId, String projectId);
+    ProjectGitHubDashboardDto getProjectGitHubDashboard(
+        String authenticatedUserId,
+        String projectId,
+        String linkedRepositoryId
+    );
 
     ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getProjectGitHubActivityPage(
         String authenticatedUserId,
         String projectId,
+        String linkedRepositoryId,
         int page,
         int size
     );
@@ -44,6 +49,7 @@ public interface SupervisorService {
     ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getProjectGitHubContributorsPage(
         String authenticatedUserId,
         String projectId,
+        String linkedRepositoryId,
         int page,
         int size
     );

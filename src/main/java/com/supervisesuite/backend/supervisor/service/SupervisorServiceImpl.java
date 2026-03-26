@@ -483,18 +483,18 @@ class SupervisorServiceImpl implements SupervisorService {
 
     @Override
     @Transactional(readOnly = true)
-    public ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedUserId, String projectId) {
+    public ProjectGitHubDashboardDto getProjectGitHubDashboard(
+            String authenticatedUserId,
+            String projectId,
+            String linkedRepositoryId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
         Project project = projectRepository
                 .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
                 .orElseThrow(EntityNotFoundException::new);
-
-        ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
-        String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
-
-        return projectService.getGitHubDashboard(project.getId(), effectiveUrl);
+        UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
+        return projectService.getGitHubDashboard(project.getId(), null, parsedLinkedRepositoryId);
     }
 
     @Override
@@ -502,6 +502,7 @@ class SupervisorServiceImpl implements SupervisorService {
     public ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getProjectGitHubActivityPage(
             String authenticatedUserId,
             String projectId,
+            String linkedRepositoryId,
             int page,
             int size) {
         User supervisor = resolveSupervisor(authenticatedUserId);
@@ -510,11 +511,8 @@ class SupervisorServiceImpl implements SupervisorService {
         Project project = projectRepository
                 .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
                 .orElseThrow(EntityNotFoundException::new);
-
-        ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
-        String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
-
-        return projectService.getGitHubActivityPage(project.getId(), effectiveUrl, page, size);
+        UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
+        return projectService.getGitHubActivityPage(project.getId(), null, parsedLinkedRepositoryId, page, size);
     }
 
     @Override
@@ -522,6 +520,7 @@ class SupervisorServiceImpl implements SupervisorService {
     public ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getProjectGitHubContributorsPage(
             String authenticatedUserId,
             String projectId,
+            String linkedRepositoryId,
             int page,
             int size) {
         User supervisor = resolveSupervisor(authenticatedUserId);
@@ -530,11 +529,8 @@ class SupervisorServiceImpl implements SupervisorService {
         Project project = projectRepository
                 .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
                 .orElseThrow(EntityNotFoundException::new);
-
-        ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
-        String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
-
-        return projectService.getGitHubContributorsPage(project.getId(), effectiveUrl, page, size);
+        UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
+        return projectService.getGitHubContributorsPage(project.getId(), null, parsedLinkedRepositoryId, page, size);
     }
 
     @Override
@@ -943,6 +939,17 @@ class SupervisorServiceImpl implements SupervisorService {
             return UUID.fromString(projectId);
         } catch (IllegalArgumentException exception) {
             throw new EntityNotFoundException();
+        }
+    }
+
+    private UUID parseLinkedRepositoryId(String linkedRepositoryId) {
+        if (linkedRepositoryId == null || linkedRepositoryId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(linkedRepositoryId.trim());
+        } catch (IllegalArgumentException exception) {
+            throw new ValidationException("linkedRepositoryId", "linkedRepositoryId must be a valid UUID.");
         }
     }
 

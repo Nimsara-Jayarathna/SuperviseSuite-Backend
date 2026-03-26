@@ -1,6 +1,7 @@
 package com.supervisesuite.backend.student.dto;
 
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -18,6 +19,7 @@ public class StudentProjectDetailDto {
     private Integer progressPercent;
     private String healthNote;
     private ProjectGitHubPreviewDto github;
+    private ProjectGitHubRepositoriesDto githubRepositories;
     private Leader leader;
     private List<Member> members;
     private List<Milestone> milestones;
@@ -37,6 +39,7 @@ public class StudentProjectDetailDto {
         Integer progressPercent,
         String healthNote,
         ProjectGitHubPreviewDto github,
+        ProjectGitHubRepositoriesDto githubRepositories,
         Leader leader,
         List<Member> members,
         List<Milestone> milestones
@@ -52,6 +55,7 @@ public class StudentProjectDetailDto {
         this.progressPercent = progressPercent;
         this.healthNote = healthNote;
         this.github = github;
+        this.githubRepositories = githubRepositories;
         this.leader = leader;
         this.members = members;
         this.milestones = milestones;
@@ -145,6 +149,14 @@ public class StudentProjectDetailDto {
 
     public void setGithub(ProjectGitHubPreviewDto github) {
         this.github = github;
+    }
+
+    public ProjectGitHubRepositoriesDto getGithubRepositories() {
+        return githubRepositories;
+    }
+
+    public void setGithubRepositories(ProjectGitHubRepositoriesDto githubRepositories) {
+        this.githubRepositories = githubRepositories;
     }
 
     public Leader getLeader() {

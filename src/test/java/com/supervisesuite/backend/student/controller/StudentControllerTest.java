@@ -83,12 +83,13 @@ class StudentControllerTest {
         data.setRepositoryLinked(true);
         ResponseEntity<ApiResponse<ProjectGitHubDashboardDto>> expected = ResponseEntity.ok(new ApiResponse<>());
 
-        when(studentService.getProjectGitHubDashboard("student-id", "project-1")).thenReturn(data);
+        when(studentService.getProjectGitHubDashboard("student-id", "project-1", null)).thenReturn(data);
         when(apiResponseFactory.ok("GitHub dashboard loaded.", data, request)).thenReturn(expected);
 
         ResponseEntity<ApiResponse<ProjectGitHubDashboardDto>> response = controller.getProjectGitHubDashboard(
             authentication,
             "project-1",
+            null,
             request
         );
 
@@ -103,14 +104,14 @@ class StudentControllerTest {
         ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit>>> expected =
             ResponseEntity.ok(new ApiResponse<>());
 
-        when(studentService.getProjectGitHubActivityPage("student-id", "project-1", 2, 0)).thenReturn(data);
+        when(studentService.getProjectGitHubActivityPage("student-id", "project-1", null, 2, 0)).thenReturn(data);
         when(apiResponseFactory.ok("GitHub activity page loaded.", data, request)).thenReturn(expected);
 
         ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit>>> response =
-            controller.getProjectGitHubActivity(authentication, "project-1", 2, null, request);
+            controller.getProjectGitHubActivity(authentication, "project-1", null, 2, null, request);
 
         assertThat(response).isSameAs(expected);
-        verify(studentService).getProjectGitHubActivityPage("student-id", "project-1", 2, 0);
+        verify(studentService).getProjectGitHubActivityPage("student-id", "project-1", null, 2, 0);
     }
 
     @Test
@@ -120,13 +121,13 @@ class StudentControllerTest {
         ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor>>> expected =
             ResponseEntity.ok(new ApiResponse<>());
 
-        when(studentService.getProjectGitHubContributorsPage("student-id", "project-1", 3, 25)).thenReturn(data);
+        when(studentService.getProjectGitHubContributorsPage("student-id", "project-1", null, 3, 25)).thenReturn(data);
         when(apiResponseFactory.ok("GitHub contributors page loaded.", data, request)).thenReturn(expected);
 
         ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor>>> response =
-            controller.getProjectGitHubContributors(authentication, "project-1", 3, 25, request);
+            controller.getProjectGitHubContributors(authentication, "project-1", null, 3, 25, request);
 
         assertThat(response).isSameAs(expected);
-        verify(studentService).getProjectGitHubContributorsPage("student-id", "project-1", 3, 25);
+        verify(studentService).getProjectGitHubContributorsPage("student-id", "project-1", null, 3, 25);
     }
 }

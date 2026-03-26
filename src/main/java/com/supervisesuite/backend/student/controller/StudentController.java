@@ -54,11 +54,13 @@ public class StudentController {
     public ResponseEntity<ApiResponse<ProjectGitHubDashboardDto>> getProjectGitHubDashboard(
         Authentication authentication,
         @PathVariable String projectId,
+        @RequestParam(name = "linkedRepositoryId", required = false) String linkedRepositoryId,
         HttpServletRequest request
     ) {
         ProjectGitHubDashboardDto data = studentService.getProjectGitHubDashboard(
             authentication.getName(),
-            projectId
+            projectId,
+            linkedRepositoryId
         );
         String message = data.isRepositoryLinked() ? "GitHub dashboard loaded." : "No repository connected.";
         return apiResponseFactory.ok(message, data, request);
@@ -68,6 +70,7 @@ public class StudentController {
     public ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit>>> getProjectGitHubActivity(
         Authentication authentication,
         @PathVariable String projectId,
+        @RequestParam(name = "linkedRepositoryId", required = false) String linkedRepositoryId,
         @RequestParam(name = "page", defaultValue = "1") int page,
         @RequestParam(name = "size", required = false) Integer size,
         HttpServletRequest request
@@ -75,6 +78,7 @@ public class StudentController {
         ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> data = studentService.getProjectGitHubActivityPage(
             authentication.getName(),
             projectId,
+            linkedRepositoryId,
             page,
             size == null ? 0 : size
         );
@@ -85,6 +89,7 @@ public class StudentController {
     public ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor>>> getProjectGitHubContributors(
         Authentication authentication,
         @PathVariable String projectId,
+        @RequestParam(name = "linkedRepositoryId", required = false) String linkedRepositoryId,
         @RequestParam(name = "page", defaultValue = "1") int page,
         @RequestParam(name = "size", required = false) Integer size,
         HttpServletRequest request
@@ -92,6 +97,7 @@ public class StudentController {
         ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> data = studentService.getProjectGitHubContributorsPage(
             authentication.getName(),
             projectId,
+            linkedRepositoryId,
             page,
             size == null ? 0 : size
         );

@@ -141,13 +141,13 @@ class StudentServiceImplTest {
         when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(studentId, projectId, Roles.STUDENT))
             .thenReturn(true);
         when(projectRepository.findByIdAndDeletedAtIsNull(projectId)).thenReturn(Optional.of(project));
-        when(projectService.getGitHubActivityPage(projectId, null, 2, 25)).thenReturn(page);
+        when(projectService.getGitHubActivityPage(projectId, null, null, 2, 25)).thenReturn(page);
 
         ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> result =
-            studentService.getProjectGitHubActivityPage(studentId.toString(), projectId.toString(), 2, 25);
+            studentService.getProjectGitHubActivityPage(studentId.toString(), projectId.toString(), null, 2, 25);
 
         assertThat(result).isSameAs(page);
-        verify(projectService).getGitHubActivityPage(projectId, null, 2, 25);
+        verify(projectService).getGitHubActivityPage(projectId, null, null, 2, 25);
     }
 
     @Test

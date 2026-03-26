@@ -11,11 +11,16 @@ public interface StudentService {
 
     StudentProjectDetailDto getProjectById(String authenticatedUserId, String projectId);
 
-    ProjectGitHubDashboardDto getProjectGitHubDashboard(String authenticatedUserId, String projectId);
+    ProjectGitHubDashboardDto getProjectGitHubDashboard(
+        String authenticatedUserId,
+        String projectId,
+        String linkedRepositoryId
+    );
 
     ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getProjectGitHubActivityPage(
         String authenticatedUserId,
         String projectId,
+        String linkedRepositoryId,
         int page,
         int size
     );
@@ -23,6 +28,7 @@ public interface StudentService {
     ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getProjectGitHubContributorsPage(
         String authenticatedUserId,
         String projectId,
+        String linkedRepositoryId,
         int page,
         int size
     );

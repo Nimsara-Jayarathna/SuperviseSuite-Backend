@@ -101,11 +101,13 @@ public class SupervisorController {
     public ResponseEntity<ApiResponse<ProjectGitHubDashboardDto>> getProjectGitHubDashboard(
         Authentication authentication,
         HttpServletRequest request,
-        @PathVariable String projectId
+        @PathVariable String projectId,
+        @RequestParam(name = "linkedRepositoryId", required = false) String linkedRepositoryId
     ) {
         ProjectGitHubDashboardDto data = supervisorService.getProjectGitHubDashboard(
             authentication.getName(),
-            projectId
+            projectId,
+            linkedRepositoryId
         );
         String message = data.isRepositoryLinked() ? "GitHub dashboard loaded." : "No repository connected.";
         return apiResponseFactory.ok(message, data, request);
@@ -116,12 +118,14 @@ public class SupervisorController {
         Authentication authentication,
         HttpServletRequest request,
         @PathVariable String projectId,
+        @RequestParam(name = "linkedRepositoryId", required = false) String linkedRepositoryId,
         @RequestParam(name = "page", defaultValue = "1") int page,
         @RequestParam(name = "size", required = false) Integer size
     ) {
         ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> data = supervisorService.getProjectGitHubActivityPage(
             authentication.getName(),
             projectId,
+            linkedRepositoryId,
             page,
             size == null ? 0 : size
         );
@@ -133,12 +137,14 @@ public class SupervisorController {
         Authentication authentication,
         HttpServletRequest request,
         @PathVariable String projectId,
+        @RequestParam(name = "linkedRepositoryId", required = false) String linkedRepositoryId,
         @RequestParam(name = "page", defaultValue = "1") int page,
         @RequestParam(name = "size", required = false) Integer size
     ) {
         ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> data = supervisorService.getProjectGitHubContributorsPage(
             authentication.getName(),
             projectId,
+            linkedRepositoryId,
             page,
             size == null ? 0 : size
         );
