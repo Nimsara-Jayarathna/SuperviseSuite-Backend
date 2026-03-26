@@ -281,7 +281,7 @@ class SupervisorServiceImpl implements SupervisorService {
         if (normalizedRepositoryUrl == null) {
             repositoryLinkService.disconnectAllLinks(savedProject.getId());
         } else {
-            repositoryLinkService.linkManualRepository(savedProject.getId(), normalizedRepositoryUrl);
+            repositoryLinkService.linkManualRepository(savedProject.getId(), normalizedRepositoryUrl, supervisor.getId());
         }
         return toProjectDetail(savedProject);
     }

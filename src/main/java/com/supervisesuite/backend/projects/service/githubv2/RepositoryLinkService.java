@@ -22,6 +22,8 @@ import com.supervisesuite.backend.projects.repository.ProjectGitHubInstallationA
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkCommitRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkContributorRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkRepository;
+import java.nio.charset.StandardCharsets;
+import java.net.URI;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -816,14 +818,50 @@ public class RepositoryLinkService {
     }
 
     @Transactional
-    public void linkManualRepository(UUID projectId, String repositoryUrl) {
+    public void linkManualRepository(UUID projectId, String repositoryUrl, UUID supervisorUserId) {
         disconnectAllLinks(projectId);
-        
+        String[] repositoryParts = extractRepositoryParts(repositoryUrl);
+        String ownerLogin = repositoryParts[0];
+        String repositoryName = repositoryParts[1];
+        String fullRepositoryName = ownerLogin + "/" + repositoryName;
+
+        GitHubAccessSource source = accessSourceRepository
+            .findByProjectIdAndAccessTypeAndIsActiveTrue(projectId, GitHubIntegrationV2Constants.ACCESS_TYPE_PUBLIC_URL)
+            .orElseGet(() -> {
+                GitHubAccessSource created = new GitHubAccessSource();
+                created.setProjectId(projectId);
+                created.setOwnerLogin(ownerLogin);
+                created.setOwnerType(GitHubIntegrationV2Constants.OWNER_TYPE_USER);
+                created.setAccessType(GitHubIntegrationV2Constants.ACCESS_TYPE_PUBLIC_URL);
+                created.setCreatedByUserId(supervisorUserId);
+                created.setIsActive(true);
+                created.setCreatedAt(Instant.now());
+                created.setUpdatedAt(Instant.now());
+                return accessSourceRepository.save(created);
+            });
+
+        long syntheticRepoId = toSyntheticRepoId(repositoryUrl);
+        GitHubRepositoryEntity repositoryEntity = gitHubRepositoryEntityRepository
+            .findByAccessSourceIdAndHtmlUrl(source.getId(), repositoryUrl)
+            .orElseGet(() -> {
+                GitHubRepositoryEntity created = new GitHubRepositoryEntity();
+                created.setAccessSourceId(source.getId());
+                created.setGithubRepoId(syntheticRepoId);
+                created.setHtmlUrl(repositoryUrl);
+                created.setName(repositoryName);
+                created.setFullName(fullRepositoryName);
+                created.setOwnerLogin(ownerLogin);
+                created.setDefaultBranch("main");
+                created.setCreatedAt(Instant.now());
+                return gitHubRepositoryEntityRepository.save(created);
+            });
+
         ProjectRepositoryLink link = new ProjectRepositoryLink();
-        link.setId(UUID.randomUUID());
         link.setProjectId(projectId);
+        link.setGithubRepositoryId(repositoryEntity.getId());
+        link.setGithubRepoId(repositoryEntity.getGithubRepoId());
         link.setRepositoryUrl(repositoryUrl);
-        link.setRepositoryName(deriveName(repositoryUrl));
+        link.setRepositoryName(repositoryName);
         link.setCreatedAt(Instant.now());
         link.setUpdatedAt(Instant.now());
         link.setLinkedAt(Instant.now());
@@ -833,6 +871,28 @@ public class RepositoryLinkService {
         link.setSyncStatus(GitHubIntegrationV2Constants.SYNC_STATUS_PENDING);
         
         projectRepositoryLinkRepository.save(link);
+    }
+
+    private long toSyntheticRepoId(String repositoryUrl) {
+        UUID stable = UUID.nameUUIDFromBytes(repositoryUrl.getBytes(StandardCharsets.UTF_8));
+        long candidate = stable.getMostSignificantBits() & Long.MAX_VALUE;
+        return candidate == 0L ? 1L : candidate;
+    }
+
+    private String[] extractRepositoryParts(String repositoryUrl) {
+        try {
+            URI uri = URI.create(repositoryUrl);
+            String path = uri.getPath();
+            if (path != null) {
+                String[] tokens = path.split("/");
+                if (tokens.length >= 3 && !tokens[1].isBlank() && !tokens[2].isBlank()) {
+                    return new String[] {tokens[1], tokens[2]};
+                }
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Fall back to safe defaults for non-URI values.
+        }
+        return new String[] {"manual", deriveName(repositoryUrl)};
     }
 
     @Transactional
