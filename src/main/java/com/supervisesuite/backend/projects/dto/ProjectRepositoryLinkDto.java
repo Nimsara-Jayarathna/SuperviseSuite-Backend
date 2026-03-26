@@ -14,6 +14,7 @@ public class ProjectRepositoryLinkDto {
     private String ownerLogin;
     private String defaultBranch;
     private String url;
+    private String accessType;
     private Boolean primary;
     private Boolean enabled;
     private Instant linkedAt;
@@ -34,6 +35,7 @@ public class ProjectRepositoryLinkDto {
         String ownerLogin,
         String defaultBranch,
         String url,
+        String accessType,
         Boolean primary,
         Boolean enabled,
         Instant linkedAt,
@@ -50,6 +52,7 @@ public class ProjectRepositoryLinkDto {
         this.ownerLogin = ownerLogin;
         this.defaultBranch = defaultBranch;
         this.url = url;
+        this.accessType = accessType;
         this.primary = primary;
         this.enabled = enabled;
         this.linkedAt = linkedAt;
@@ -139,6 +142,14 @@ public class ProjectRepositoryLinkDto {
 
     public Boolean getPrimary() {
         return primary;
+    }
+
+    public String getAccessType() {
+        return accessType;
+    }
+
+    public void setAccessType(String accessType) {
+        this.accessType = accessType;
     }
 
     public void setPrimary(Boolean primary) {

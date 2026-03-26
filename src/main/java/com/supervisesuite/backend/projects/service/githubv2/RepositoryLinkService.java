@@ -313,7 +313,7 @@ public class RepositoryLinkService {
         UUID userId = guardService.parseUuid(authenticatedUserIdRaw, "authenticatedUserId");
 
         GitHubAccessSource source = accessSourceRepository
-            .findByIdAndIsActiveTrue(sourceId)
+            .findById(sourceId)
             .orElseThrow(() -> new ValidationException("sourceId", "GitHub access source not found."));
 
         guardService.requireOwnedProject(source.getProjectId(), userId);
@@ -615,11 +615,12 @@ public class RepositoryLinkService {
         GitHubAccessSourceDto source = repository == null ? null : sourceById.get(repository.getAccessSourceId());
 
         String sourceId = source == null ? null : source.getId();
+        String resolvedSourceId = repository == null ? sourceId : repository.getAccessSourceId().toString();
         String githubRepositoryId = repository == null ? null : repository.getId().toString();
 
         return new ProjectRepositoryLinkDto(
             link.getId().toString(),
-            sourceId,
+            resolvedSourceId,
             githubRepositoryId,
             link.getGithubRepoId(),
             repository == null ? null : repository.getFullName(),
@@ -628,6 +629,7 @@ public class RepositoryLinkService {
             repository == null ? null : repository.getOwnerLogin(),
             repository == null ? null : repository.getDefaultBranch(),
             repository == null ? null : repository.getHtmlUrl(),
+            link.getAccessType(),
             link.getIsPrimary(),
             link.getIsEnabled(),
             link.getLinkedAt(),
