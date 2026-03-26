@@ -204,7 +204,7 @@ public class RepositoryLinkService {
         }
 
         ensureSinglePrimaryRepository(projectId);
-        consumeRequestedAccessSourceIfApplicable(source);
+        consumeSingleUseInstallationSourceIfApplicable(source);
 
         return getProjectRepositories(projectId.toString(), authenticatedUserIdRaw);
     }
@@ -578,14 +578,18 @@ public class RepositoryLinkService {
         }
     }
 
-    private void consumeRequestedAccessSourceIfApplicable(GitHubAccessSource source) {
+    private void consumeSingleUseInstallationSourceIfApplicable(GitHubAccessSource source) {
         if (source == null) {
             return;
         }
         if (!Boolean.TRUE.equals(source.getIsActive())) {
             return;
         }
-        if (!GitHubIntegrationV2Constants.ACCESS_TYPE_INSTALLATION_REQUESTED.equals(source.getAccessType())) {
+        String accessType = source.getAccessType();
+        boolean singleUseInstallationSource =
+            GitHubIntegrationV2Constants.ACCESS_TYPE_INSTALLATION_REQUESTED.equals(accessType) ||
+            GitHubIntegrationV2Constants.ACCESS_TYPE_INSTALLATION_DIRECT.equals(accessType);
+        if (!singleUseInstallationSource) {
             return;
         }
 
