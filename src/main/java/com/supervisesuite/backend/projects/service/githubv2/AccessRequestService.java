@@ -8,8 +8,10 @@ import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto
 import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
 import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryDto;
 import com.supervisesuite.backend.projects.entity.GitHubAccessRequestV2;
+import com.supervisesuite.backend.projects.entity.GitHubAccessSource;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.repository.GitHubAccessRequestV2Repository;
+import com.supervisesuite.backend.projects.repository.GitHubAccessSourceRepository;
 import com.supervisesuite.backend.projects.repository.GitHubRepositoryEntityRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.integration.github.GitHubAppAuthService;
@@ -31,6 +33,7 @@ public class AccessRequestService {
 
     private final GitHubAccessRequestV2Repository accessRequestRepository;
     private final ProjectRepository projectRepository;
+    private final GitHubAccessSourceRepository accessSourceRepository;
     private final GitHubRepositoryEntityRepository repositoryRepository;
     private final GitHubAppAuthService gitHubAppAuthService;
     private final GitHubIntegrationGuardService guardService;
@@ -41,6 +44,7 @@ public class AccessRequestService {
     public AccessRequestService(
         GitHubAccessRequestV2Repository accessRequestRepository,
         ProjectRepository projectRepository,
+        GitHubAccessSourceRepository accessSourceRepository,
         GitHubRepositoryEntityRepository repositoryRepository,
         GitHubAppAuthService gitHubAppAuthService,
         GitHubIntegrationGuardService guardService,
@@ -49,6 +53,7 @@ public class AccessRequestService {
     ) {
         this.accessRequestRepository = accessRequestRepository;
         this.projectRepository = projectRepository;
+        this.accessSourceRepository = accessSourceRepository;
         this.repositoryRepository = repositoryRepository;
         this.gitHubAppAuthService = gitHubAppAuthService;
         this.guardService = guardService;
@@ -160,11 +165,14 @@ public class AccessRequestService {
 
         int count = context.totalCount() != null ? context.totalCount().intValue() : repositories.size();
         String scope = count <= 0 ? "NO_REPOSITORIES" : count == 1 ? "SINGLE_REPOSITORY" : "MULTIPLE_REPOSITORIES";
+        AccessSourceContext sourceContext = resolveAccessSourceContext(project.getId(), installationId);
 
         return new GitHubAccessUpdatedSummaryDto(
             project.getId(),
             project.getName(),
             installationId,
+            sourceContext.sourceId(),
+            sourceContext.flowType(),
             scope,
             count,
             repositories
@@ -228,11 +236,14 @@ public class AccessRequestService {
                         repo.getDefaultBranch()
                     ))
                     .toList();
+                AccessSourceContext sourceContext = resolveAccessSourceContext(request.getProjectId(), request.getInstallationId());
 
                 return new GitHubAccessUpdatedSummaryDto(
                     request.getProjectId(),
                     projectTitle,
                     request.getInstallationId(),
+                    sourceContext.sourceId(),
+                    sourceContext.flowType(),
                     resolveAccessScope(repositories.size()),
                     repositories.size(),
                     repositories
@@ -257,6 +268,24 @@ public class AccessRequestService {
         return "MULTIPLE_REPOSITORIES";
     }
 
+    private AccessSourceContext resolveAccessSourceContext(UUID projectId, Long installationId) {
+        if (projectId == null || installationId == null) {
+            return new AccessSourceContext(null, GitHubIntegrationV2Constants.FLOW_TYPE_INSTALLATION_REQUESTED);
+        }
+
+        GitHubAccessSource source = accessSourceRepository
+            .findByProjectIdAndInstallationIdAndIsActiveTrue(projectId, installationId)
+            .orElse(null);
+        if (source == null) {
+            return new AccessSourceContext(null, GitHubIntegrationV2Constants.FLOW_TYPE_INSTALLATION_REQUESTED);
+        }
+
+        String flowType = GitHubIntegrationV2Constants.ACCESS_TYPE_INSTALLATION_DIRECT.equals(source.getAccessType())
+            ? GitHubIntegrationV2Constants.FLOW_TYPE_INSTALLATION_DIRECT
+            : GitHubIntegrationV2Constants.FLOW_TYPE_INSTALLATION_REQUESTED;
+        return new AccessSourceContext(source.getId().toString(), flowType);
+    }
+
     private String generateOpaqueToken() {
         byte[] bytes = new byte[32];
         secureRandom.nextBytes(bytes);
@@ -278,5 +307,8 @@ public class AccessRequestService {
             return null;
         }
         return value.trim();
+    }
+
+    private record AccessSourceContext(String sourceId, String flowType) {
     }
 }

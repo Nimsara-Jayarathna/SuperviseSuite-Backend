@@ -17,6 +17,8 @@ import com.supervisesuite.backend.projects.entity.GitHubAccessRequestV2;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.integration.github.GitHubAppAuthService;
 import com.supervisesuite.backend.projects.repository.GitHubAccessRequestV2Repository;
+import com.supervisesuite.backend.projects.repository.GitHubAccessSourceRepository;
+import com.supervisesuite.backend.projects.repository.GitHubRepositoryEntityRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import java.time.Instant;
 import java.util.List;
@@ -38,6 +40,12 @@ class AccessRequestServiceTest {
     private ProjectRepository projectRepository;
 
     @Mock
+    private GitHubAccessSourceRepository accessSourceRepository;
+
+    @Mock
+    private GitHubRepositoryEntityRepository repositoryRepository;
+
+    @Mock
     private GitHubAppAuthService gitHubAppAuthService;
 
     @Mock
@@ -54,6 +62,8 @@ class AccessRequestServiceTest {
         accessRequestService = new AccessRequestService(
             accessRequestRepository,
             projectRepository,
+            accessSourceRepository,
+            repositoryRepository,
             gitHubAppAuthService,
             guardService,
             gitHubProperties,

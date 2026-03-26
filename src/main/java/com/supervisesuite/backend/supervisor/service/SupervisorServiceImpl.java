@@ -569,13 +569,7 @@ class SupervisorServiceImpl implements SupervisorService {
         List<com.supervisesuite.backend.projects.dto.GitHubAccessSourceDto> sources = accessSourceService.getProjectAccessSources(project.getId());
         
         List<GitHubAvailableRepositoriesDto> inventory = sources.stream()
-                .map(source -> {
-                    try {
-                        return repositoryLinkService.getAvailableRepositories(source.getId(), authenticatedUserId);
-                    } catch (Exception e) {
-                        return new GitHubAvailableRepositoriesDto(source.getId(), List.of(), 0);
-                    }
-                })
+                .map(source -> repositoryLinkService.getAvailableRepositories(source.getId(), authenticatedUserId))
                 .toList();
         
         return new ProjectGitHubRepositoryListingDto(project.getId().toString(), inventory);

@@ -124,7 +124,13 @@ public class GitHubAccessSourceController {
 
             URI redirectUri;
             if (resultToken != null) {
-                redirectUri = buildAccessUpdatedRedirect(resultToken, "success");
+                redirectUri = buildAccessUpdatedRedirect(
+                    resultToken,
+                    "success",
+                    callbackState.projectId(),
+                    accessSource.getId(),
+                    callbackState.flowType()
+                );
             } else {
                 redirectUri = buildProjectRedirect(
                     callbackState.projectId(),
@@ -257,7 +263,13 @@ public class GitHubAccessSourceController {
         return apiResponseFactory.ok("GitHub repository display name updated.", data, request);
     }
 
-    private URI buildAccessUpdatedRedirect(String token, String status) {
+    private URI buildAccessUpdatedRedirect(
+        String token,
+        String status,
+        UUID projectId,
+        UUID sourceId,
+        String flowType
+    ) {
         String baseUrl = trimToNull(frontendProperties.getBaseUrl());
         if (baseUrl == null) {
             throw new IllegalStateException("FRONTEND_BASE_URL is not configured.");
@@ -267,6 +279,9 @@ public class GitHubAccessSourceController {
             .pathSegment("github", "access-updated")
             .queryParam("token", token)
             .queryParam("status", status)
+            .queryParam("projectId", projectId == null ? null : projectId.toString())
+            .queryParam("sourceId", sourceId == null ? null : sourceId.toString())
+            .queryParam("flowType", trimToNull(flowType))
             .build(true)
             .toUri();
     }

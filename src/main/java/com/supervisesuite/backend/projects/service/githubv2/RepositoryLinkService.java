@@ -24,9 +24,11 @@ import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkContr
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkRepository;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -86,22 +88,18 @@ public class RepositoryLinkService {
 
         guardService.requireOwnedProject(source.getProjectId(), userId);
 
-        if (!GitHubIntegrationV2Constants.ACCESS_TYPE_PUBLIC_URL.equals(source.getAccessType())) {
-            syncInstallationRepositories(source);
-        }
+        final Set<Long> visibleRepositoryIds = GitHubIntegrationV2Constants.ACCESS_TYPE_PUBLIC_URL.equals(source.getAccessType())
+            ? null
+            : syncInstallationRepositories(source);
 
         List<GitHubRepositoryOptionDto> repositories = gitHubRepositoryEntityRepository
             .findByAccessSourceIdOrderByFullNameAsc(source.getId())
             .stream()
+            .filter(repository -> visibleRepositoryIds == null || visibleRepositoryIds.contains(repository.getGithubRepoId()))
             .map(this::toRepositoryOption)
             .toList();
 
         int totalCount = repositories.size();
-        int maxPerSource = Math.max(1, gitHubProperties.getMaxLinkedReposPerProject());
-        if (repositories.size() > maxPerSource) {
-            repositories = repositories.subList(0, maxPerSource);
-        }
-
         return new GitHubAvailableRepositoriesDto(source.getId().toString(), repositories, totalCount);
     }
 
@@ -206,6 +204,7 @@ public class RepositoryLinkService {
         }
 
         ensureSinglePrimaryRepository(projectId);
+        consumeRequestedAccessSourceIfApplicable(source);
 
         return getProjectRepositories(projectId.toString(), authenticatedUserIdRaw);
     }
@@ -435,38 +434,60 @@ public class RepositoryLinkService {
         );
     }
 
-    private void syncInstallationRepositories(GitHubAccessSource source) {
+    private Set<Long> syncInstallationRepositories(GitHubAccessSource source) {
         if (source.getInstallationId() == null || source.getInstallationId() < 1) {
             throw new ValidationException("installationId", "Installation id is required for installation access source.");
         }
 
         int pageSize = Math.max(1, gitHubProperties.getInstallationRepositories().getMaxPageSize());
-        GitHubAppAuthService.GitHubInstallationRepositoriesPageContext context = gitHubClient
-            .fetchInstallationRepositoriesPage(source.getInstallationId(), 1, pageSize);
+        int page = 1;
+        Long totalCount = null;
+        Set<Long> visibleRepositoryIds = new HashSet<>();
 
-        Instant now = Instant.now();
-        for (GitHubAppAuthService.GitHubInstallationRepositoryContext repository : context.repositories()) {
-            if (repository == null || repository.repositoryId() == null) {
-                continue;
+        while (true) {
+            GitHubAppAuthService.GitHubInstallationRepositoriesPageContext context = gitHubClient
+                .fetchInstallationRepositoriesPage(source.getInstallationId(), page, pageSize);
+
+            Instant now = Instant.now();
+            for (GitHubAppAuthService.GitHubInstallationRepositoryContext repository : context.repositories()) {
+                if (repository == null || repository.repositoryId() == null) {
+                    continue;
+                }
+                visibleRepositoryIds.add(repository.repositoryId());
+
+                GitHubRepositoryEntity entity = gitHubRepositoryEntityRepository
+                    .findByAccessSourceIdAndGithubRepoId(source.getId(), repository.repositoryId())
+                    .orElseGet(() -> {
+                        GitHubRepositoryEntity created = new GitHubRepositoryEntity();
+                        created.setAccessSourceId(source.getId());
+                        created.setGithubRepoId(repository.repositoryId());
+                        created.setCreatedAt(now);
+                        return created;
+                    });
+
+                entity.setFullName(nullable(repository.fullName(), fallbackFullName(repository.ownerLogin(), repository.repositoryName())));
+                entity.setName(nullable(repository.repositoryName(), deriveName(repository.fullName())));
+                entity.setOwnerLogin(nullable(repository.ownerLogin(), deriveOwner(repository.fullName())));
+                entity.setHtmlUrl(nullable(repository.htmlUrl(), "https://github.com/" + entity.getFullName()));
+                entity.setDefaultBranch(nullable(repository.defaultBranch(), "main"));
+                gitHubRepositoryEntityRepository.save(entity);
             }
 
-            GitHubRepositoryEntity entity = gitHubRepositoryEntityRepository
-                .findByAccessSourceIdAndGithubRepoId(source.getId(), repository.repositoryId())
-                .orElseGet(() -> {
-                    GitHubRepositoryEntity created = new GitHubRepositoryEntity();
-                    created.setAccessSourceId(source.getId());
-                    created.setGithubRepoId(repository.repositoryId());
-                    created.setCreatedAt(now);
-                    return created;
-                });
+            if (context.totalCount() != null) {
+                totalCount = context.totalCount();
+            }
 
-            entity.setFullName(nullable(repository.fullName(), fallbackFullName(repository.ownerLogin(), repository.repositoryName())));
-            entity.setName(nullable(repository.repositoryName(), deriveName(repository.fullName())));
-            entity.setOwnerLogin(nullable(repository.ownerLogin(), deriveOwner(repository.fullName())));
-            entity.setHtmlUrl(nullable(repository.htmlUrl(), "https://github.com/" + entity.getFullName()));
-            entity.setDefaultBranch(nullable(repository.defaultBranch(), "main"));
-            gitHubRepositoryEntityRepository.save(entity);
+            int returnedCount = context.repositories().size();
+            boolean hasNext = totalCount != null
+                ? (long) page * pageSize < totalCount
+                : returnedCount >= pageSize && returnedCount > 0;
+            if (!hasNext) {
+                break;
+            }
+            page++;
         }
+
+        return visibleRepositoryIds;
     }
 
     private void setPrimary(UUID projectId, UUID selectedPrimaryLinkId) {
@@ -554,6 +575,22 @@ public class RepositoryLinkService {
             accessSourceRepository.findByIdAndProjectIdAndIsActiveTrue(sourceId, projectId)
                 .ifPresent(accessSourceRepository::delete);
         }
+    }
+
+    private void consumeRequestedAccessSourceIfApplicable(GitHubAccessSource source) {
+        if (source == null) {
+            return;
+        }
+        if (!Boolean.TRUE.equals(source.getIsActive())) {
+            return;
+        }
+        if (!GitHubIntegrationV2Constants.ACCESS_TYPE_INSTALLATION_REQUESTED.equals(source.getAccessType())) {
+            return;
+        }
+
+        source.setIsActive(false);
+        source.setUpdatedAt(Instant.now());
+        accessSourceRepository.save(source);
     }
 
 
