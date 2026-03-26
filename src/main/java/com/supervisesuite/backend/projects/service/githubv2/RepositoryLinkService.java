@@ -767,8 +767,22 @@ public class RepositoryLinkService {
 
     public ProjectGitHubAccessMetadata resolveLink(UUID projectId) {
         List<ProjectRepositoryLink> links = projectRepositoryLinkRepository.findByProjectIdOrderByLinkedAtDesc(projectId);
+        
+        // Find installation ID from active sources if available
+        Long installationId = accessSourceRepository.findByProjectIdAndIsActiveTrueOrderByCreatedAtDesc(projectId)
+            .stream()
+            .filter(source -> source.getInstallationId() != null)
+            .map(GitHubAccessSource::getInstallationId)
+            .findFirst()
+            .orElse(null);
+
         if (links.isEmpty()) {
-            return new ProjectGitHubAccessMetadata(null, 0, "none", null);
+            return new ProjectGitHubAccessMetadata(
+                installationId,
+                0,
+                installationId != null ? "installation" : "none",
+                null
+            );
         }
 
         ProjectRepositoryLink primary = links.stream()
@@ -777,9 +791,9 @@ public class RepositoryLinkService {
             .orElse(links.get(0));
 
         return new ProjectGitHubAccessMetadata(
-            primary.getGithubInstallationId(),
+            installationId != null ? installationId : primary.getGithubInstallationId(),
             links.size(),
-            primary.getGithubInstallationId() != null ? "installation" : "public",
+            installationId != null || primary.getGithubInstallationId() != null ? "installation" : "public",
             primary.getRepositoryUrl()
         );
     }

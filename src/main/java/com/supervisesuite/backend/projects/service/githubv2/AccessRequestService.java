@@ -10,6 +10,7 @@ import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryDto;
 import com.supervisesuite.backend.projects.entity.GitHubAccessRequestV2;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.repository.GitHubAccessRequestV2Repository;
+import com.supervisesuite.backend.projects.repository.GitHubRepositoryEntityRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.integration.github.GitHubAppAuthService;
 import java.nio.charset.StandardCharsets;
@@ -30,6 +31,7 @@ public class AccessRequestService {
 
     private final GitHubAccessRequestV2Repository accessRequestRepository;
     private final ProjectRepository projectRepository;
+    private final GitHubRepositoryEntityRepository repositoryRepository;
     private final GitHubAppAuthService gitHubAppAuthService;
     private final GitHubIntegrationGuardService guardService;
     private final GitHubProperties gitHubProperties;
@@ -39,6 +41,7 @@ public class AccessRequestService {
     public AccessRequestService(
         GitHubAccessRequestV2Repository accessRequestRepository,
         ProjectRepository projectRepository,
+        GitHubRepositoryEntityRepository repositoryRepository,
         GitHubAppAuthService gitHubAppAuthService,
         GitHubIntegrationGuardService guardService,
         GitHubProperties gitHubProperties,
@@ -46,6 +49,7 @@ public class AccessRequestService {
     ) {
         this.accessRequestRepository = accessRequestRepository;
         this.projectRepository = projectRepository;
+        this.repositoryRepository = repositoryRepository;
         this.gitHubAppAuthService = gitHubAppAuthService;
         this.guardService = guardService;
         this.gitHubProperties = gitHubProperties;
@@ -203,6 +207,54 @@ public class AccessRequestService {
             return frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1) + relative;
         }
         return frontendBaseUrl + relative;
+    }
+
+    @Transactional(readOnly = true)
+    public GitHubAccessUpdatedSummaryDto getPendingSummary(UUID projectId) {
+        return accessRequestRepository.findFirstByProjectIdAndUsedAtIsNotNullAndResultAcknowledgedAtIsNullOrderByUsedAtDesc(projectId)
+            .map(request -> {
+                String projectTitle = projectRepository.findById(request.getProjectId())
+                    .map(Project::getName)
+                    .orElse("Unknown Project");
+
+                List<GitHubInstallationRepositoryDto> repositories = repositoryRepository.findByAccessSourceInstallationId(request.getInstallationId())
+                    .stream()
+                    .map(repo -> new GitHubInstallationRepositoryDto(
+                        repo.getGithubRepoId(),
+                        repo.getName(),
+                        repo.getFullName(),
+                        repo.getHtmlUrl(),
+                        repo.getOwnerLogin(),
+                        repo.getDefaultBranch()
+                    ))
+                    .toList();
+
+                return new GitHubAccessUpdatedSummaryDto(
+                    request.getProjectId(),
+                    projectTitle,
+                    request.getInstallationId(),
+                    resolveAccessScope(repositories.size()),
+                    repositories.size(),
+                    repositories
+                );
+            })
+            .orElse(null);
+    }
+
+    @Transactional
+    public void acknowledgePending(UUID projectId) {
+        accessRequestRepository.findFirstByProjectIdAndUsedAtIsNotNullAndResultAcknowledgedAtIsNullOrderByUsedAtDesc(projectId)
+            .ifPresent(request -> {
+                request.setResultAcknowledgedAt(Instant.now());
+                request.setUpdatedAt(Instant.now());
+                accessRequestRepository.save(request);
+            });
+    }
+
+    private String resolveAccessScope(int count) {
+        if (count == 0) return "NO_REPOSITORIES";
+        if (count == 1) return "SINGLE_REPOSITORY";
+        return "MULTIPLE_REPOSITORIES";
     }
 
     private String generateOpaqueToken() {

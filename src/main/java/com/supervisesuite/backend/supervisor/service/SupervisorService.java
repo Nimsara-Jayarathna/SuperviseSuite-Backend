@@ -21,6 +21,8 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryListingDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto;
 import java.util.List;
 
 public interface SupervisorService {
@@ -136,5 +138,15 @@ public interface SupervisorService {
     CreateSupervisorProjectResponse createProject(
         String authenticatedUserId,
         CreateSupervisorProjectRequest request
+    );
+
+    GitHubAccessUpdatedSummaryDto getGitHubAccessUpdatedSummary(
+        String authenticatedUserId,
+        String projectId
+    );
+
+    GitHubAccessUpdatedAcknowledgeDto acknowledgeGitHubAccessUpdated(
+        String authenticatedUserId,
+        String projectId
     );
 }

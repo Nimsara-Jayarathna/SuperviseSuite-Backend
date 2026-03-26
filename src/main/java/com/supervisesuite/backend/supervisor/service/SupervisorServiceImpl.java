@@ -8,6 +8,8 @@ import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
+import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
@@ -57,6 +59,7 @@ import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkServic
 import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
+import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
 
 @Service
 class SupervisorServiceImpl implements SupervisorService {
@@ -87,6 +90,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final SetupCallbackService setupCallbackService;
     private final RepositoryLinkService repositoryLinkService;
     private final AccessSourceService accessSourceService;
+    private final AccessRequestService accessRequestService;
 
     SupervisorServiceImpl(
             UserRepository userRepository,
@@ -97,7 +101,8 @@ class SupervisorServiceImpl implements SupervisorService {
             GitHubAppIntegrationService gitHubAppIntegrationService,
             SetupCallbackService setupCallbackService,
             RepositoryLinkService repositoryLinkService,
-            AccessSourceService accessSourceService) {
+            AccessSourceService accessSourceService,
+            AccessRequestService accessRequestService) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
@@ -107,6 +112,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.setupCallbackService = setupCallbackService;
         this.repositoryLinkService = repositoryLinkService;
         this.accessSourceService = accessSourceService;
+        this.accessRequestService = accessRequestService;
     }
 
     @Override
@@ -792,6 +798,32 @@ class SupervisorServiceImpl implements SupervisorService {
         }
 
         return students;
+    }
+
+
+    @Override
+    @Transactional(readOnly = true)
+    public GitHubAccessUpdatedSummaryDto getGitHubAccessUpdatedSummary(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+        
+        return accessRequestService.getPendingSummary(parsedProjectId);
+    }
+
+    @Override
+    @Transactional
+    public GitHubAccessUpdatedAcknowledgeDto acknowledgeGitHubAccessUpdated(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+        
+        accessRequestService.acknowledgePending(parsedProjectId);
+        return new GitHubAccessUpdatedAcknowledgeDto(parsedProjectId);
     }
 
     private ProjectMember buildProjectMember(

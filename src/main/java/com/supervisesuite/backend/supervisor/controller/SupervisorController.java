@@ -23,6 +23,8 @@ import com.supervisesuite.backend.supervisor.dto.StudentSearchResultDto;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectRequest;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRequest;
+import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
+import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto;
 import com.supervisesuite.backend.supervisor.service.SupervisorService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -364,5 +366,31 @@ public class SupervisorController {
             body
         );
         return apiResponseFactory.ok("Milestone updated successfully.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/access-updated/summary")
+    public ResponseEntity<ApiResponse<GitHubAccessUpdatedSummaryDto>> getProjectAccessUpdatedSummary(
+        Authentication authentication,
+        @PathVariable String projectId,
+        HttpServletRequest request
+    ) {
+        GitHubAccessUpdatedSummaryDto data = supervisorService.getGitHubAccessUpdatedSummary(
+            authentication.getName(),
+            projectId
+        );
+        return apiResponseFactory.ok("Pending GitHub access summary loaded.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/access-updated/acknowledge")
+    public ResponseEntity<ApiResponse<GitHubAccessUpdatedAcknowledgeDto>> acknowledgeProjectAccessUpdated(
+        Authentication authentication,
+        @PathVariable String projectId,
+        HttpServletRequest request
+    ) {
+        GitHubAccessUpdatedAcknowledgeDto data = supervisorService.acknowledgeGitHubAccessUpdated(
+            authentication.getName(),
+            projectId
+        );
+        return apiResponseFactory.ok("GitHub access update acknowledged for project.", data, request);
     }
 }

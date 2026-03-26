@@ -13,4 +13,11 @@ public interface GitHubRepositoryEntityRepository extends JpaRepository<GitHubRe
     Optional<GitHubRepositoryEntity> findByAccessSourceIdAndGithubRepoId(UUID accessSourceId, Long githubRepoId);
 
     Optional<GitHubRepositoryEntity> findByAccessSourceIdAndHtmlUrl(UUID accessSourceId, String htmlUrl);
+
+    @org.springframework.data.jpa.repository.Query("""
+        select r from GitHubRepositoryEntity r
+        join GitHubAccessSource s on r.accessSourceId = s.id
+        where s.installationId = :installationId
+    """)
+    List<GitHubRepositoryEntity> findByAccessSourceInstallationId(@org.springframework.data.repository.query.Param("installationId") Long installationId);
 }

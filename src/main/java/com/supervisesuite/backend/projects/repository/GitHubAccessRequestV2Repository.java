@@ -16,6 +16,8 @@ public interface GitHubAccessRequestV2Repository extends JpaRepository<GitHubAcc
 
     boolean existsByProjectIdAndUsedAtIsNotNullAndResultAcknowledgedAtIsNull(UUID projectId);
 
+    Optional<GitHubAccessRequestV2> findFirstByProjectIdAndUsedAtIsNotNullAndResultAcknowledgedAtIsNullOrderByUsedAtDesc(UUID projectId);
+
     @Modifying
     @Query("""
         delete from GitHubAccessRequestV2 request
