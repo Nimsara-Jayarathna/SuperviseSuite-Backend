@@ -12,6 +12,10 @@ import org.springframework.data.repository.query.Param;
 public interface GitHubAccessRequestV2Repository extends JpaRepository<GitHubAccessRequestV2, UUID> {
     Optional<GitHubAccessRequestV2> findByTokenHash(String tokenHash);
 
+    Optional<GitHubAccessRequestV2> findByResultTokenHash(String resultTokenHash);
+
+    boolean existsByProjectIdAndUsedAtIsNotNullAndResultAcknowledgedAtIsNull(UUID projectId);
+
     @Modifying
     @Query("""
         delete from GitHubAccessRequestV2 request

@@ -12,6 +12,7 @@ import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto
 import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
 import com.supervisesuite.backend.projects.dto.GitHubWebhookResultDto;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
+import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
 import com.supervisesuite.backend.projects.service.githubv2.WebhookService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
@@ -29,6 +30,9 @@ class GitHubAppControllerTest {
     private GitHubAppIntegrationService gitHubAppIntegrationService;
 
     @Mock
+    private AccessRequestService accessRequestService;
+
+    @Mock
     private ApiResponseFactory apiResponseFactory;
 
     @Mock
@@ -43,6 +47,7 @@ class GitHubAppControllerTest {
     void setUp() {
         controller = new GitHubAppController(
             gitHubAppIntegrationService,
+            accessRequestService,
             webhookService,
             apiResponseFactory
         );
@@ -99,8 +104,8 @@ class GitHubAppControllerTest {
         ResponseEntity<ApiResponse<GitHubAccessUpdatedSummaryDto>> summaryExpected = ResponseEntity.ok(new ApiResponse<>());
         ResponseEntity<ApiResponse<GitHubAccessUpdatedAcknowledgeDto>> ackExpected = ResponseEntity.ok(new ApiResponse<>());
 
-        when(gitHubAppIntegrationService.getAccessUpdatedSummary("token-x")).thenReturn(summary);
-        when(gitHubAppIntegrationService.acknowledgeAccessUpdated("token-x")).thenReturn(ack);
+        when(accessRequestService.getSummary("token-x")).thenReturn(summary);
+        when(accessRequestService.acknowledge("token-x")).thenReturn(ack);
         when(apiResponseFactory.ok("GitHub access update summary loaded.", summary, request)).thenReturn(summaryExpected);
         when(apiResponseFactory.ok("GitHub access update acknowledged.", ack, request)).thenReturn(ackExpected);
 

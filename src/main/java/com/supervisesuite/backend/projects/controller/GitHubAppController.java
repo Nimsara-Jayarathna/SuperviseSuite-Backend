@@ -8,6 +8,7 @@ import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto
 import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
 import com.supervisesuite.backend.projects.dto.GitHubWebhookResultDto;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
+import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
 import com.supervisesuite.backend.projects.service.githubv2.WebhookService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
@@ -24,15 +25,18 @@ import org.springframework.web.bind.annotation.GetMapping;
 public class GitHubAppController {
 
     private final GitHubAppIntegrationService gitHubAppIntegrationService;
+    private final AccessRequestService accessRequestService;
     private final WebhookService webhookService;
     private final ApiResponseFactory apiResponseFactory;
 
     public GitHubAppController(
         GitHubAppIntegrationService gitHubAppIntegrationService,
+        AccessRequestService accessRequestService,
         WebhookService webhookService,
         ApiResponseFactory apiResponseFactory
     ) {
         this.gitHubAppIntegrationService = gitHubAppIntegrationService;
+        this.accessRequestService = accessRequestService;
         this.webhookService = webhookService;
         this.apiResponseFactory = apiResponseFactory;
     }
@@ -71,7 +75,7 @@ public class GitHubAppController {
         @RequestParam(name = "token") String token,
         HttpServletRequest request
     ) {
-        GitHubAccessUpdatedSummaryDto data = gitHubAppIntegrationService.getAccessUpdatedSummary(token);
+        GitHubAccessUpdatedSummaryDto data = accessRequestService.getSummary(token);
         return apiResponseFactory.ok("GitHub access update summary loaded.", data, request);
     }
 
@@ -80,7 +84,7 @@ public class GitHubAppController {
         @RequestParam(name = "token") String token,
         HttpServletRequest request
     ) {
-        GitHubAccessUpdatedAcknowledgeDto data = gitHubAppIntegrationService.acknowledgeAccessUpdated(token);
+        GitHubAccessUpdatedAcknowledgeDto data = accessRequestService.acknowledge(token);
         return apiResponseFactory.ok("GitHub access update acknowledged.", data, request);
     }
 }

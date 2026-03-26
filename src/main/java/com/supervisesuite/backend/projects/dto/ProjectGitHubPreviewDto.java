@@ -13,6 +13,7 @@ public class ProjectGitHubPreviewDto {
     private List<ContributorPreviewItem> contributorsPreview;
     private List<RecentCommitPreviewItem> recentCommitsPreview;
     private String repositoryUrl;
+    private boolean hasUnacknowledgedAccess;
 
     public ProjectGitHubPreviewDto() {
     }
@@ -101,6 +102,14 @@ public class ProjectGitHubPreviewDto {
 
     public void setRepositoryUrl(String repositoryUrl) {
         this.repositoryUrl = repositoryUrl;
+    }
+
+    public boolean isHasUnacknowledgedAccess() {
+        return hasUnacknowledgedAccess;
+    }
+
+    public void setHasUnacknowledgedAccess(boolean hasUnacknowledgedAccess) {
+        this.hasUnacknowledgedAccess = hasUnacknowledgedAccess;
     }
 
     public static class RepositoryItem {

@@ -22,6 +22,7 @@ import com.supervisesuite.backend.projects.repository.ProjectGitHubInstallationA
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkCommitRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkContributorRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkRepository;
+import com.supervisesuite.backend.projects.repository.GitHubAccessRequestV2Repository;
 import com.supervisesuite.backend.projects.service.githubv2.GitHubSyncService;
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.projects.service.githubv2.GitHubIntegrationV2Constants;
@@ -62,6 +63,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final RepositoryLinkService repositoryLinkService;
     private final GitHubSyncService gitHubSyncService;
     private final GitHubProperties gitHubProperties;
+    private final GitHubAccessRequestV2Repository accessRequestRepository;
 
     public ProjectServiceImpl(
         GitHubCommitClient gitHubCommitClient,
@@ -74,7 +76,8 @@ public class ProjectServiceImpl implements ProjectService {
         ProjectRepositoryLinkContributorRepository projectRepositoryLinkContributorRepository,
         RepositoryLinkService repositoryLinkService,
         GitHubSyncService gitHubSyncService,
-        GitHubProperties gitHubProperties
+        GitHubProperties gitHubProperties,
+        GitHubAccessRequestV2Repository accessRequestRepository
     ) {
         this.gitHubCommitClient = gitHubCommitClient;
         this.dashboardMapper = dashboardMapper;
@@ -87,6 +90,7 @@ public class ProjectServiceImpl implements ProjectService {
         this.repositoryLinkService = repositoryLinkService;
         this.gitHubSyncService = gitHubSyncService;
         this.gitHubProperties = gitHubProperties;
+        this.accessRequestRepository = accessRequestRepository;
     }
 
     @Override
@@ -174,6 +178,7 @@ public class ProjectServiceImpl implements ProjectService {
             preview.setAuthorizedInstallationId(accessMetadata.authorizedInstallationId());
             preview.setAccessibleRepositoryCount(accessMetadata.accessibleRepositoryCount());
             preview.setAccessScope(accessMetadata.accessScope());
+            preview.setHasUnacknowledgedAccess(checkUnacknowledgedAccess(projectId));
             return preview;
         }
 
@@ -236,6 +241,7 @@ public class ProjectServiceImpl implements ProjectService {
         preview.setAuthorizedInstallationId(accessMetadata.authorizedInstallationId());
         preview.setAccessibleRepositoryCount(accessMetadata.accessibleRepositoryCount());
         preview.setAccessScope(accessMetadata.accessScope());
+        preview.setHasUnacknowledgedAccess(checkUnacknowledgedAccess(projectId));
         return preview;
     }
 
@@ -657,5 +663,9 @@ public class ProjectServiceImpl implements ProjectService {
             return GitHubIntegrationV2Constants.DEFAULT_BRANCH;
         }
         return configured.trim();
+    }
+
+    private boolean checkUnacknowledgedAccess(UUID projectId) {
+        return accessRequestRepository.existsByProjectIdAndUsedAtIsNotNullAndResultAcknowledgedAtIsNull(projectId);
     }
 }

@@ -119,15 +119,21 @@ public class GitHubAccessSourceController {
                 installationId,
                 callbackState.flowType()
             );
-            accessRequestService.markUsed(callbackState.requestId());
 
-            URI redirectUri = buildProjectRedirect(
-                callbackState.projectId(),
-                "success",
-                installationId,
-                accessSource.getId(),
-                callbackState.flowType()
-            );
+            String resultToken = accessRequestService.completeRequest(callbackState.requestId(), installationId);
+
+            URI redirectUri;
+            if (resultToken != null) {
+                redirectUri = buildAccessUpdatedRedirect(resultToken, "success");
+            } else {
+                redirectUri = buildProjectRedirect(
+                    callbackState.projectId(),
+                    "success",
+                    installationId,
+                    accessSource.getId(),
+                    callbackState.flowType()
+                );
+            }
             return ResponseEntity.status(HttpStatus.SEE_OTHER).location(redirectUri).build();
         } catch (Exception exception) {
             LOGGER.warn("GitHub install callback failed: {}", exception.getMessage(), exception);
@@ -249,6 +255,20 @@ public class GitHubAccessSourceController {
             body.getCustomName()
         );
         return apiResponseFactory.ok("GitHub repository display name updated.", data, request);
+    }
+
+    private URI buildAccessUpdatedRedirect(String token, String status) {
+        String baseUrl = trimToNull(frontendProperties.getBaseUrl());
+        if (baseUrl == null) {
+            throw new IllegalStateException("FRONTEND_BASE_URL is not configured.");
+        }
+
+        return UriComponentsBuilder.fromUriString(baseUrl)
+            .pathSegment("github", "access-updated")
+            .queryParam("token", token)
+            .queryParam("status", status)
+            .build(true)
+            .toUri();
     }
 
     private URI buildProjectRedirect(

@@ -23,6 +23,7 @@ import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkServic
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkCommitRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkContributorRepository;
+import com.supervisesuite.backend.projects.repository.GitHubAccessRequestV2Repository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -61,6 +62,9 @@ class ProjectServiceImplTest {
     private ProjectRepositoryLinkContributorRepository projectRepositoryLinkContributorRepository;
 
     @Mock
+    private GitHubAccessRequestV2Repository gitHubAccessRequestV2Repository;
+
+    @Mock
     private RepositoryLinkService repositoryLinkService;
 
     @Mock
@@ -95,7 +99,8 @@ class ProjectServiceImplTest {
             projectRepositoryLinkContributorRepository,
             repositoryLinkService,
             gitHubSyncService,
-            gitHubProperties
+            gitHubProperties,
+            gitHubAccessRequestV2Repository
         );
 
         projectId = UUID.randomUUID();

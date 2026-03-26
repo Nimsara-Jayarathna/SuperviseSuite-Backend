@@ -36,6 +36,14 @@ public class GitHubAccessRequestV2 {
 
     private Instant usedAt;
 
+    private String resultTokenHash;
+
+    private Instant resultExpiresAt;
+
+    private Instant resultAcknowledgedAt;
+
+    private Long installationId;
+
     @Column(nullable = false)
     private Instant createdAt;
 
