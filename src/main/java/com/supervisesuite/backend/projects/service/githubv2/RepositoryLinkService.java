@@ -572,7 +572,8 @@ public class RepositoryLinkService {
             projectRepositoryLinkRepository.existsByProjectIdAndGithubRepositoryIdIn(projectId, sourceRepositoryIds);
 
         if (!stillLinked) {
-            accessSourceRepository.findByIdAndProjectIdAndIsActiveTrue(sourceId, projectId)
+            accessSourceRepository.findById(sourceId)
+                .filter(source -> projectId.equals(source.getProjectId()))
                 .ifPresent(accessSourceRepository::delete);
         }
     }

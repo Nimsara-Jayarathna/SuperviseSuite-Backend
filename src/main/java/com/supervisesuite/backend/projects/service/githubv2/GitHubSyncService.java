@@ -70,8 +70,8 @@ public class GitHubSyncService {
             .orElseThrow(() -> new ValidationException("githubRepositoryId", "GitHub repository was not found."));
 
         GitHubAccessSource accessSource = accessSourceRepository
-            .findByIdAndIsActiveTrue(repositoryEntity.getAccessSourceId())
-            .orElseThrow(() -> new ValidationException("sourceId", "GitHub access source is not active."));
+            .findById(repositoryEntity.getAccessSourceId())
+            .orElseThrow(() -> new ValidationException("sourceId", "GitHub access source was not found."));
 
         Instant now = Instant.now();
         try {
