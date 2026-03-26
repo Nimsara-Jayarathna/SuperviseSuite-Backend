@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -204,6 +205,7 @@ public class RepositoryLinkService {
         } else if (currentPrimary == null) {
             ensureSinglePrimaryRepository(projectId);
         }
+        pruneUnlinkedRepositoryInventoryForSource(source);
         consumeSingleUseInstallationSourceIfApplicable(source);
 
         return getProjectRepositories(projectId.toString(), authenticatedUserIdRaw);
@@ -596,6 +598,34 @@ public class RepositoryLinkService {
         source.setIsActive(false);
         source.setUpdatedAt(Instant.now());
         accessSourceRepository.save(source);
+    }
+
+    private void pruneUnlinkedRepositoryInventoryForSource(GitHubAccessSource source) {
+        if (source == null || source.getId() == null || source.getProjectId() == null) {
+            return;
+        }
+
+        List<GitHubRepositoryEntity> sourceRepositories =
+            gitHubRepositoryEntityRepository.findByAccessSourceIdOrderByFullNameAsc(source.getId());
+        if (sourceRepositories.isEmpty()) {
+            return;
+        }
+
+        Set<UUID> linkedRepositoryEntityIds = projectRepositoryLinkRepository
+            .findByProjectIdOrderByCreatedAtAsc(source.getProjectId())
+            .stream()
+            .map(ProjectRepositoryLink::getGithubRepositoryId)
+            .filter(id -> id != null)
+            .collect(Collectors.toSet());
+
+        List<UUID> staleRepositoryEntityIds = sourceRepositories.stream()
+            .map(GitHubRepositoryEntity::getId)
+            .filter(id -> !linkedRepositoryEntityIds.contains(id))
+            .toList();
+
+        if (!staleRepositoryEntityIds.isEmpty()) {
+            gitHubRepositoryEntityRepository.deleteAllByIdInBatch(staleRepositoryEntityIds);
+        }
     }
 
 
