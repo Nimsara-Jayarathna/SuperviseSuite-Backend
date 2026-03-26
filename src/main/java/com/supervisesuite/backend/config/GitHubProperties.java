@@ -1,5 +1,6 @@
 package com.supervisesuite.backend.config;
 
+import com.supervisesuite.backend.projects.service.githubv2.GitHubIntegrationV2Constants;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -55,7 +56,7 @@ public class GitHubProperties {
     /**
      * Default branch fallback used when provider metadata is missing.
      */
-    private String defaultBranch = "main";
+    private String defaultBranch = GitHubIntegrationV2Constants.DEFAULT_BRANCH;
 
     /**
      * Activity recency window (hours) for deriving active vs idle status.

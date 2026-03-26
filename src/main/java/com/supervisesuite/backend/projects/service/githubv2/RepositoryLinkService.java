@@ -469,7 +469,7 @@ public class RepositoryLinkService {
                 entity.setName(nullable(repository.repositoryName(), deriveName(repository.fullName())));
                 entity.setOwnerLogin(nullable(repository.ownerLogin(), deriveOwner(repository.fullName())));
                 entity.setHtmlUrl(nullable(repository.htmlUrl(), "https://github.com/" + entity.getFullName()));
-                entity.setDefaultBranch(nullable(repository.defaultBranch(), "main"));
+                entity.setDefaultBranch(nullable(repository.defaultBranch(), defaultBranch()));
                 gitHubRepositoryEntityRepository.save(entity);
             }
 
@@ -665,6 +665,11 @@ public class RepositoryLinkService {
 
     private String nullable(String value, String fallback) {
         return value == null || value.trim().isEmpty() ? fallback : value.trim();
+    }
+
+    private String defaultBranch() {
+        String configured = trimToNull(gitHubProperties.getDefaultBranch());
+        return configured == null ? GitHubIntegrationV2Constants.DEFAULT_BRANCH : configured;
     }
 
     private String trimToNull(String value) {

@@ -123,7 +123,7 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
                     ref.owner(),
                     ref.repo(),
                     repositoryUrl,
-                    defaultBranch()
+                    null
                 );
             }
 
@@ -138,7 +138,7 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
                 hasText(ownerLogin) ? ownerLogin.trim() : ref.owner(),
                 hasText(name) ? name.trim() : ref.repo(),
                 hasText(url) ? url.trim() : repositoryUrl,
-                hasText(defaultBranch) ? defaultBranch.trim() : defaultBranch()
+                hasText(defaultBranch) ? defaultBranch.trim() : null
             );
         } catch (RestClientResponseException | ResourceAccessException exception) {
             throw new ServiceUnavailableException(

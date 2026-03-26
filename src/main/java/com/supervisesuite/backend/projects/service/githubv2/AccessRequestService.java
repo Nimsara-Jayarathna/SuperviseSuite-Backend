@@ -159,7 +159,7 @@ public class AccessRequestService {
                 repo.fullName(),
                 repo.htmlUrl(),
                 repo.ownerLogin(),
-                repo.defaultBranch() != null ? repo.defaultBranch() : "main"
+                repo.defaultBranch() != null ? repo.defaultBranch() : defaultBranch()
             ));
         }
 
@@ -203,6 +203,11 @@ public class AccessRequestService {
             return 15;
         }
         return accessRequests.getExpiresInMinutes();
+    }
+
+    private String defaultBranch() {
+        String configured = trimToNull(gitHubProperties.getDefaultBranch());
+        return configured != null ? configured : GitHubIntegrationV2Constants.DEFAULT_BRANCH;
     }
 
     private String buildRequestUrl(String rawToken) {

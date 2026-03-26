@@ -22,6 +22,7 @@ import com.supervisesuite.backend.projects.repository.ProjectGitHubAccessRequest
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.repository.ProjectGitHubInstallationAuthorizationRepository;
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
+import com.supervisesuite.backend.projects.service.githubv2.GitHubIntegrationV2Constants;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -813,7 +814,10 @@ public class GitHubAppIntegrationService {
     }
 
     private String defaultBranch() {
-        return nullable(trimToNull(gitHubProperties.getDefaultBranch()), "main");
+        return nullable(
+            trimToNull(gitHubProperties.getDefaultBranch()),
+            GitHubIntegrationV2Constants.DEFAULT_BRANCH
+        );
     }
 
     public record SetupCallbackResult(

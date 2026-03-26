@@ -82,7 +82,7 @@ public class AccessSourceService {
         repository.setGithubRepoId(githubRepoId);
         repository.setFullName(fullName);
         repository.setName(repositoryName);
-        repository.setDefaultBranch(nullable(metadata.getDefaultBranch(), "main"));
+        repository.setDefaultBranch(nullable(metadata.getDefaultBranch(), GitHubIntegrationV2Constants.DEFAULT_BRANCH));
         repository.setHtmlUrl(nullable(metadata.getUrl(), normalizedRepositoryUrl));
         repository.setOwnerLogin(ownerLogin);
         repository.setCreatedAt(now);
