@@ -2,6 +2,8 @@
 
 Core SuperviseSuite backend built with Spring Boot. Provides REST APIs for authentication/authorization, user and project management, and project membership/assignment workflows. Owns the main database model and supports future expansion for analytics, reporting, and external tool connectivity.
 
+Current scope includes GitHub integration v2 (SCRUM-81): project-scoped authorization, explicit repository linking, request-access continuation flow, callback-result acknowledgement, and repository-link based sync/preview APIs.
+
 ## API Documentation
 
 Current API references:
@@ -16,7 +18,14 @@ Backend fix documents:
 
 - `docs/backend/major-fixes-scrum-97-supervisor-workflow.md`
 - `docs/backend/major-fixes-scrum-80-github-app-dashboard.md`
+- `docs/backend/major-fixes-scrum-81-multiple-github-repositories.md`
 - `docs/backend/recent-changes-2026-03-05.md`
+
+Database documentation:
+
+- `docs/database/README.md`
+- `docs/database/migrations.md`
+- `docs/database/schema-v1.md`
 
 ## Recent API Contract Update (March 2026)
 
@@ -129,6 +138,22 @@ GITHUB_REPOSITORY_REFRESH_BATCH_SIZE=50
 - On each backend start, Flyway checks the schema history table and applies only pending versions.
 - `V1__init_schema.sql` creates the base tables for `users`, `projects`, and `project_members`.
 - `V2__add_refresh_tokens.sql` adds the `refresh_tokens` table for httpOnly cookie session management.
+- SCRUM-81 GitHub integration v2 migrations:
+  - `V10__github_integration_v2.sql`
+    - introduces v2 tables for access sources, repositories, project links, setup states, access requests, and link-level commits/contributors
+  - `V11__github_repository_enablement_limits.sql`
+    - adds repository enable/disable state and enforces one enabled primary repository per project
+  - `V12__decommission_v1_github_integration.sql`
+    - removes legacy `projects.repository_url` and drops deprecated v1 repository cache tables
+  - `V13__denormalized_repository_link_fields.sql`
+    - adds denormalized repository metadata to `project_repository_links` for faster project-detail/dashboard reads
+  - `V14__add_updated_at_to_access_sources.sql`
+    - adds `updated_at` to `github_access_sources` and backfills existing rows
+  - `V15__align_github_access_request_v2_with_result_tracking.sql`
+    - adds result-token tracking fields used by access-request callback confirmation flow
+- Database documentation for migration-by-migration context and effective schema:
+  - `docs/database/migrations.md`
+  - `docs/database/schema-v1.md`
 - Default safety: `baseline-on-migrate` is disabled.
 - Dev-only fallback exists in `application-dev.yaml` if you need one-time baseline for a legacy/local DB.
   - Run with dev profile only when required:
