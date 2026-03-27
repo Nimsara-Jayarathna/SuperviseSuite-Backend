@@ -3,11 +3,10 @@ package com.supervisesuite.backend.auth.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.supervisesuite.backend.TestcontainersConfiguration;
+import com.supervisesuite.backend.auth.AuthTestBase;
 import com.supervisesuite.backend.auth.dto.LoginRequest;
-import com.supervisesuite.backend.auth.repository.RefreshTokenRepository;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.users.entity.User;
-import com.supervisesuite.backend.users.repository.UserRepository;
 import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,7 +39,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
     }
 )
 @Import(TestcontainersConfiguration.class)
-class LoginEndpointTest {
+class LoginEndpointTest extends AuthTestBase {
 
     private static final String LOGIN_URL = "/api/auth/login";
     private static final String TEST_EMAIL = "amal.perera@university.ac.lk";
@@ -50,18 +49,11 @@ class LoginEndpointTest {
     private TestRestTemplate restTemplate;
 
     @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private RefreshTokenRepository refreshTokenRepository;
-
-    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void cleanUp() {
-        refreshTokenRepository.deleteAll();
-        userRepository.deleteAll();
+        safeCleanup();
         persistUser(TEST_EMAIL, TEST_PASSWORD, Roles.STUDENT);
     }
 

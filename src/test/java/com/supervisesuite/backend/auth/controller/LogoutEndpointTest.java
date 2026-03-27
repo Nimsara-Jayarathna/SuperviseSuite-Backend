@@ -3,13 +3,12 @@ package com.supervisesuite.backend.auth.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.supervisesuite.backend.TestcontainersConfiguration;
+import com.supervisesuite.backend.auth.AuthTestBase;
 import com.supervisesuite.backend.auth.entity.RefreshToken;
-import com.supervisesuite.backend.auth.repository.RefreshTokenRepository;
 import com.supervisesuite.backend.auth.security.CookieService;
 import com.supervisesuite.backend.auth.service.RefreshTokenService;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.users.entity.User;
-import com.supervisesuite.backend.users.repository.UserRepository;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,13 +42,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
     }
 )
 @Import(TestcontainersConfiguration.class)
-class LogoutEndpointTest {
+class LogoutEndpointTest extends AuthTestBase {
 
     private static final String LOGOUT_URL = "/api/auth/logout";
 
     @Autowired private TestRestTemplate restTemplate;
-    @Autowired private UserRepository userRepository;
-    @Autowired private RefreshTokenRepository refreshTokenRepository;
     @Autowired private RefreshTokenService refreshTokenService;
     @Autowired private PasswordEncoder passwordEncoder;
 
@@ -57,8 +54,7 @@ class LogoutEndpointTest {
 
     @BeforeEach
     void setUp() {
-        refreshTokenRepository.deleteAll();
-        userRepository.deleteAll();
+        safeCleanup();
         savedUser = persistUser("logout.test@university.ac.lk", "Secure@123");
     }
 
