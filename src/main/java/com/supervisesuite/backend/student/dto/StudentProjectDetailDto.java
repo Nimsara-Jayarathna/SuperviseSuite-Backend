@@ -1,5 +1,7 @@
 package com.supervisesuite.backend.student.dto;
 
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -16,6 +18,9 @@ public class StudentProjectDetailDto {
     private Instant lastActivityAt;
     private Integer progressPercent;
     private String healthNote;
+    private ProjectGitHubPreviewDto github;
+    private ProjectGitHubRepositoriesDto githubRepositories;
+    private Leader leader;
     private List<Member> members;
     private List<Milestone> milestones;
 
@@ -33,6 +38,9 @@ public class StudentProjectDetailDto {
         Instant lastActivityAt,
         Integer progressPercent,
         String healthNote,
+        ProjectGitHubPreviewDto github,
+        ProjectGitHubRepositoriesDto githubRepositories,
+        Leader leader,
         List<Member> members,
         List<Milestone> milestones
     ) {
@@ -46,6 +54,9 @@ public class StudentProjectDetailDto {
         this.lastActivityAt = lastActivityAt;
         this.progressPercent = progressPercent;
         this.healthNote = healthNote;
+        this.github = github;
+        this.githubRepositories = githubRepositories;
+        this.leader = leader;
         this.members = members;
         this.milestones = milestones;
     }
@@ -128,6 +139,32 @@ public class StudentProjectDetailDto {
 
     public void setHealthNote(String healthNote) {
         this.healthNote = healthNote;
+    }
+
+
+
+    public ProjectGitHubPreviewDto getGithub() {
+        return github;
+    }
+
+    public void setGithub(ProjectGitHubPreviewDto github) {
+        this.github = github;
+    }
+
+    public ProjectGitHubRepositoriesDto getGithubRepositories() {
+        return githubRepositories;
+    }
+
+    public void setGithubRepositories(ProjectGitHubRepositoriesDto githubRepositories) {
+        this.githubRepositories = githubRepositories;
+    }
+
+    public Leader getLeader() {
+        return leader;
+    }
+
+    public void setLeader(Leader leader) {
+        this.leader = leader;
     }
 
     public List<Member> getMembers() {
@@ -219,6 +256,71 @@ public class StudentProjectDetailDto {
 
         public void setMemberRole(String memberRole) {
             this.memberRole = memberRole;
+        }
+    }
+
+    public static class Leader {
+        private UUID id;
+        private String firstName;
+        private String lastName;
+        private String email;
+        private String registrationNumber;
+
+        public Leader() {
+        }
+
+        public Leader(
+            UUID id,
+            String firstName,
+            String lastName,
+            String email,
+            String registrationNumber
+        ) {
+            this.id = id;
+            this.firstName = firstName;
+            this.lastName = lastName;
+            this.email = email;
+            this.registrationNumber = registrationNumber;
+        }
+
+        public UUID getId() {
+            return id;
+        }
+
+        public void setId(UUID id) {
+            this.id = id;
+        }
+
+        public String getFirstName() {
+            return firstName;
+        }
+
+        public void setFirstName(String firstName) {
+            this.firstName = firstName;
+        }
+
+        public String getLastName() {
+            return lastName;
+        }
+
+        public void setLastName(String lastName) {
+            this.lastName = lastName;
+        }
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
+        }
+
+        public String getRegistrationNumber() {
+            return registrationNumber;
+        }
+
+        public void setRegistrationNumber(String registrationNumber) {
+            this.registrationNumber = registrationNumber;
         }
     }
 

@@ -1,78 +1,112 @@
 # Migration Log
 
-## 2026-03-02 — Full schema rewrite (no prior data; clean reset)
+This log is aligned to migration files under `src/main/resources/db/migration`.
 
-### V1__init_schema.sql
+## 2026-03-02 — Initial schema and auth token persistence
 
-- Created core tables:
-  - `users` — `id` (UUID, `gen_random_uuid()`), `created_at` (NOT NULL), `updated_at`, `email` (NOT NULL UNIQUE), `role` (NOT NULL)
-  - `projects` — `id`, `created_at` (NOT NULL), `updated_at`, `name` (NOT NULL), `description`, `status` (NOT NULL), `supervisor_id` (FK → `users.id`), `deleted_at`
-  - `project_members` — `id`, `created_at` (NOT NULL), `updated_at`, `user_id` (NOT NULL, FK → `users`), `project_id` (NOT NULL, FK → `projects`)
-- Added constraints:
-  - `chk_users_role`: `role IN ('SUPERVISOR', 'STUDENT')`
-  - `fk_projects_supervisor`: supervisor_id → users.id
-  - `fk_project_members_user`, `fk_project_members_project` with ON DELETE CASCADE
-  - `uk_project_members_user_project`: unique (user_id, project_id)
-- Added indexes:
-  - `idx_project_members_user_id`
-  - `idx_project_members_project_id`
-  - `idx_projects_supervisor_id`
+### `V1__init_schema.sql`
 
-### V2__auth_schema.sql
+- Created core tables: `users`, `projects`, `project_members`.
+- Added role/member constraints and baseline indexes.
 
-- **`users`** extended:
-  - `password_hash` varchar(255) nullable — populated on registration; pre-seeded rows have no password
-  - `first_name`, `last_name` varchar(100) nullable
-  - `registration_number` varchar(20) nullable, unique — populated on student registration; pre-seeded supervisor rows have no value
-- **`refresh_tokens`** new table:
-  - `token_hash` varchar(255) NOT NULL UNIQUE
-  - `revoked_at` nullable — null means still active
-  - `expires_at` NOT NULL
-  - `created_at` NOT NULL
-  - FK → `users.id` ON DELETE CASCADE
+### `V2__add_refresh_tokens.sql`
+
+- Added `refresh_tokens` table for refresh-token persistence/revocation.
 
 ## 2026-03-04 — Project domain expansion
 
-### V3__project_domain_expansion.sql
+### `V3__project_domain_expansion.sql`
 
-- **`projects`** updated:
-  - Renamed columns:
-    - `name` -> `title`
-    - `description` -> `summary`
-    - `status` -> `lifecycle_status`
-  - Added columns:
-    - `batch`, `semester`
-    - `progress_percent`
-    - `health_note`
-    - `milestone_date`
-    - `last_activity_at`
-    - `communication_url`, `repository_url`
-    - `jira_project_key`, `jira_board_url`
-  - Added constraints:
-    - `chk_projects_lifecycle_status`
-    - `chk_projects_progress_percent`
-  - Added indexes:
-    - `idx_projects_lifecycle_status`
-    - `idx_projects_milestone_date`
+- Expanded `projects` with lifecycle/progress/reporting fields.
+- Added `project_milestones`.
+- Added `member_role` to `project_members`.
 
-- **`project_members`** updated:
-  - Added `member_role` with backfill based on whether the member matches `projects.supervisor_id`
-  - Added `chk_project_members_member_role`
-  - Added `idx_project_members_member_role`
+## 2026-03-21 — Supervisor project leader support
 
-- **`project_milestones`** new table:
-  - `id`, `project_id`, `title`, `description`
-  - `due_date`, `status`, `sequence_no`
-  - `created_by`, `created_at`, `updated_at`
-  - FK to `projects.id` with `ON DELETE CASCADE`
-  - FK to `users.id` for `created_by`
-  - Unique per project milestone order: `(project_id, sequence_no)`
+### `V4__project_leader_assignment.sql`
+
+- Added `projects.leader_user_id` (+ FK/index).
+
+## 2026-03-21 — GitHub integration v1 foundation
+
+### `V5__project_github_cache.sql`
+
+- Added v1 repository cache tables:
+  - `project_repositories`
+  - `project_repository_commits`
+  - `project_repository_contributors`
+
+### `V6__github_app_installations.sql`
+
+- Added `github_app_installations`.
+
+## 2026-03-22 — Project-scoped authorization and access-request flow (v1 path)
+
+### `V7__project_github_authorization_scope.sql`
+
+- Added `project_github_installation_authorizations`.
+
+### `V8__project_github_access_requests.sql`
+
+- Added `project_github_access_requests` (request tokens + state hash/status).
+
+### `V9__project_github_access_request_result_tokens.sql`
+
+- Extended `project_github_access_requests` with result-token fields.
+
+## 2026-03-22 onward — GitHub integration v2 (SCRUM-81)
+
+### `V10__github_integration_v2.sql`
+
+- Introduced v2 tables:
+  - `github_access_sources`
+  - `github_repositories`
+  - `project_repository_links`
+  - `github_setup_states`
+  - `github_access_requests_v2`
+  - `project_repository_link_commits`
+  - `project_repository_link_contributors`
+
+### `V11__github_repository_enablement_limits.sql`
+
+- Added `is_enabled` to `project_repository_links`.
+- Enforced one enabled primary link per project (partial unique index).
+
+### `V12__decommission_v1_github_integration.sql`
+
+- Dropped legacy `projects.repository_url`.
+- Dropped v1 cache tables:
+  - `project_repositories`
+  - `project_repository_commits`
+  - `project_repository_contributors`
+
+### `V13__denormalized_repository_link_fields.sql`
+
+- Added denormalized metadata columns to `project_repository_links`:
+  - `github_installation_id`
+  - `repository_url`
+  - `repository_name`
+  - `default_branch`
+  - `linked_by_supervisor_user_id`
+  - `access_type`
+
+### `V14__add_updated_at_to_access_sources.sql`
+
+- Added `updated_at` to `github_access_sources`.
+
+### `V15__align_github_access_request_v2_with_result_tracking.sql`
+
+- Added callback result-tracking columns to `github_access_requests_v2`:
+  - `result_token_hash`
+  - `result_expires_at`
+  - `result_acknowledged_at`
+  - `installation_id`
 
 ## Rules for Next Migrations
 
-- Use versioned files: `V{number}__{description}.sql`
-- Never edit a migration file that has been applied to shared environments.
+- Use versioned files: `V{number}__{description}.sql`.
+- Never modify an already-applied migration in shared environments.
 - Add a new version for every schema/data change.
-- Record each new migration in this file with date and summary.
-- Keep versioned DDL deterministic — do not use `IF NOT EXISTS` in versioned Flyway migrations.
-- `baseline-on-migrate`: disabled (`false`) in all profiles. Apply only to an empty database.
+- Update this document whenever a new migration is added.
+- Keep versioned DDL deterministic.
+- `baseline-on-migrate` is disabled; apply migrations on an empty DB unless explicitly handling legacy bootstrap flows.

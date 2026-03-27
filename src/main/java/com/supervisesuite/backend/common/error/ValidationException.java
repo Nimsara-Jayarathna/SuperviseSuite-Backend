@@ -17,7 +17,7 @@ import org.springframework.http.HttpStatus;
  *
  * <p>Handled by
  * {@link GlobalExceptionHandler#handleValidationException} which propagates
- * {@code details[]} into the structured {@link ApiError} response.
+ * {@code details[]} into the unified API error envelope.
  */
 public class ValidationException extends DomainException {
 

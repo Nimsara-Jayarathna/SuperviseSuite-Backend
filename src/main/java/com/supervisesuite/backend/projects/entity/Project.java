@@ -65,8 +65,7 @@ public class Project {
     @Column(columnDefinition = "TEXT")
     private String communicationUrl;
 
-    @Column(columnDefinition = "TEXT")
-    private String repositoryUrl;
+    private UUID leaderUserId;
 
     private String jiraProjectKey;
 

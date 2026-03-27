@@ -2,7 +2,6 @@ package com.supervisesuite.backend.config;
 
 import com.supervisesuite.backend.auth.security.JwtAuthFilter;
 import com.supervisesuite.backend.common.error.ErrorCode;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,6 +35,14 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/github/setup").permitAll()
+                .requestMatchers("/api/github/access-source/callback").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/github/access-source/install/start").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/github/access-requests/validate").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/github/access-requests/continue").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/github/access-updated/summary").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/github/access-updated/acknowledge").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/github/webhooks").permitAll()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex
@@ -44,23 +51,21 @@ public class SecurityConfig {
                 // which is wrong for a stateless REST API.
                 .authenticationEntryPoint((request, response, authException) ->
                     securityErrorResponseWriter.write(
+                        request,
                         response,
-                        HttpServletResponse.SC_UNAUTHORIZED,
-                        "Unauthorized",
+                        org.springframework.http.HttpStatus.UNAUTHORIZED,
                         ErrorCode.UNAUTHORIZED,
-                        "Authentication required.",
-                        request.getRequestURI()
+                        "Authentication required."
                     )
                 )
                 // Valid token but insufficient role -> 403
                 .accessDeniedHandler((request, response, accessDeniedException) ->
                     securityErrorResponseWriter.write(
+                        request,
                         response,
-                        HttpServletResponse.SC_FORBIDDEN,
-                        "Forbidden",
+                        org.springframework.http.HttpStatus.FORBIDDEN,
                         ErrorCode.FORBIDDEN,
-                        "Access denied.",
-                        request.getRequestURI()
+                        "Access denied."
                     )
                 )
             )

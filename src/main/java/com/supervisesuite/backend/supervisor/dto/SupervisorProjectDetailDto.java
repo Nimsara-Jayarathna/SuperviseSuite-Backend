@@ -1,5 +1,7 @@
 package com.supervisesuite.backend.supervisor.dto;
 
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -15,7 +17,10 @@ public class SupervisorProjectDetailDto {
     private LocalDate milestoneDate;
     private Integer progressPercent;
     private String healthNote;
+    private ProjectGitHubPreviewDto github;
+    private ProjectGitHubRepositoriesDto githubRepositories;
     private Instant lastActivityAt;
+    private Leader leader;
     private List<Member> members;
     private List<Milestone> milestones;
 
@@ -23,19 +28,21 @@ public class SupervisorProjectDetailDto {
     }
 
     public SupervisorProjectDetailDto(
-        UUID id,
-        String title,
-        String summary,
-        String lifecycleStatus,
-        String batch,
-        String semester,
-        LocalDate milestoneDate,
-        Integer progressPercent,
-        String healthNote,
-        Instant lastActivityAt,
-        List<Member> members,
-        List<Milestone> milestones
-    ) {
+            UUID id,
+            String title,
+            String summary,
+            String lifecycleStatus,
+            String batch,
+            String semester,
+            LocalDate milestoneDate,
+            Integer progressPercent,
+            String healthNote,
+            ProjectGitHubPreviewDto github,
+            ProjectGitHubRepositoriesDto githubRepositories,
+            Instant lastActivityAt,
+            Leader leader,
+            List<Member> members,
+            List<Milestone> milestones) {
         this.id = id;
         this.title = title;
         this.summary = summary;
@@ -45,7 +52,10 @@ public class SupervisorProjectDetailDto {
         this.milestoneDate = milestoneDate;
         this.progressPercent = progressPercent;
         this.healthNote = healthNote;
+        this.github = github;
+        this.githubRepositories = githubRepositories;
         this.lastActivityAt = lastActivityAt;
+        this.leader = leader;
         this.members = members;
         this.milestones = milestones;
     }
@@ -130,6 +140,30 @@ public class SupervisorProjectDetailDto {
         this.lastActivityAt = lastActivityAt;
     }
 
+    public ProjectGitHubPreviewDto getGithub() {
+        return github;
+    }
+
+    public void setGithub(ProjectGitHubPreviewDto github) {
+        this.github = github;
+    }
+
+    public ProjectGitHubRepositoriesDto getGithubRepositories() {
+        return githubRepositories;
+    }
+
+    public void setGithubRepositories(ProjectGitHubRepositoriesDto githubRepositories) {
+        this.githubRepositories = githubRepositories;
+    }
+
+    public Leader getLeader() {
+        return leader;
+    }
+
+    public void setLeader(Leader leader) {
+        this.leader = leader;
+    }
+
     public List<Member> getMembers() {
         return members;
     }
@@ -158,13 +192,12 @@ public class SupervisorProjectDetailDto {
         }
 
         public Member(
-            UUID id,
-            String firstName,
-            String lastName,
-            String email,
-            String registrationNumber,
-            String memberRole
-        ) {
+                UUID id,
+                String firstName,
+                String lastName,
+                String email,
+                String registrationNumber,
+                String memberRole) {
             this.id = id;
             this.firstName = firstName;
             this.lastName = lastName;
@@ -222,6 +255,70 @@ public class SupervisorProjectDetailDto {
         }
     }
 
+    public static class Leader {
+        private UUID id;
+        private String firstName;
+        private String lastName;
+        private String email;
+        private String registrationNumber;
+
+        public Leader() {
+        }
+
+        public Leader(
+                UUID id,
+                String firstName,
+                String lastName,
+                String email,
+                String registrationNumber) {
+            this.id = id;
+            this.firstName = firstName;
+            this.lastName = lastName;
+            this.email = email;
+            this.registrationNumber = registrationNumber;
+        }
+
+        public UUID getId() {
+            return id;
+        }
+
+        public void setId(UUID id) {
+            this.id = id;
+        }
+
+        public String getFirstName() {
+            return firstName;
+        }
+
+        public void setFirstName(String firstName) {
+            this.firstName = firstName;
+        }
+
+        public String getLastName() {
+            return lastName;
+        }
+
+        public void setLastName(String lastName) {
+            this.lastName = lastName;
+        }
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
+        }
+
+        public String getRegistrationNumber() {
+            return registrationNumber;
+        }
+
+        public void setRegistrationNumber(String registrationNumber) {
+            this.registrationNumber = registrationNumber;
+        }
+    }
+
     public static class Milestone {
         private UUID id;
         private String title;
@@ -234,13 +331,12 @@ public class SupervisorProjectDetailDto {
         }
 
         public Milestone(
-            UUID id,
-            String title,
-            String description,
-            LocalDate dueDate,
-            String status,
-            Integer sequenceNo
-        ) {
+                UUID id,
+                String title,
+                String description,
+                LocalDate dueDate,
+                String status,
+                Integer sequenceNo) {
             this.id = id;
             this.title = title;
             this.description = description;

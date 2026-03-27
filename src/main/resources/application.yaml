@@ -3,6 +3,16 @@ spring:
     import: optional:file:.env[.properties]
   application:
     name: SuperviseSuite Backend
+  mvc:
+    throw-exception-if-no-handler-found: true
+  web:
+    resources:
+      add-mappings: false
+  devtools:
+    restart:
+      # Keep Flyway SQL migrations on the base classloader; avoids classpath
+      # inputstream issues after migration renames during local development.
+      additional-exclude: db/migration/**
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -33,3 +43,42 @@ app:
     # Set to false in local dev (HTTP). Must be true in production (HTTPS).
     # Browsers (except Chrome) block Secure cookies over plain HTTP even on localhost.
     secure: ${COOKIE_SECURE:true}
+  frontend:
+    base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+  github:
+    api-base-url: ${GITHUB_API_BASE_URL:https://api.github.com}
+    token: ${GITHUB_TOKEN:}
+    app-id: ${GITHUB_APP_ID:}
+    app-client-id: ${GITHUB_APP_CLIENT_ID:}
+    app-client-secret: ${GITHUB_APP_CLIENT_SECRET:}
+    app-install-url: ${GITHUB_APP_INSTALL_URL:}
+    app-private-key: ${GITHUB_APP_PRIVATE_KEY:}
+    app-webhook-secret: ${GITHUB_APP_WEBHOOK_SECRET:}
+    default-branch: ${GITHUB_DEFAULT_BRANCH:main}
+    activity-active-window-hours: ${GITHUB_ACTIVITY_ACTIVE_WINDOW_HOURS:48}
+    preview-commits-limit: ${GITHUB_PREVIEW_COMMITS_LIMIT:6}
+    preview-contributors-limit: ${GITHUB_PREVIEW_CONTRIBUTORS_LIMIT:4}
+    dashboard-contributors-limit: ${GITHUB_DASHBOARD_CONTRIBUTORS_LIMIT:5}
+    commits-page-size: ${GITHUB_COMMITS_PAGE_SIZE:100}
+    default-page-size: ${GITHUB_DEFAULT_PAGE_SIZE:10}
+    max-page-size: ${GITHUB_MAX_PAGE_SIZE:100}
+    max-linked-repos-per-project: ${GITHUB_MAX_LINKED_REPOS_PER_PROJECT:5}
+    max-enabled-repos-per-project: ${GITHUB_MAX_ENABLED_REPOS_PER_PROJECT:${GITHUB_MAX_LINKED_REPOS_PER_PROJECT:5}}
+    setup-state-ttl-seconds: ${GITHUB_SETUP_STATE_TTL_SECONDS:900}
+    setup-state-secret: ${GITHUB_SETUP_STATE_SECRET:${JWT_SECRET}}
+    sync-max-commit-pages: ${GITHUB_SYNC_MAX_COMMIT_PAGES:5}
+    installation-repositories:
+      default-page-size: ${GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE:100}
+      max-page-size: ${GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE:100}
+    access-requests:
+      expires-in-minutes: ${GITHUB_ACCESS_REQUEST_EXPIRES_IN_MINUTES:15}
+    jobs:
+      access-request-cleanup:
+        enabled: ${GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED:true}
+        initial-delay-ms: ${GITHUB_ACCESS_REQUEST_CLEANUP_INITIAL_DELAY_MS:120000}
+        fixed-delay-ms: ${GITHUB_ACCESS_REQUEST_CLEANUP_FIXED_DELAY_MS:900000}
+      repository-refresh:
+        enabled: ${GITHUB_REPOSITORY_REFRESH_JOB_ENABLED:true}
+        cron: ${GITHUB_REPOSITORY_REFRESH_CRON:0 0 0 * * *}
+        zone: ${GITHUB_REPOSITORY_REFRESH_ZONE:UTC}
+        batch-size: ${GITHUB_REPOSITORY_REFRESH_BATCH_SIZE:50}

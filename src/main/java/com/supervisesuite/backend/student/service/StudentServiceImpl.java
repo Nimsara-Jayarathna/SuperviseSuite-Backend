@@ -2,16 +2,23 @@ package com.supervisesuite.backend.student.service;
 
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
+import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
+import com.supervisesuite.backend.projects.service.ProjectService;
+import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -29,17 +36,23 @@ class StudentServiceImpl implements StudentService {
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectRepository projectRepository;
     private final ProjectMilestoneRepository projectMilestoneRepository;
+    private final ProjectService projectService;
+    private final RepositoryLinkService repositoryLinkService;
 
     StudentServiceImpl(
-        UserRepository userRepository,
-        ProjectMemberRepository projectMemberRepository,
-        ProjectRepository projectRepository,
-        ProjectMilestoneRepository projectMilestoneRepository
+         UserRepository userRepository,
+         ProjectMemberRepository projectMemberRepository,
+         ProjectRepository projectRepository,
+         ProjectMilestoneRepository projectMilestoneRepository,
+         ProjectService projectService,
+         RepositoryLinkService repositoryLinkService
     ) {
-        this.userRepository = userRepository;
-        this.projectMemberRepository = projectMemberRepository;
-        this.projectRepository = projectRepository;
-        this.projectMilestoneRepository = projectMilestoneRepository;
+         this.userRepository = userRepository;
+         this.projectMemberRepository = projectMemberRepository;
+         this.projectRepository = projectRepository;
+         this.projectMilestoneRepository = projectMilestoneRepository;
+         this.projectService = projectService;
+         this.repositoryLinkService = repositoryLinkService;
     }
 
     @Override
@@ -99,6 +112,24 @@ class StudentServiceImpl implements StudentService {
             .map(this::toDetailMilestone)
             .toList();
 
+        StudentProjectDetailDto.Leader leader = null;
+        if (project.getLeaderUserId() != null) {
+            User leaderUser = userById.get(project.getLeaderUserId());
+            if (leaderUser == null) {
+                leaderUser = userRepository.findById(project.getLeaderUserId()).orElse(null);
+            }
+            if (leaderUser != null) {
+                leader = toDetailLeader(leaderUser);
+            }
+        }
+
+        ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
+        String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
+        ProjectGitHubRepositoriesDto githubRepositories = repositoryLinkService.getProjectRepositories(
+            project.getId().toString(),
+            project.getSupervisor().getId().toString()
+        );
+
         return new StudentProjectDetailDto(
             project.getId(),
             project.getName(),
@@ -110,9 +141,94 @@ class StudentServiceImpl implements StudentService {
             project.getLastActivityAt(),
             project.getProgressPercent(),
             project.getHealthNote(),
+            projectService.getGitHubPreview(project.getId(), effectiveUrl),
+            githubRepositories,
+            leader,
             members,
             milestones
         );
+    }
+
+    @Override
+@Transactional(readOnly = true)
+public ProjectGitHubDashboardDto getProjectGitHubDashboard(
+    String authenticatedUserId,
+    String projectId,
+    String linkedRepositoryId
+) {
+    User student = resolveStudent(authenticatedUserId);
+    UUID parsedProjectId = parseProjectId(projectId);
+
+    boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
+        student.getId(),
+        parsedProjectId,
+        Roles.STUDENT
+    );
+    if (!hasAccess) {
+        throw new EntityNotFoundException();
+    }
+
+    Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
+        .orElseThrow(EntityNotFoundException::new);
+
+    UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
+    return projectService.getGitHubDashboard(project.getId(), null, parsedLinkedRepositoryId);
+}
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> getProjectGitHubActivityPage(
+        String authenticatedUserId,
+        String projectId,
+        String linkedRepositoryId,
+        int page,
+        int size
+    ) {
+        User student = resolveStudent(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
+            student.getId(),
+            parsedProjectId,
+            Roles.STUDENT
+        );
+        if (!hasAccess) {
+            throw new EntityNotFoundException();
+        }
+
+        Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
+            .orElseThrow(EntityNotFoundException::new);
+
+        UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
+        return projectService.getGitHubActivityPage(project.getId(), null, parsedLinkedRepositoryId, page, size);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> getProjectGitHubContributorsPage(
+        String authenticatedUserId,
+        String projectId,
+        String linkedRepositoryId,
+        int page,
+        int size
+    ) {
+        User student = resolveStudent(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
+            student.getId(),
+            parsedProjectId,
+            Roles.STUDENT
+        );
+        if (!hasAccess) {
+            throw new EntityNotFoundException();
+        }
+
+        Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
+            .orElseThrow(EntityNotFoundException::new);
+
+        UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
+        return projectService.getGitHubContributorsPage(project.getId(), null, parsedLinkedRepositoryId, page, size);
     }
 
     private User resolveStudent(String authenticatedUserId) {
@@ -182,11 +298,32 @@ class StudentServiceImpl implements StudentService {
         );
     }
 
+    private StudentProjectDetailDto.Leader toDetailLeader(User user) {
+        return new StudentProjectDetailDto.Leader(
+            user.getId(),
+            user.getFirstName(),
+            user.getLastName(),
+            user.getEmail(),
+            user.getRegistrationNumber()
+        );
+    }
+
     private UUID parseProjectId(String projectId) {
         try {
             return UUID.fromString(projectId);
         } catch (IllegalArgumentException exception) {
             throw new EntityNotFoundException();
+        }
+    }
+
+    private UUID parseLinkedRepositoryId(String linkedRepositoryId) {
+        if (linkedRepositoryId == null || linkedRepositoryId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(linkedRepositoryId.trim());
+        } catch (IllegalArgumentException exception) {
+            throw new ValidationException("linkedRepositoryId", "linkedRepositoryId must be a valid UUID.");
         }
     }
 }

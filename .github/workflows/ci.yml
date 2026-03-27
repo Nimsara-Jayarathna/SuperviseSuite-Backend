@@ -1,17 +1,25 @@
-name: CI
+name: Backend CI/CD
 
 on:
   pull_request:
-    branches: [ "main", "dev" ]
+    branches: ["main", "dev"]
   push:
-    branches: [ "main", "dev" ]
+    branches: ["main", "dev"]
 
 concurrency:
-  group: be-ci-${{ github.ref }}
+  group: be-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  packages: write
+
+env:
+  APP_NAME: supervisesuite-be
+
 jobs:
-  build-test:
+  test:
+    name: Test
     runs-on: ubuntu-latest
 
     steps:
@@ -21,12 +29,184 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: "temurin"
+          distribution: temurin
           java-version: "21"
-          cache: "maven"
+          cache: maven
 
       - name: Run tests
-        run: ./mvnw test
+        run: ./mvnw -q test
 
-      - name: Package (jar)
-        run: ./mvnw -DskipTests=false clean package
+      - name: Package application
+        run: ./mvnw -q -DskipTests package
+
+  build:
+    name: Build Image
+    if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') }}
+    needs: test
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'stg' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive deployment metadata
+        run: |
+          echo "IMAGE_REPO=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            echo "DEPLOY_ENV=prod" >> "$GITHUB_ENV"
+          else
+            echo "DEPLOY_ENV=stg" >> "$GITHUB_ENV"
+          fi
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        run: |
+          docker build \
+            -t "$IMAGE_REPO:$DEPLOY_ENV" \
+            -t "$IMAGE_REPO:${GITHUB_SHA::7}" \
+            .
+
+      - name: Push image
+        run: |
+          docker push "$IMAGE_REPO:$DEPLOY_ENV"
+          docker push "$IMAGE_REPO:${GITHUB_SHA::7}"
+
+  deploy:
+    name: Deploy
+    if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') }}
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'stg' }}
+    env:
+      APP_ENV_FILE: ${{ secrets.APP_ENV_FILE }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive deployment metadata
+        run: |
+          echo "IMAGE_REPO=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            echo "DEPLOY_ENV=prod" >> "$GITHUB_ENV"
+            echo "APP_DIR=/var/www/supervisesuite-backend" >> "$GITHUB_ENV"
+            echo "COMPOSE_PROJECT_NAME=supervisesuite-prod" >> "$GITHUB_ENV"
+            echo "CONTAINER_NAME=${APP_NAME}-prod" >> "$GITHUB_ENV"
+            echo "DB_CONTAINER_NAME=supervisesuite-db-prod" >> "$GITHUB_ENV"
+            echo "NETWORK_ALIAS=${APP_NAME}-prod" >> "$GITHUB_ENV"
+            echo "INTERNAL_NET_NAME=supervisesuite_prod_internal" >> "$GITHUB_ENV"
+          else
+            echo "DEPLOY_ENV=stg" >> "$GITHUB_ENV"
+            echo "APP_DIR=/var/www/supervisesuite-backend-stg" >> "$GITHUB_ENV"
+            echo "COMPOSE_PROJECT_NAME=supervisesuite-stg" >> "$GITHUB_ENV"
+            echo "CONTAINER_NAME=${APP_NAME}-stg" >> "$GITHUB_ENV"
+            echo "DB_CONTAINER_NAME=supervisesuite-db-stg" >> "$GITHUB_ENV"
+            echo "NETWORK_ALIAS=${APP_NAME}-stg" >> "$GITHUB_ENV"
+            echo "INTERNAL_NET_NAME=supervisesuite_stg_internal" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install rsync and SSH client
+        run: sudo apt-get update && sudo apt-get install -y rsync openssh-client
+
+      - name: Validate SSH settings
+        run: |
+          echo "SSH_HOST=$SSH_HOST"
+          echo "SSH_PORT=$SSH_PORT"
+          if [ -n "${SSH_USER:-}" ]; then
+            echo "SSH_USER set? yes"
+          else
+            echo "SSH_USER set? no"
+          fi
+          echo "SSH_PRIVATE_KEY length: ${#SSH_PRIVATE_KEY}"
+          echo "APP_ENV_FILE length: ${#APP_ENV_FILE}"
+          if [ -z "${SSH_PORT:-}" ] || ! echo "$SSH_PORT" | grep -Eq '^[0-9]+$'; then
+            echo "Invalid SSH_PORT: $SSH_PORT" >&2
+            exit 1
+          fi
+
+      - name: Configure SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync deployment files
+        run: |
+          SSH_OPTS="-i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes"
+          ssh $SSH_OPTS -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "sudo mkdir -p '$APP_DIR' && sudo chown '$SSH_USER:$SSH_USER' '$APP_DIR'"
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'target' \
+            --exclude '.env' \
+            ./ "$SSH_USER@$SSH_HOST:$APP_DIR/" -e "ssh $SSH_OPTS -p $SSH_PORT"
+
+      - name: Upload environment file
+        run: |
+          SSH_OPTS="-i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes"
+          if [ -n "${APP_ENV_FILE:-}" ]; then
+            printf '%s' "$APP_ENV_FILE" | ssh $SSH_OPTS -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "cat > '$APP_DIR/.env'"
+          else
+            echo "APP_ENV_FILE secret is required" >&2
+            exit 1
+          fi
+
+      - name: Run docker compose remotely
+        env:
+          NPM_NET_NAME: ${{ vars.NPM_NET_NAME }}
+        run: |
+          SSH_OPTS="-i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes"
+          ssh $SSH_OPTS -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "APP_DIR='$APP_DIR' IMAGE='$IMAGE_REPO:$DEPLOY_ENV' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' CONTAINER_NAME='$CONTAINER_NAME' DB_CONTAINER_NAME='$DB_CONTAINER_NAME' NETWORK_ALIAS='$NETWORK_ALIAS' INTERNAL_NET_NAME='$INTERNAL_NET_NAME' NPM_NET_NAME='${NPM_NET_NAME:-npm_default}' bash -s" <<'EOF'
+          set -euo pipefail
+
+          cd "$APP_DIR"
+
+          if ! command -v docker >/dev/null 2>&1; then
+            echo "Docker is required on the target server" >&2
+            exit 1
+          fi
+
+          if docker compose version >/dev/null 2>&1; then
+            DC="docker compose"
+          elif command -v docker-compose >/dev/null 2>&1; then
+            DC="docker-compose"
+          else
+            echo "Docker Compose not available" >&2
+            exit 1
+          fi
+
+          if ! docker network inspect "$NPM_NET_NAME" >/dev/null 2>&1; then
+            docker network create --driver bridge "$NPM_NET_NAME"
+          fi
+
+          IMAGE="$IMAGE" \
+          CONTAINER_NAME="$CONTAINER_NAME" \
+          DB_CONTAINER_NAME="$DB_CONTAINER_NAME" \
+          NETWORK_ALIAS="$NETWORK_ALIAS" \
+          INTERNAL_NET_NAME="$INTERNAL_NET_NAME" \
+          NPM_NET_NAME="$NPM_NET_NAME" \
+          $DC -p "$COMPOSE_PROJECT_NAME" -f docker-compose.yml pull
+
+          IMAGE="$IMAGE" \
+          CONTAINER_NAME="$CONTAINER_NAME" \
+          DB_CONTAINER_NAME="$DB_CONTAINER_NAME" \
+          NETWORK_ALIAS="$NETWORK_ALIAS" \
+          INTERNAL_NET_NAME="$INTERNAL_NET_NAME" \
+          NPM_NET_NAME="$NPM_NET_NAME" \
+          $DC -p "$COMPOSE_PROJECT_NAME" -f docker-compose.yml up -d
+
+          docker image prune -f
+          EOF

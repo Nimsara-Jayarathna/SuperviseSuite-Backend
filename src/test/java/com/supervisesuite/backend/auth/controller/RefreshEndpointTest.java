@@ -3,13 +3,12 @@ package com.supervisesuite.backend.auth.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.supervisesuite.backend.TestcontainersConfiguration;
+import com.supervisesuite.backend.auth.AuthTestBase;
 import com.supervisesuite.backend.auth.entity.RefreshToken;
-import com.supervisesuite.backend.auth.repository.RefreshTokenRepository;
 import com.supervisesuite.backend.auth.security.CookieService;
 import com.supervisesuite.backend.auth.service.RefreshTokenService;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.users.entity.User;
-import com.supervisesuite.backend.users.repository.UserRepository;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -48,13 +47,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
     }
 )
 @Import(TestcontainersConfiguration.class)
-class RefreshEndpointTest {
+class RefreshEndpointTest extends AuthTestBase {
 
     private static final String REFRESH_URL = "/api/auth/refresh";
 
     @Autowired private TestRestTemplate restTemplate;
-    @Autowired private UserRepository userRepository;
-    @Autowired private RefreshTokenRepository refreshTokenRepository;
     @Autowired private RefreshTokenService refreshTokenService;
     @Autowired private PasswordEncoder passwordEncoder;
 
@@ -62,8 +59,7 @@ class RefreshEndpointTest {
 
     @BeforeEach
     void setUp() {
-        refreshTokenRepository.deleteAll();
-        userRepository.deleteAll();
+        safeCleanup();
         savedUser = persistUser("refresh.test@university.ac.lk", "Secure@123");
     }
 
@@ -157,7 +153,7 @@ class RefreshEndpointTest {
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     @Test
@@ -165,7 +161,7 @@ class RefreshEndpointTest {
         ResponseEntity<Map> response = postWithRefreshCookie("completely-invalid-token");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     @Test
@@ -176,7 +172,7 @@ class RefreshEndpointTest {
         ResponseEntity<Map> response = postWithRefreshCookie(rawToken);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     @Test
@@ -208,7 +204,7 @@ class RefreshEndpointTest {
         ResponseEntity<Map> response = postWithRefreshCookie(rawToken);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     // -------------------------------------------------------------------------
@@ -243,5 +239,10 @@ class RefreshEndpointTest {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> error(ResponseEntity<Map> response) {
+        return (Map<String, Object>) response.getBody().get("error");
     }
 }

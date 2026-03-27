@@ -11,6 +11,7 @@ import com.supervisesuite.backend.auth.service.AuthService;
 import com.supervisesuite.backend.auth.service.RefreshTokenService;
 import com.supervisesuite.backend.auth.service.RefreshTokenValidator;
 import com.supervisesuite.backend.common.api.ApiResponse;
+import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.users.entity.User;
 import jakarta.servlet.http.Cookie;
@@ -20,7 +21,6 @@ import jakarta.validation.Valid;
 import java.util.Arrays;
 import java.util.Optional;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -43,19 +43,22 @@ public class AuthController {
     private final TokenService tokenService;
     private final RefreshTokenService refreshTokenService;
     private final RefreshTokenValidator refreshTokenValidator;
+    private final ApiResponseFactory apiResponseFactory;
 
     public AuthController(
         AuthService authService,
         CookieService cookieService,
         TokenService tokenService,
         RefreshTokenService refreshTokenService,
-        RefreshTokenValidator refreshTokenValidator
+        RefreshTokenValidator refreshTokenValidator,
+        ApiResponseFactory apiResponseFactory
     ) {
         this.authService = authService;
         this.cookieService = cookieService;
         this.tokenService = tokenService;
         this.refreshTokenService = refreshTokenService;
         this.refreshTokenValidator = refreshTokenValidator;
+        this.apiResponseFactory = apiResponseFactory;
     }
 
     /**
@@ -75,18 +78,11 @@ public class AuthController {
      */
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<RegisterResponse>> register(
-        @Valid @RequestBody RegisterRequest request
+        @Valid @RequestBody RegisterRequest request,
+        HttpServletRequest httpRequest
     ) {
         RegisterResponse data = authService.registerStudent(request);
-
-        ApiResponse<RegisterResponse> response = new ApiResponse<>(
-            true,
-            "Registration successful.",
-            data,
-            null
-        );
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return apiResponseFactory.created("Registration successful.", data, httpRequest);
     }
 
     /**
@@ -112,6 +108,7 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginUserResponse>> login(
         @Valid @RequestBody LoginRequest request,
+        HttpServletRequest httpRequest,
         HttpServletResponse httpResponse
     ) {
         LoginResponse data = authService.login(request);
@@ -122,14 +119,7 @@ public class AuthController {
         httpResponse.addHeader(HttpHeaders.SET_COOKIE,
             cookieService.buildRefreshTokenCookie(data.getRefreshToken()).toString());
 
-        ApiResponse<LoginUserResponse> response = new ApiResponse<>(
-            true,
-            "Login successful.",
-            new LoginUserResponse(data.getUser()),
-            null
-        );
-
-        return ResponseEntity.ok(response);
+        return apiResponseFactory.ok("Login successful.", new LoginUserResponse(data.getUser()), httpRequest);
     }
 
     /**
@@ -175,9 +165,7 @@ public class AuthController {
             user.getLastName(), user.getRole()
         );
 
-        return ResponseEntity.ok(new ApiResponse<>(
-            true, "Token refreshed.", new LoginUserResponse(userInfo), null
-        ));
+        return apiResponseFactory.ok("Token refreshed.", new LoginUserResponse(userInfo), httpRequest);
     }
 
     /**

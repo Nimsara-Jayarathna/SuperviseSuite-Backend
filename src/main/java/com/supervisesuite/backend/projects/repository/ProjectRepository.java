@@ -8,6 +8,8 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ProjectRepository extends JpaRepository<Project, UUID> {
+    List<Project> findByDeletedAtIsNullOrderByCreatedAtDesc();
+
     List<Project> findBySupervisorIdAndDeletedAtIsNullOrderByCreatedAtDesc(UUID supervisorId);
 
     Optional<Project> findByIdAndSupervisor_IdAndDeletedAtIsNull(UUID id, UUID supervisorId);

@@ -3,11 +3,10 @@ package com.supervisesuite.backend.auth.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.supervisesuite.backend.TestcontainersConfiguration;
+import com.supervisesuite.backend.auth.AuthTestBase;
 import com.supervisesuite.backend.auth.dto.LoginRequest;
-import com.supervisesuite.backend.auth.repository.RefreshTokenRepository;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.users.entity.User;
-import com.supervisesuite.backend.users.repository.UserRepository;
 import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -39,7 +39,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
     }
 )
 @Import(TestcontainersConfiguration.class)
-class LoginEndpointTest {
+class LoginEndpointTest extends AuthTestBase {
 
     private static final String LOGIN_URL = "/api/auth/login";
     private static final String TEST_EMAIL = "amal.perera@university.ac.lk";
@@ -49,18 +49,11 @@ class LoginEndpointTest {
     private TestRestTemplate restTemplate;
 
     @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private RefreshTokenRepository refreshTokenRepository;
-
-    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void cleanUp() {
-        refreshTokenRepository.deleteAll();
-        userRepository.deleteAll();
+        safeCleanup();
         persistUser(TEST_EMAIL, TEST_PASSWORD, Roles.STUDENT);
     }
 
@@ -193,7 +186,11 @@ class LoginEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(response.getHeaders().getContentType()).isNotNull();
+        assertThat(response.getHeaders().getContentType().isCompatibleWith(MediaType.APPLICATION_JSON)).isTrue();
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().get("success")).isEqualTo(false);
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
         assertThat(response.getBody().get("message")).isEqualTo("Invalid email or password.");
     }
 
@@ -206,7 +203,11 @@ class LoginEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(response.getHeaders().getContentType()).isNotNull();
+        assertThat(response.getHeaders().getContentType().isCompatibleWith(MediaType.APPLICATION_JSON)).isTrue();
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().get("success")).isEqualTo(false);
+        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
         // Same message as wrong password — prevents user enumeration
         assertThat(response.getBody().get("message")).isEqualTo("Invalid email or password.");
     }
@@ -235,9 +236,9 @@ class LoginEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<Map<?, ?>>) response.getBody().get("details");
+        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
         assertThat(details).anyMatch(d -> "email".equals(d.get("field")));
     }
 
@@ -250,9 +251,9 @@ class LoginEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<Map<?, ?>>) response.getBody().get("details");
+        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
         assertThat(details).anyMatch(d -> "email".equals(d.get("field")));
     }
 
@@ -265,9 +266,9 @@ class LoginEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<Map<?, ?>>) response.getBody().get("details");
+        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
         assertThat(details).anyMatch(d -> "password".equals(d.get("field")));
     }
 
@@ -292,5 +293,10 @@ class LoginEndpointTest {
         user.setRegistrationNumber("CS/2021/001");
         user.setCreatedAt(Instant.now());
         userRepository.save(user);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> error(ResponseEntity<Map> response) {
+        return (Map<String, Object>) response.getBody().get("error");
     }
 }

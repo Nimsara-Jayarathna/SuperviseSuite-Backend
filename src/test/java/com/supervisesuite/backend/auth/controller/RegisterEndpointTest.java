@@ -3,10 +3,10 @@ package com.supervisesuite.backend.auth.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.supervisesuite.backend.TestcontainersConfiguration;
+import com.supervisesuite.backend.auth.AuthTestBase;
 import com.supervisesuite.backend.auth.dto.RegisterRequest;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.users.entity.User;
-import com.supervisesuite.backend.users.repository.UserRepository;
 import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +37,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
     }
 )
 @Import(TestcontainersConfiguration.class)
-class RegisterEndpointTest {
+class RegisterEndpointTest extends AuthTestBase {
 
     private static final String REGISTER_URL = "/api/auth/register";
 
@@ -45,14 +45,11 @@ class RegisterEndpointTest {
     private TestRestTemplate restTemplate;
 
     @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void cleanUp() {
-        userRepository.deleteAll();
+        safeCleanup();
     }
 
     // -------------------------------------------------------------------------
@@ -135,7 +132,7 @@ class RegisterEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(REGISTER_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(response.getBody().get("code")).isEqualTo("CONFLICT");
+        assertThat(error(response).get("code")).isEqualTo("CONFLICT");
         assertThat(response.getBody().get("message").toString()).containsIgnoringCase("email");
     }
 
@@ -147,7 +144,7 @@ class RegisterEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(REGISTER_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(response.getBody().get("code")).isEqualTo("CONFLICT");
+        assertThat(error(response).get("code")).isEqualTo("CONFLICT");
         assertThat(response.getBody().get("message").toString()).containsIgnoringCase("registration number");
     }
 
@@ -162,9 +159,9 @@ class RegisterEndpointTest {
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<?>) response.getBody().get("details");
+        var details = (java.util.List<?>) error(response).get("details");
         assertThat(details).isNotEmpty();
     }
 
@@ -176,9 +173,9 @@ class RegisterEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(REGISTER_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<Map<?, ?>>) response.getBody().get("details");
+        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
         assertThat(details).anyMatch(d -> "email".equals(d.get("field")));
     }
 
@@ -190,9 +187,9 @@ class RegisterEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(REGISTER_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<Map<?, ?>>) response.getBody().get("details");
+        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
         assertThat(details).anyMatch(d -> "password".equals(d.get("field")));
     }
 
@@ -204,7 +201,7 @@ class RegisterEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(REGISTER_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        var details = (java.util.List<Map<?, ?>>) response.getBody().get("details");
+        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
         assertThat(details).anyMatch(d -> "firstName".equals(d.get("field")));
     }
 
@@ -216,7 +213,7 @@ class RegisterEndpointTest {
         ResponseEntity<Map> response = restTemplate.postForEntity(REGISTER_URL, request, Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        var details = (java.util.List<Map<?, ?>>) response.getBody().get("details");
+        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
         assertThat(details).anyMatch(d -> "registrationNumber".equals(d.get("field")));
     }
 
@@ -264,5 +261,10 @@ class RegisterEndpointTest {
         user.setLastName("User");
         user.setCreatedAt(Instant.now());
         userRepository.save(user);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> error(ResponseEntity<Map> response) {
+        return (Map<String, Object>) response.getBody().get("error");
     }
 }

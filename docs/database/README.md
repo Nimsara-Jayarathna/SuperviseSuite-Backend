@@ -4,8 +4,8 @@ This directory tracks database structure and migration history for the backend.
 
 ## Structure
 
-- `schema-v1.md`: full schema reference covering V1 and V2 migrations.
-- `migrations.md`: migration log and rules for future schema changes.
+- `schema-v1.md`: schema reference updated through GitHub integration v2 migrations (`V15`).
+- `migrations.md`: chronological migration log and rules for future schema changes.
 
 ## Source of Truth
 
@@ -14,6 +14,20 @@ This directory tracks database structure and migration history for the backend.
 - Profile-specific Flyway behavior:
   - default: `src/main/resources/application.yaml` (`baseline-on-migrate: false`)
   - dev: `src/main/resources/application-dev.yaml` — no Flyway overrides; apply only to an empty database
+
+## Current Baseline
+
+- Core domain initialized by `V1__init_schema.sql`.
+- Auth refresh-token support added by `V2__add_refresh_tokens.sql`.
+- Project domain expanded by `V3__project_domain_expansion.sql` and `V4__project_leader_assignment.sql`.
+- GitHub integration v1 introduced by `V5__project_github_cache.sql` and `V6__github_app_installations.sql`.
+- GitHub integration v2 finalized by:
+  - `V10__github_integration_v2.sql`
+  - `V11__github_repository_enablement_limits.sql`
+  - `V12__decommission_v1_github_integration.sql`
+  - `V13__denormalized_repository_link_fields.sql`
+  - `V14__add_updated_at_to_access_sources.sql`
+  - `V15__align_github_access_request_v2_with_result_tracking.sql`
 
 ## Change Workflow
 

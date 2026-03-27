@@ -1,0 +1,133 @@
+package com.supervisesuite.backend.student.controller;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.supervisesuite.backend.common.api.ApiResponse;
+import com.supervisesuite.backend.common.api.ApiResponseFactory;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
+import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
+import com.supervisesuite.backend.student.service.StudentService;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+
+@ExtendWith(MockitoExtension.class)
+class StudentControllerTest {
+
+    @Mock
+    private StudentService studentService;
+
+    @Mock
+    private ApiResponseFactory apiResponseFactory;
+
+    @Mock
+    private Authentication authentication;
+
+    @Mock
+    private HttpServletRequest request;
+
+    private StudentController controller;
+
+    @BeforeEach
+    void setUp() {
+        controller = new StudentController(studentService, apiResponseFactory);
+        when(authentication.getName()).thenReturn("student-id");
+    }
+
+    @Test
+    void getProjects_delegatesToServiceAndFactory() {
+        List<StudentProjectSummaryDto> data = List.of(new StudentProjectSummaryDto());
+        ResponseEntity<ApiResponse<List<StudentProjectSummaryDto>>> expected = ResponseEntity.ok(new ApiResponse<>());
+
+        when(studentService.getProjects("student-id")).thenReturn(data);
+        when(apiResponseFactory.ok("Projects loaded.", data, request)).thenReturn(expected);
+
+        ResponseEntity<ApiResponse<List<StudentProjectSummaryDto>>> response = controller.getProjects(authentication, request);
+
+        assertThat(response).isSameAs(expected);
+        verify(studentService).getProjects("student-id");
+        verify(apiResponseFactory).ok("Projects loaded.", data, request);
+    }
+
+    @Test
+    void getProjectById_delegatesToServiceAndFactory() {
+        StudentProjectDetailDto data = new StudentProjectDetailDto();
+        ResponseEntity<ApiResponse<StudentProjectDetailDto>> expected = ResponseEntity.ok(new ApiResponse<>());
+
+        when(studentService.getProjectById("student-id", "project-1")).thenReturn(data);
+        when(apiResponseFactory.ok("Project loaded.", data, request)).thenReturn(expected);
+
+        ResponseEntity<ApiResponse<StudentProjectDetailDto>> response = controller.getProjectById(
+            authentication,
+            "project-1",
+            request
+        );
+
+        assertThat(response).isSameAs(expected);
+        verify(studentService).getProjectById("student-id", "project-1");
+    }
+
+    @Test
+    void getProjectGitHubDashboard_usesConnectedMessageWhenRepositoryLinked() {
+        ProjectGitHubDashboardDto data = new ProjectGitHubDashboardDto();
+        data.setRepositoryLinked(true);
+        ResponseEntity<ApiResponse<ProjectGitHubDashboardDto>> expected = ResponseEntity.ok(new ApiResponse<>());
+
+        when(studentService.getProjectGitHubDashboard("student-id", "project-1", null)).thenReturn(data);
+        when(apiResponseFactory.ok("GitHub dashboard loaded.", data, request)).thenReturn(expected);
+
+        ResponseEntity<ApiResponse<ProjectGitHubDashboardDto>> response = controller.getProjectGitHubDashboard(
+            authentication,
+            "project-1",
+            null,
+            request
+        );
+
+        assertThat(response).isSameAs(expected);
+        verify(apiResponseFactory).ok("GitHub dashboard loaded.", data, request);
+    }
+
+    @Test
+    void getProjectGitHubActivity_whenSizeNull_passesZeroToService() {
+        ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> data =
+            new ProjectGitHubPageDto<>(List.of(), 1, 10, 0, false);
+        ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit>>> expected =
+            ResponseEntity.ok(new ApiResponse<>());
+
+        when(studentService.getProjectGitHubActivityPage("student-id", "project-1", null, 2, 0)).thenReturn(data);
+        when(apiResponseFactory.ok("GitHub activity page loaded.", data, request)).thenReturn(expected);
+
+        ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit>>> response =
+            controller.getProjectGitHubActivity(authentication, "project-1", null, 2, null, request);
+
+        assertThat(response).isSameAs(expected);
+        verify(studentService).getProjectGitHubActivityPage("student-id", "project-1", null, 2, 0);
+    }
+
+    @Test
+    void getProjectGitHubContributors_whenSizeProvided_passesThrough() {
+        ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor> data =
+            new ProjectGitHubPageDto<>(List.of(), 1, 10, 0, false);
+        ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor>>> expected =
+            ResponseEntity.ok(new ApiResponse<>());
+
+        when(studentService.getProjectGitHubContributorsPage("student-id", "project-1", null, 3, 25)).thenReturn(data);
+        when(apiResponseFactory.ok("GitHub contributors page loaded.", data, request)).thenReturn(expected);
+
+        ResponseEntity<ApiResponse<ProjectGitHubPageDto<ProjectGitHubDashboardDto.Contributor>>> response =
+            controller.getProjectGitHubContributors(authentication, "project-1", null, 3, 25, request);
+
+        assertThat(response).isSameAs(expected);
+        verify(studentService).getProjectGitHubContributorsPage("student-id", "project-1", null, 3, 25);
+    }
+}
