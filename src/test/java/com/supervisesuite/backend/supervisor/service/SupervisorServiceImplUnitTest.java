@@ -401,8 +401,13 @@ class SupervisorServiceImplUnitTest {
         request.setState("bad-state-without-colon");
 
         assertThatThrownBy(() -> service.completeJiraOAuth(supervisorId.toString(), request))
-            .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("OAuth state format is invalid");
+            .isInstanceOfSatisfying(ValidationException.class, exception -> {
+                assertThat(exception.getMessage()).isEqualTo("Validation failed.");
+                assertThat(exception.getDetails()).hasSize(1);
+                assertThat(exception.getDetails().getFirst().field()).isEqualTo("state");
+                assertThat(exception.getDetails().getFirst().issue())
+                    .contains("OAuth state format is invalid");
+            });
 
         verify(restClientBuilder, never()).build();
     }
