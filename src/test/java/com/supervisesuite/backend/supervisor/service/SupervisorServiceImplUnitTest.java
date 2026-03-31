@@ -404,8 +404,8 @@ class SupervisorServiceImplUnitTest {
             .isInstanceOfSatisfying(ValidationException.class, exception -> {
                 assertThat(exception.getMessage()).isEqualTo("Validation failed.");
                 assertThat(exception.getDetails()).hasSize(1);
-                assertThat(exception.getDetails().getFirst().field()).isEqualTo("state");
-                assertThat(exception.getDetails().getFirst().issue())
+                assertThat(exception.getDetails().getFirst().getField()).isEqualTo("state");
+                assertThat(exception.getDetails().getFirst().getIssue())
                     .contains("OAuth state format is invalid");
             });
 
