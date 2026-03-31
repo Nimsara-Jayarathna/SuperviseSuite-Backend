@@ -32,6 +32,7 @@ import com.supervisesuite.backend.projects.integration.github.GitHubInstallation
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
+import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionService;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
@@ -59,7 +60,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -111,6 +111,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final AccessRequestService accessRequestService;
     private final JiraProperties jiraProperties;
     private final ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
+    private final JiraTokenEncryptionService jiraTokenEncryptionService;
     private final RestClient restClient;
 
     SupervisorServiceImpl(
@@ -126,6 +127,7 @@ class SupervisorServiceImpl implements SupervisorService {
             AccessRequestService accessRequestService,
             JiraProperties jiraProperties,
             ProjectJiraIntegrationRepository projectJiraIntegrationRepository,
+            JiraTokenEncryptionService jiraTokenEncryptionService,
             RestClient.Builder restClientBuilder) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
@@ -139,6 +141,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.accessRequestService = accessRequestService;
         this.jiraProperties = jiraProperties;
         this.projectJiraIntegrationRepository = projectJiraIntegrationRepository;
+        this.jiraTokenEncryptionService = jiraTokenEncryptionService;
         this.restClient = restClientBuilder.build();
     }
 
@@ -1027,7 +1030,7 @@ class SupervisorServiceImpl implements SupervisorService {
         integration.setCloudId(cloudId);
         integration.setWorkspaceName(workspaceName);
         integration.setWorkspaceUrl(workspaceUrl);
-        integration.setAccessTokenEncrypted(Base64.getEncoder().encodeToString(accessToken.getBytes(StandardCharsets.UTF_8)));
+        integration.setAccessTokenEncrypted(jiraTokenEncryptionService.encrypt(accessToken));
         integration.setScope(scopes);
         integration.setConnectedBy(supervisor.getId());
         integration.setConnectedAt(now);

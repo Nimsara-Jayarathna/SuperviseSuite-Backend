@@ -23,6 +23,7 @@ import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
 import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
+import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionService;
 import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.SupervisorDashboardDto;
@@ -81,6 +82,8 @@ class SupervisorServiceImplUnitTest {
     @Mock
     private ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
     @Mock
+    private JiraTokenEncryptionService jiraTokenEncryptionService;
+    @Mock
     private RestClient.Builder restClientBuilder;
     @Mock
     private RestClient restClient;
@@ -105,6 +108,7 @@ class SupervisorServiceImplUnitTest {
                 accessRequestService,
                 jiraProperties,
                 projectJiraIntegrationRepository,
+                jiraTokenEncryptionService,
                 restClientBuilder);
 
         supervisorId = UUID.randomUUID();
