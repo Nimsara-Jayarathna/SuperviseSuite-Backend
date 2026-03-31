@@ -67,8 +67,4 @@ public class Project {
 
     private UUID leaderUserId;
 
-    private String jiraProjectKey;
-
-    @Column(columnDefinition = "TEXT")
-    private String jiraBoardUrl;
 }

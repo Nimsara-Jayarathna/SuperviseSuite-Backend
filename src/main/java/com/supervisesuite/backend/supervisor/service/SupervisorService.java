@@ -23,6 +23,7 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryListingDto
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto;
+import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
 import java.util.List;
 
 public interface SupervisorService {
@@ -155,4 +156,6 @@ public interface SupervisorService {
         String authenticatedUserId,
         String projectId
     );
+
+    JiraAuthUrlDto getProjectJiraAuthUrl(String authenticatedUserId, String projectId);
 }

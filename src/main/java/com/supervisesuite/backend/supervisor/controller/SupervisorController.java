@@ -11,6 +11,7 @@ import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryReques
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
+import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
@@ -271,6 +272,16 @@ public class SupervisorController {
     ) {
         supervisorService.refreshProjectGitHubData(authentication.getName(), projectId);
         return apiResponseFactory.ok("GitHub data refreshed successfully.", null, request);
+    }
+
+    @GetMapping("/projects/{projectId}/jira/auth-url")
+    public ResponseEntity<ApiResponse<JiraAuthUrlDto>> getProjectJiraAuthUrl(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        JiraAuthUrlDto data = supervisorService.getProjectJiraAuthUrl(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Jira authorization URL generated.", data, request);
     }
 
     @PostMapping("/projects")

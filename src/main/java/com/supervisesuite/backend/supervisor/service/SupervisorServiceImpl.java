@@ -21,7 +21,9 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryListingDto;
 import com.supervisesuite.backend.projects.dto.GitHubAvailableRepositoriesDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
+import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
+import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.projects.integration.github.GitHubInstallationDisconnectedException;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
@@ -50,6 +52,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.supervisesuite.backend.projects.service.ProjectService;
@@ -91,6 +95,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final RepositoryLinkService repositoryLinkService;
     private final AccessSourceService accessSourceService;
     private final AccessRequestService accessRequestService;
+    private final JiraProperties jiraProperties;
 
     SupervisorServiceImpl(
             UserRepository userRepository,
@@ -102,7 +107,8 @@ class SupervisorServiceImpl implements SupervisorService {
             SetupCallbackService setupCallbackService,
             RepositoryLinkService repositoryLinkService,
             AccessSourceService accessSourceService,
-            AccessRequestService accessRequestService) {
+            AccessRequestService accessRequestService,
+            JiraProperties jiraProperties) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
@@ -113,6 +119,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.repositoryLinkService = repositoryLinkService;
         this.accessSourceService = accessSourceService;
         this.accessRequestService = accessRequestService;
+        this.jiraProperties = jiraProperties;
     }
 
     @Override
@@ -724,6 +731,7 @@ class SupervisorServiceImpl implements SupervisorService {
                 project.getHealthNote(),
                 projectService.getGitHubPreview(project.getId(), effectiveUrl),
                 githubRepositories,
+                new SupervisorProjectDetailDto.JiraIntegration(false, null),
                 project.getLastActivityAt(),
                 toDetailLeader(project.getLeaderUserId()),
                 getProjectMembers(project.getId()),
@@ -814,6 +822,61 @@ class SupervisorServiceImpl implements SupervisorService {
         
         accessRequestService.acknowledgePending(parsedProjectId);
         return new GitHubAccessUpdatedAcknowledgeDto(parsedProjectId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public JiraAuthUrlDto getProjectJiraAuthUrl(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        String clientId = trimToNull(jiraProperties.getClientId());
+        if (clientId == null) {
+            clientId = trimToNull(System.getenv("ATLASSIAN_CLIENT_ID"));
+        }
+        String redirectUri = trimToNull(jiraProperties.getRedirectUri());
+        if (redirectUri == null) {
+            redirectUri = trimToNull(System.getenv("ATLASSIAN_REDIRECT_URI"));
+        }
+        if (clientId == null || redirectUri == null) {
+            throw new ValidationException("jiraConfig", "Jira OAuth is not fully configured.");
+        }
+
+        String authTargetUrl = trimToNull(jiraProperties.getAuthTargetUrl());
+        if (authTargetUrl == null) {
+            authTargetUrl = trimToNull(System.getenv("ATLASSIAN_AUTH_TARGET_URL"));
+        }
+        if (authTargetUrl == null) {
+            authTargetUrl = "https://auth.atlassian.com/authorize";
+        }
+        String statePrefix = trimToNull(jiraProperties.getOauthState());
+        if (statePrefix == null) {
+            statePrefix = trimToNull(System.getenv("ATLASSIAN_OAUTH_STATE"));
+        }
+        if (statePrefix == null) {
+            statePrefix = "supervisesuite_jira_state";
+        }
+        String url = authTargetUrl
+            + "?audience=" + urlencode(defaultIfBlank(
+                trimToNull(jiraProperties.getAudience()) != null
+                    ? jiraProperties.getAudience()
+                    : System.getenv("ATLASSIAN_AUDIENCE"),
+                "api.atlassian.com"
+            ))
+            + "&client_id=" + urlencode(clientId)
+            + "&scope=" + urlencode(defaultIfBlank(
+                trimToNull(jiraProperties.getScope()) != null
+                    ? jiraProperties.getScope()
+                    : System.getenv("ATLASSIAN_SCOPE"),
+                "read:jira-user read:jira-work"
+            ))
+            + "&redirect_uri=" + urlencode(redirectUri)
+            + "&state=" + urlencode(statePrefix + ":" + parsedProjectId)
+            + "&response_type=code&prompt=consent";
+        return new JiraAuthUrlDto(url);
     }
 
     private ProjectMember buildProjectMember(
@@ -967,6 +1030,15 @@ class SupervisorServiceImpl implements SupervisorService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String defaultIfBlank(String value, String fallback) {
+        String trimmed = trimToNull(value);
+        return trimmed == null ? fallback : trimmed;
+    }
+
+    private String urlencode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     private UUID resolveLeaderForCreate(UUID leaderStudentId, List<User> students) {
