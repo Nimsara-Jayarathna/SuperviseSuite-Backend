@@ -82,3 +82,14 @@ app:
         cron: ${GITHUB_REPOSITORY_REFRESH_CRON:0 0 0 * * *}
         zone: ${GITHUB_REPOSITORY_REFRESH_ZONE:UTC}
         batch-size: ${GITHUB_REPOSITORY_REFRESH_BATCH_SIZE:50}
+  jira:
+    client-id: ${ATLASSIAN_CLIENT_ID:}
+    client-secret: ${ATLASSIAN_CLIENT_SECRET:}
+    scope: ${ATLASSIAN_SCOPE:read:jira-user read:jira-work}
+    audience: ${ATLASSIAN_AUDIENCE:api.atlassian.com}
+    auth-target-url: ${ATLASSIAN_AUTH_TARGET_URL:https://auth.atlassian.com/authorize}
+    token-target-url: ${ATLASSIAN_TOKEN_TARGET_URL:https://auth.atlassian.com/oauth/token}
+    redirect-uri: ${ATLASSIAN_REDIRECT_URI:}
+    oauth-state: ${ATLASSIAN_OAUTH_STATE:supervisesuite_jira_state}
+    oauth-state-ttl-seconds: ${ATLASSIAN_OAUTH_STATE_TTL_SECONDS:900}
+    token-encryption-secret: ${ATLASSIAN_TOKEN_ENCRYPTION_SECRET:${JWT_SECRET:}}

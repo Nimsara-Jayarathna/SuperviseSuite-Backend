@@ -7,10 +7,12 @@ import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
+import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
+import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
@@ -38,6 +40,7 @@ class StudentServiceImpl implements StudentService {
     private final ProjectMilestoneRepository projectMilestoneRepository;
     private final ProjectService projectService;
     private final RepositoryLinkService repositoryLinkService;
+    private final ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
 
     StudentServiceImpl(
          UserRepository userRepository,
@@ -45,7 +48,8 @@ class StudentServiceImpl implements StudentService {
          ProjectRepository projectRepository,
          ProjectMilestoneRepository projectMilestoneRepository,
          ProjectService projectService,
-         RepositoryLinkService repositoryLinkService
+         RepositoryLinkService repositoryLinkService,
+         ProjectJiraIntegrationRepository projectJiraIntegrationRepository
     ) {
          this.userRepository = userRepository;
          this.projectMemberRepository = projectMemberRepository;
@@ -53,6 +57,7 @@ class StudentServiceImpl implements StudentService {
          this.projectMilestoneRepository = projectMilestoneRepository;
          this.projectService = projectService;
          this.repositoryLinkService = repositoryLinkService;
+         this.projectJiraIntegrationRepository = projectJiraIntegrationRepository;
     }
 
     @Override
@@ -129,6 +134,9 @@ class StudentServiceImpl implements StudentService {
             project.getId().toString(),
             project.getSupervisor().getId().toString()
         );
+        ProjectJiraIntegration jiraIntegration = projectJiraIntegrationRepository
+            .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
+            .orElse(null);
 
         return new StudentProjectDetailDto(
             project.getId(),
@@ -143,6 +151,11 @@ class StudentServiceImpl implements StudentService {
             project.getHealthNote(),
             projectService.getGitHubPreview(project.getId(), effectiveUrl),
             githubRepositories,
+            new StudentProjectDetailDto.JiraIntegration(
+                jiraIntegration != null,
+                jiraIntegration != null ? jiraIntegration.getWorkspaceName() : null,
+                jiraIntegration != null ? jiraIntegration.getWorkspaceUrl() : null
+            ),
             leader,
             members,
             milestones

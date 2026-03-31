@@ -11,6 +11,9 @@ import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryReques
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
+import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
+import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
+import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
@@ -271,6 +274,36 @@ public class SupervisorController {
     ) {
         supervisorService.refreshProjectGitHubData(authentication.getName(), projectId);
         return apiResponseFactory.ok("GitHub data refreshed successfully.", null, request);
+    }
+
+    @GetMapping("/projects/{projectId}/jira/auth-url")
+    public ResponseEntity<ApiResponse<JiraAuthUrlDto>> getProjectJiraAuthUrl(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        JiraAuthUrlDto data = supervisorService.getProjectJiraAuthUrl(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Jira authorization URL generated.", data, request);
+    }
+
+    @PostMapping("/jira/oauth/complete")
+    public ResponseEntity<ApiResponse<JiraOAuthCompleteResultDto>> completeJiraOAuth(
+        Authentication authentication,
+        HttpServletRequest request,
+        @RequestBody JiraOAuthCompleteRequestDto body
+    ) {
+        JiraOAuthCompleteResultDto data = supervisorService.completeJiraOAuth(authentication.getName(), body);
+        return apiResponseFactory.ok("Jira workspace connected successfully.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/jira/disconnect")
+    public ResponseEntity<ApiResponse<SupervisorProjectDetailDto>> disconnectProjectJira(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        SupervisorProjectDetailDto data = supervisorService.disconnectProjectJira(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Jira workspace disconnected successfully.", data, request);
     }
 
     @PostMapping("/projects")

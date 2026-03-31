@@ -11,12 +11,16 @@ import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto;
 import com.supervisesuite.backend.projects.entity.Project;
+import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
+import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
+import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -50,6 +54,8 @@ class StudentServiceImplTest {
 
     @Mock
     private RepositoryLinkService repositoryLinkService;
+    @Mock
+    private ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
 
     private StudentServiceImpl studentService;
 
@@ -64,7 +70,8 @@ class StudentServiceImplTest {
             projectRepository,
             projectMilestoneRepository,
             projectService,
-            repositoryLinkService
+            repositoryLinkService,
+            projectJiraIntegrationRepository
         );
 
         studentId = UUID.randomUUID();
@@ -155,6 +162,51 @@ class StudentServiceImplTest {
         assertThatThrownBy(() -> studentService.getProjects("not-a-uuid"))
             .isInstanceOf(UnauthorizedException.class)
             .hasMessageContaining("Authentication required");
+    }
+
+    @Test
+    void getProjectById_includesJiraIntegrationInResponse() {
+        UUID projectId = UUID.randomUUID();
+        Project project = project(projectId, "Project");
+        User supervisor = new User();
+        supervisor.setId(UUID.randomUUID());
+        supervisor.setEmail("supervisor@university.ac.lk");
+        project.setSupervisor(supervisor);
+
+        ProjectJiraIntegration jiraIntegration = new ProjectJiraIntegration();
+        jiraIntegration.setProjectId(projectId);
+        jiraIntegration.setWorkspaceName("supervise-suite");
+        jiraIntegration.setWorkspaceUrl("https://supervise-suite.atlassian.net");
+
+        ProjectGitHubPreviewDto preview = new ProjectGitHubPreviewDto(
+            false,
+            List.of(),
+            new ProjectGitHubPreviewDto.ActivitySummary(0, null, "idle"),
+            List.of(),
+            List.of()
+        );
+
+        when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
+        when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(studentId, projectId, Roles.STUDENT))
+            .thenReturn(true);
+        when(projectRepository.findByIdAndDeletedAtIsNull(projectId)).thenReturn(Optional.of(project));
+        when(projectMemberRepository.findByProjectIdOrderByCreatedAtAsc(projectId))
+            .thenReturn(List.of(membership(studentId, projectId)));
+        when(userRepository.findAllById(org.mockito.ArgumentMatchers.anyCollection()))
+            .thenReturn(List.of(student));
+        when(projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(projectId)).thenReturn(List.of());
+        when(repositoryLinkService.resolveLink(projectId)).thenReturn(null);
+        when(repositoryLinkService.getProjectRepositories(projectId.toString(), supervisor.getId().toString()))
+            .thenReturn(null);
+        when(projectService.getGitHubPreview(projectId, null)).thenReturn(preview);
+        when(projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
+            .thenReturn(Optional.of(jiraIntegration));
+
+        StudentProjectDetailDto result = studentService.getProjectById(studentId.toString(), projectId.toString());
+
+        assertThat(result.getJira()).isNotNull();
+        assertThat(result.getJira().isConnected()).isTrue();
+        assertThat(result.getJira().getWorkspaceName()).isEqualTo("supervise-suite");
     }
 
     private static ProjectMember membership(UUID userId, UUID projectId) {

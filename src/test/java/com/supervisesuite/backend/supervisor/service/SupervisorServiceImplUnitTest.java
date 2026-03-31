@@ -2,6 +2,8 @@ package com.supervisesuite.backend.supervisor.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -10,10 +12,16 @@ import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
 import com.supervisesuite.backend.projects.dto.GitHubInstallStartDto;
+import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
+import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
 import com.supervisesuite.backend.projects.entity.Project;
+import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
+import com.supervisesuite.backend.projects.entity.ProjectJiraOAuthState;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
+import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
+import com.supervisesuite.backend.projects.repository.ProjectJiraOAuthStateRepository;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
@@ -22,6 +30,8 @@ import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
 import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
+import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionService;
+import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.SupervisorDashboardDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
@@ -38,7 +48,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.client.RestClient;
 
 @ExtendWith(MockitoExtension.class)
 class SupervisorServiceImplUnitTest {
@@ -73,6 +85,19 @@ class SupervisorServiceImplUnitTest {
     @Mock
     private AccessRequestService accessRequestService;
 
+    @Mock
+    private JiraProperties jiraProperties;
+    @Mock
+    private ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
+    @Mock
+    private ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository;
+    @Mock
+    private JiraTokenEncryptionService jiraTokenEncryptionService;
+    @Mock
+    private RestClient.Builder restClientBuilder;
+    @Mock
+    private RestClient restClient;
+
     private SupervisorServiceImpl service;
 
     private UUID supervisorId;
@@ -90,7 +115,12 @@ class SupervisorServiceImplUnitTest {
                 setupCallbackService,
                 repositoryLinkService,
                 accessSourceService,
-                accessRequestService);
+                accessRequestService,
+                jiraProperties,
+                projectJiraIntegrationRepository,
+                projectJiraOAuthStateRepository,
+                jiraTokenEncryptionService,
+                restClientBuilder);
 
         supervisorId = UUID.randomUUID();
         supervisor = new User();
@@ -99,7 +129,7 @@ class SupervisorServiceImplUnitTest {
         supervisor.setEmail("supervisor@university.ac.lk");
         supervisor.setFirstName("Sup");
         supervisor.setLastName("User");
-        when(userRepository.findById(supervisorId)).thenReturn(Optional.of(supervisor));
+        lenient().when(userRepository.findById(supervisorId)).thenReturn(Optional.of(supervisor));
     }
 
     @Test
@@ -298,6 +328,127 @@ class SupervisorServiceImplUnitTest {
         assertThatThrownBy(() -> service.createGitHubRepositoryAccessRequest(
                 supervisorId.toString(),
                 "00000000-0000-0000-0000-000000000001")).isInstanceOf(EntityNotFoundException.class);
+    }
+
+    @Test
+    void getProjectJiraAuthUrl_whenAlreadyConnected_throwsValidationException() {
+        UUID projectId = UUID.randomUUID();
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        ProjectJiraIntegration integration = new ProjectJiraIntegration();
+        integration.setProjectId(projectId);
+        integration.setWorkspaceName("supervise-suite");
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+            .thenReturn(Optional.of(project));
+        when(projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
+            .thenReturn(Optional.of(integration));
+
+        assertThatThrownBy(() -> service.getProjectJiraAuthUrl(supervisorId.toString(), projectId.toString()))
+            .isInstanceOf(ValidationException.class)
+            .hasMessageContaining("already connected");
+    }
+
+    @Test
+    void completeJiraOAuth_whenAccessDenied_throwsFriendlyValidationMessage() {
+        JiraOAuthCompleteRequestDto request = new JiraOAuthCompleteRequestDto();
+        request.setError("access_denied");
+        request.setErrorDescription("User did not authorize the request");
+
+        assertThatThrownBy(() -> service.completeJiraOAuth(supervisorId.toString(), request))
+            .isInstanceOf(ValidationException.class)
+            .hasMessageContaining("cancelled");
+    }
+
+    @Test
+    void getProjectJiraAuthUrl_persistsOAuthStateNonceAndReturnsAuthUrl() {
+        UUID projectId = UUID.randomUUID();
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+            .thenReturn(Optional.of(project));
+        when(projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
+            .thenReturn(Optional.empty());
+        when(jiraProperties.getClientId()).thenReturn("client-id");
+        when(jiraProperties.getRedirectUri()).thenReturn("http://localhost:5173/supervisor/jira/callback");
+        when(jiraProperties.getAuthTargetUrl()).thenReturn("https://auth.atlassian.com/authorize");
+        when(jiraProperties.getAudience()).thenReturn("api.atlassian.com");
+        when(jiraProperties.getScope()).thenReturn("read:jira-user read:jira-work");
+        when(jiraProperties.getOauthStateTtlSeconds()).thenReturn(900L);
+
+        JiraAuthUrlDto result = service.getProjectJiraAuthUrl(supervisorId.toString(), projectId.toString());
+
+        assertThat(result.url()).contains("https://auth.atlassian.com/authorize");
+        assertThat(result.url()).contains("state=");
+
+        ArgumentCaptor<ProjectJiraOAuthState> captor = ArgumentCaptor.forClass(ProjectJiraOAuthState.class);
+        verify(projectJiraOAuthStateRepository).saveAndFlush(captor.capture());
+        ProjectJiraOAuthState saved = captor.getValue();
+        assertThat(saved.getProjectId()).isEqualTo(projectId);
+        assertThat(saved.getUserId()).isEqualTo(supervisorId);
+        assertThat(saved.getStateNonceHash()).isNotBlank();
+        assertThat(saved.getExpiresAt()).isNotNull();
+    }
+
+    @Test
+    void completeJiraOAuth_withInvalidState_throwsValidationAndDoesNotCallAtlassian() {
+        JiraOAuthCompleteRequestDto request = new JiraOAuthCompleteRequestDto();
+        request.setCode("oauth-code");
+        request.setState("bad-state-without-colon");
+
+        assertThatThrownBy(() -> service.completeJiraOAuth(supervisorId.toString(), request))
+            .isInstanceOfSatisfying(ValidationException.class, exception -> {
+                assertThat(exception.getMessage()).isEqualTo("Validation failed.");
+                assertThat(exception.getDetails()).hasSize(1);
+                assertThat(exception.getDetails().getFirst().getField()).isEqualTo("state");
+                assertThat(exception.getDetails().getFirst().getIssue())
+                    .contains("OAuth state format is invalid");
+            });
+
+        verify(restClient, never()).post();
+    }
+
+    @Test
+    void disconnectProjectJira_whenActiveIntegrationExists_deletesIntegration() {
+        UUID projectId = UUID.randomUUID();
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        ProjectJiraIntegration integration = new ProjectJiraIntegration();
+        integration.setProjectId(projectId);
+        integration.setWorkspaceName("supervise-suite");
+        integration.setWorkspaceUrl("https://example.atlassian.net");
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+            .thenReturn(Optional.of(project));
+        when(projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
+            .thenReturn(Optional.of(integration))
+            .thenReturn(Optional.empty());
+        when(projectRepository.save(project)).thenReturn(project);
+
+        com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto preview =
+            new com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto(
+                false,
+                List.of(),
+                new com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto.ActivitySummary(0, null, "idle"),
+                List.of(),
+                List.of());
+        when(projectService.getGitHubPreview(projectId, null)).thenReturn(preview);
+        when(projectMemberRepository.findByProjectIdOrderByCreatedAtAsc(projectId)).thenReturn(List.of());
+        when(projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(projectId)).thenReturn(List.of());
+        when(userRepository.findAllById(org.mockito.ArgumentMatchers.anyCollection())).thenReturn(List.of());
+
+        SupervisorProjectDetailDto result =
+            service.disconnectProjectJira(supervisorId.toString(), projectId.toString());
+
+        assertThat(result.getJira()).isNotNull();
+        assertThat(result.getJira().isConnected()).isFalse();
+        verify(projectJiraIntegrationRepository).delete(integration);
     }
 
     private static Project project(String title, String status, LocalDate milestoneDate) {

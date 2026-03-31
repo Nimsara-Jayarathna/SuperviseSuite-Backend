@@ -1,6 +1,7 @@
 package com.supervisesuite.backend.supervisor.service;
 
 import com.supervisesuite.backend.common.constants.Roles;
+import com.supervisesuite.backend.common.error.ApiErrorDetail;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.common.util.NormalizationUtils;
@@ -21,10 +22,19 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryListingDto;
 import com.supervisesuite.backend.projects.dto.GitHubAvailableRepositoriesDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
+import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
+import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
+import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
+import com.supervisesuite.backend.config.JiraProperties;
+import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
+import com.supervisesuite.backend.projects.entity.ProjectJiraOAuthState;
 import com.supervisesuite.backend.projects.integration.github.GitHubInstallationDisconnectedException;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
+import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
+import com.supervisesuite.backend.projects.repository.ProjectJiraOAuthStateRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
+import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionService;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
@@ -41,17 +51,31 @@ import com.supervisesuite.backend.users.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Base64;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
 import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService;
@@ -63,6 +87,7 @@ import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService
 
 @Service
 class SupervisorServiceImpl implements SupervisorService {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private static final String DEFAULT_LIFECYCLE_STATUS = "PLANNING";
     private static final String DEFAULT_MILESTONE_STATUS = "PLANNED";
@@ -91,6 +116,12 @@ class SupervisorServiceImpl implements SupervisorService {
     private final RepositoryLinkService repositoryLinkService;
     private final AccessSourceService accessSourceService;
     private final AccessRequestService accessRequestService;
+    private final JiraProperties jiraProperties;
+    private final ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
+    private final ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository;
+    private final JiraTokenEncryptionService jiraTokenEncryptionService;
+    private final RestClient restClient;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     SupervisorServiceImpl(
             UserRepository userRepository,
@@ -102,7 +133,12 @@ class SupervisorServiceImpl implements SupervisorService {
             SetupCallbackService setupCallbackService,
             RepositoryLinkService repositoryLinkService,
             AccessSourceService accessSourceService,
-            AccessRequestService accessRequestService) {
+            AccessRequestService accessRequestService,
+            JiraProperties jiraProperties,
+            ProjectJiraIntegrationRepository projectJiraIntegrationRepository,
+            ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository,
+            JiraTokenEncryptionService jiraTokenEncryptionService,
+            RestClient.Builder restClientBuilder) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
@@ -113,6 +149,11 @@ class SupervisorServiceImpl implements SupervisorService {
         this.repositoryLinkService = repositoryLinkService;
         this.accessSourceService = accessSourceService;
         this.accessRequestService = accessRequestService;
+        this.jiraProperties = jiraProperties;
+        this.projectJiraIntegrationRepository = projectJiraIntegrationRepository;
+        this.projectJiraOAuthStateRepository = projectJiraOAuthStateRepository;
+        this.jiraTokenEncryptionService = jiraTokenEncryptionService;
+        this.restClient = restClientBuilder.build();
     }
 
     @Override
@@ -712,6 +753,10 @@ class SupervisorServiceImpl implements SupervisorService {
         ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
         String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
 
+        ProjectJiraIntegration jiraIntegration = projectJiraIntegrationRepository
+                .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
+                .orElse(null);
+
         return new SupervisorProjectDetailDto(
                 project.getId(),
                 project.getName(),
@@ -724,6 +769,10 @@ class SupervisorServiceImpl implements SupervisorService {
                 project.getHealthNote(),
                 projectService.getGitHubPreview(project.getId(), effectiveUrl),
                 githubRepositories,
+                new SupervisorProjectDetailDto.JiraIntegration(
+                        jiraIntegration != null,
+                        jiraIntegration != null ? jiraIntegration.getWorkspaceName() : null,
+                        jiraIntegration != null ? jiraIntegration.getWorkspaceUrl() : null),
                 project.getLastActivityAt(),
                 toDetailLeader(project.getLeaderUserId()),
                 getProjectMembers(project.getId()),
@@ -814,6 +863,232 @@ class SupervisorServiceImpl implements SupervisorService {
         
         accessRequestService.acknowledgePending(parsedProjectId);
         return new GitHubAccessUpdatedAcknowledgeDto(parsedProjectId);
+    }
+
+    @Override
+    @Transactional
+    public JiraAuthUrlDto getProjectJiraAuthUrl(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        Project project = projectRepository
+            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+            .orElseThrow(EntityNotFoundException::new);
+
+        ProjectJiraIntegration activeIntegration = projectJiraIntegrationRepository
+                .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
+                .orElse(null);
+        if (activeIntegration != null) {
+            String issue = "Jira is already connected for this project (" + activeIntegration.getWorkspaceName() + ").";
+            throw new ValidationException(
+                    issue,
+                    List.of(new ApiErrorDetail("jira", issue)));
+        }
+
+        String clientId = trimToNull(jiraProperties.getClientId());
+        String redirectUri = trimToNull(jiraProperties.getRedirectUri());
+        if (clientId == null || redirectUri == null) {
+            throw new ValidationException("jiraConfig", "Jira OAuth is not fully configured.");
+        }
+
+        String authTargetUrl = defaultIfBlank(trimToNull(jiraProperties.getAuthTargetUrl()), "https://auth.atlassian.com/authorize");
+        String nonce = generateOpaqueToken();
+        String state = nonce + ":" + parsedProjectId;
+        Instant now = Instant.now();
+        Instant expiresAt = now.plusSeconds(Math.max(60, jiraProperties.getOauthStateTtlSeconds()));
+
+        ProjectJiraOAuthState oauthState = new ProjectJiraOAuthState();
+        oauthState.setStateNonceHash(sha256Base64(nonce));
+        oauthState.setProjectId(parsedProjectId);
+        oauthState.setUserId(supervisor.getId());
+        oauthState.setExpiresAt(expiresAt);
+        oauthState.setCreatedAt(now);
+        oauthState.setUpdatedAt(now);
+        projectJiraOAuthStateRepository.saveAndFlush(oauthState);
+
+        String url = authTargetUrl
+            + "?audience=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getAudience()), "api.atlassian.com"))
+            + "&client_id=" + urlencode(clientId)
+            + "&scope=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getScope()), "read:jira-user read:jira-work"))
+            + "&redirect_uri=" + urlencode(redirectUri)
+            + "&state=" + urlencode(state)
+            + "&response_type=code&prompt=consent";
+        return new JiraAuthUrlDto(url);
+    }
+
+    @Override
+    @Transactional
+    public JiraOAuthCompleteResultDto completeJiraOAuth(String authenticatedUserId, JiraOAuthCompleteRequestDto request) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        String oauthError = trimToNull(request.getError());
+        String code = trimToNull(request.getCode());
+        String state = trimToNull(request.getState());
+        if (oauthError != null) {
+            String issue = "access_denied".equalsIgnoreCase(oauthError)
+                ? "Jira authorization was cancelled. No connection was saved."
+                : "Jira authorization was not completed. "
+                    + defaultIfBlank(trimToNull(request.getErrorDescription()), "Please try again.");
+            throw new ValidationException(
+                    issue,
+                    List.of(new ApiErrorDetail("jiraOAuth", issue)));
+        }
+
+        if (code == null || state == null) {
+            throw new ValidationException("jiraOAuth", "Missing OAuth code/state.");
+        }
+
+        String nonce = trimToNull(state.split(":", 2)[0]);
+        String projectIdRaw = state.contains(":") ? state.split(":", 2)[1] : null;
+        if (nonce == null || projectIdRaw == null) {
+            throw new ValidationException("state", "OAuth state format is invalid. Start Jira connection again.");
+        }
+        UUID projectId;
+        try {
+            projectId = UUID.fromString(projectIdRaw);
+        } catch (IllegalArgumentException ex) {
+            throw new ValidationException("state", "Invalid OAuth state project reference.");
+        }
+
+        String nonceHash = sha256Base64(nonce);
+        Optional<ProjectJiraOAuthState> persistedStateOpt = projectJiraOAuthStateRepository.findByStateNonceHash(nonceHash);
+        if (persistedStateOpt.isEmpty()) {
+            throw new ValidationException("state", "OAuth state was not recognized. Start Jira connection again.");
+        }
+        ProjectJiraOAuthState persistedState = persistedStateOpt.get();
+        Instant now = Instant.now();
+        if (persistedState.getUsedAt() != null) {
+            throw new ValidationException("state", "OAuth state was already used. Start Jira connection again.");
+        }
+        if (persistedState.getExpiresAt() == null || now.isAfter(persistedState.getExpiresAt())) {
+            throw new ValidationException("state", "OAuth state expired. Start Jira connection again.");
+        }
+        if (!projectId.equals(persistedState.getProjectId())) {
+            throw new ValidationException("state", "OAuth state project does not match this callback.");
+        }
+        if (!supervisor.getId().equals(persistedState.getUserId())) {
+            throw new ValidationException("state", "OAuth state user does not match the current session.");
+        }
+        persistedState.setUsedAt(now);
+        persistedState.setUpdatedAt(now);
+        projectJiraOAuthStateRepository.save(persistedState);
+
+        Project project = projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+
+        String clientId = trimToNull(jiraProperties.getClientId());
+        String clientSecret = trimToNull(jiraProperties.getClientSecret());
+        String redirectUri = trimToNull(jiraProperties.getRedirectUri());
+        if (clientId == null || clientSecret == null || redirectUri == null) {
+            throw new ValidationException("jiraConfig", "Jira OAuth is not fully configured.");
+        }
+
+        String tokenTargetUrl = defaultIfBlank(
+                trimToNull(jiraProperties.getTokenTargetUrl()),
+                "https://auth.atlassian.com/oauth/token");
+
+        Map<String, Object> tokenRequest = new LinkedHashMap<>();
+        tokenRequest.put("grant_type", "authorization_code");
+        tokenRequest.put("client_id", clientId);
+        tokenRequest.put("client_secret", clientSecret);
+        tokenRequest.put("code", code);
+        tokenRequest.put("redirect_uri", redirectUri);
+
+        Map<?, ?> tokenResponse;
+        try {
+            tokenResponse = restClient.post()
+                    .uri(tokenTargetUrl)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(tokenRequest)
+                    .retrieve()
+                    .body(Map.class);
+        } catch (RestClientResponseException exception) {
+            throw new ValidationException("jiraOAuth", buildAtlassianTokenExchangeIssue(exception));
+        }
+
+        String accessToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("access_token")));
+        if (accessToken == null || "null".equalsIgnoreCase(accessToken)) {
+            throw new ValidationException("jiraOAuth", "Atlassian token exchange returned no access token.");
+        }
+        String scopes = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("scope")));
+
+        List<Map<String, Object>> resources;
+        try {
+            resources = restClient.get()
+                    .uri("https://api.atlassian.com/oauth/token/accessible-resources")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(List.class);
+        } catch (RestClientResponseException exception) {
+            throw new ValidationException("jiraOAuth", "Unable to fetch Jira workspace details.");
+        }
+
+        if (resources == null || resources.isEmpty()) {
+            throw new ValidationException("jiraOAuth", "No Jira workspace was returned for this authorization.");
+        }
+
+        Map<String, Object> workspace = resources.get(0);
+        String cloudId = trimToNull(workspace == null ? null : (String) workspace.get("id"));
+        String workspaceName = trimToNull(workspace == null ? null : (String) workspace.get("name"));
+        String workspaceUrl = trimToNull(workspace == null ? null : (String) workspace.get("url"));
+        if (cloudId == null || workspaceName == null) {
+            throw new ValidationException("jiraOAuth", "Jira workspace details are incomplete.");
+        }
+
+        Instant revokeTimestamp = Instant.now();
+        projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
+                .ifPresent(existing -> {
+                    existing.setRevokedAt(revokeTimestamp);
+                    existing.setUpdatedAt(revokeTimestamp);
+                    projectJiraIntegrationRepository.save(existing);
+                });
+
+        now = Instant.now();
+        ProjectJiraIntegration integration = new ProjectJiraIntegration();
+        integration.setProjectId(project.getId());
+        integration.setCloudId(cloudId);
+        integration.setWorkspaceName(workspaceName);
+        integration.setWorkspaceUrl(workspaceUrl);
+        integration.setAccessTokenEncrypted(jiraTokenEncryptionService.encrypt(accessToken));
+        integration.setScope(scopes);
+        integration.setConnectedBy(supervisor.getId());
+        integration.setConnectedAt(now);
+        integration.setUpdatedAt(now);
+        projectJiraIntegrationRepository.save(integration);
+
+        project.setUpdatedAt(now);
+        project.setLastActivityAt(now);
+        projectRepository.save(project);
+
+        return new JiraOAuthCompleteResultDto(project.getId().toString(), workspaceName);
+    }
+
+    @Override
+    @Transactional
+    public SupervisorProjectDetailDto disconnectProjectJira(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        Project project = projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+
+        ProjectJiraIntegration activeIntegration = projectJiraIntegrationRepository
+                .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
+                .orElse(null);
+        if (activeIntegration == null) {
+            throw new ValidationException(
+                    "Jira is not connected for this project.",
+                    List.of(new ApiErrorDetail("jira", "Jira is not connected for this project.")));
+        }
+
+        Instant now = Instant.now();
+        projectJiraIntegrationRepository.delete(activeIntegration);
+
+        project.setUpdatedAt(now);
+        project.setLastActivityAt(now);
+        Project savedProject = projectRepository.save(project);
+        return toProjectDetail(savedProject);
     }
 
     private ProjectMember buildProjectMember(
@@ -969,6 +1244,15 @@ class SupervisorServiceImpl implements SupervisorService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    private String defaultIfBlank(String value, String fallback) {
+        String trimmed = trimToNull(value);
+        return trimmed == null ? fallback : trimmed;
+    }
+
+    private String urlencode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
     private UUID resolveLeaderForCreate(UUID leaderStudentId, List<User> students) {
         if (leaderStudentId == null) {
             return null;
@@ -1027,5 +1311,44 @@ class SupervisorServiceImpl implements SupervisorService {
             throw new ValidationException("lifecycleStatus", "Lifecycle status is invalid.");
         }
         return lifecycleStatus;
+    }
+
+    private String buildAtlassianTokenExchangeIssue(RestClientResponseException exception) {
+        String body = trimToNull(exception.getResponseBodyAsString());
+        if (body != null) {
+            try {
+                JsonNode node = OBJECT_MAPPER.readTree(body);
+                String error = trimToNull(node.path("error").asText(null));
+                String errorDescription = trimToNull(node.path("error_description").asText(null));
+                if (error != null && errorDescription != null) {
+                    return "Atlassian token exchange failed: " + error + " (" + errorDescription + ")";
+                }
+                if (error != null) {
+                    return "Atlassian token exchange failed: " + error;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return "Atlassian token exchange failed (HTTP " + exception.getStatusCode().value() + ").";
+    }
+
+    private String generateOpaqueToken() {
+        byte[] bytes = new byte[32];
+        secureRandom.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private String sha256Base64(String raw) {
+        return Base64.getEncoder()
+            .encodeToString(sha256Bytes((raw == null ? "" : raw).getBytes(StandardCharsets.UTF_8)));
+    }
+
+
+    private byte[] sha256Bytes(byte[] bytes) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(bytes == null ? new byte[0] : bytes);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 algorithm not available", exception);
+        }
     }
 }
