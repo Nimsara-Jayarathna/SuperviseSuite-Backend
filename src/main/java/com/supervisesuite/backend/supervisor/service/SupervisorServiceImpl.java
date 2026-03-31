@@ -925,10 +925,13 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         String oauthError = trimToNull(request.getError());
         if (oauthError != null) {
+            String issue = "access_denied".equalsIgnoreCase(oauthError)
+                ? "Jira authorization was cancelled. No connection was saved."
+                : "Jira authorization was not completed. "
+                    + defaultIfBlank(trimToNull(request.getErrorDescription()), "Please try again.");
             throw new ValidationException(
-                    "jiraOAuth",
-                    "Jira authorization was not completed. " + defaultIfBlank(trimToNull(request.getErrorDescription()),
-                            "Please try again."));
+                    issue,
+                    List.of(new ApiErrorDetail("jiraOAuth", issue)));
         }
 
         String code = trimToNull(request.getCode());
