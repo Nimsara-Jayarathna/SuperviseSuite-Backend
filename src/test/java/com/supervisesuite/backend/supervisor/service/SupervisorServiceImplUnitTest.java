@@ -386,7 +386,7 @@ class SupervisorServiceImplUnitTest {
         assertThat(result.url()).contains("state=");
 
         ArgumentCaptor<ProjectJiraOAuthState> captor = ArgumentCaptor.forClass(ProjectJiraOAuthState.class);
-        verify(projectJiraOAuthStateRepository).save(captor.capture());
+        verify(projectJiraOAuthStateRepository).saveAndFlush(captor.capture());
         ProjectJiraOAuthState saved = captor.getValue();
         assertThat(saved.getProjectId()).isEqualTo(projectId);
         assertThat(saved.getUserId()).isEqualTo(supervisorId);
@@ -402,7 +402,7 @@ class SupervisorServiceImplUnitTest {
 
         assertThatThrownBy(() -> service.completeJiraOAuth(supervisorId.toString(), request))
             .isInstanceOf(ValidationException.class)
-            .hasMessageContaining("Invalid OAuth state");
+            .hasMessageContaining("OAuth state format is invalid");
 
         verify(restClientBuilder, never()).build();
     }
