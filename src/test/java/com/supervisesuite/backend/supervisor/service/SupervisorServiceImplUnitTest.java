@@ -409,7 +409,7 @@ class SupervisorServiceImplUnitTest {
                     .contains("OAuth state format is invalid");
             });
 
-        verify(restClientBuilder, never()).build();
+        verify(restClient, never()).post();
     }
 
     @Test
