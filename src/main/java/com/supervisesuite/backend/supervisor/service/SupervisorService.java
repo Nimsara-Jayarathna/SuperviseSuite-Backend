@@ -162,4 +162,6 @@ public interface SupervisorService {
     JiraAuthUrlDto getProjectJiraAuthUrl(String authenticatedUserId, String projectId);
 
     JiraOAuthCompleteResultDto completeJiraOAuth(String authenticatedUserId, JiraOAuthCompleteRequestDto request);
+
+    SupervisorProjectDetailDto disconnectProjectJira(String authenticatedUserId, String projectId);
 }

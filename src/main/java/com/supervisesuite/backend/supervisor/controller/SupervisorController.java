@@ -296,6 +296,16 @@ public class SupervisorController {
         return apiResponseFactory.ok("Jira workspace connected successfully.", data, request);
     }
 
+    @PostMapping("/projects/{projectId}/jira/disconnect")
+    public ResponseEntity<ApiResponse<SupervisorProjectDetailDto>> disconnectProjectJira(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        SupervisorProjectDetailDto data = supervisorService.disconnectProjectJira(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Jira workspace disconnected successfully.", data, request);
+    }
+
     @PostMapping("/projects")
     public ResponseEntity<ApiResponse<CreateSupervisorProjectResponse>> createProject(
         Authentication authentication,

@@ -1041,6 +1041,33 @@ class SupervisorServiceImpl implements SupervisorService {
         return new JiraOAuthCompleteResultDto(project.getId().toString(), workspaceName);
     }
 
+    @Override
+    @Transactional
+    public SupervisorProjectDetailDto disconnectProjectJira(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        Project project = projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+
+        ProjectJiraIntegration activeIntegration = projectJiraIntegrationRepository
+                .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
+                .orElse(null);
+        if (activeIntegration == null) {
+            throw new ValidationException(
+                    "Jira is not connected for this project.",
+                    List.of(new ApiErrorDetail("jira", "Jira is not connected for this project.")));
+        }
+
+        Instant now = Instant.now();
+        projectJiraIntegrationRepository.delete(activeIntegration);
+
+        project.setUpdatedAt(now);
+        project.setLastActivityAt(now);
+        Project savedProject = projectRepository.save(project);
+        return toProjectDetail(savedProject);
+    }
+
     private ProjectMember buildProjectMember(
             UUID projectId,
             UUID userId,
