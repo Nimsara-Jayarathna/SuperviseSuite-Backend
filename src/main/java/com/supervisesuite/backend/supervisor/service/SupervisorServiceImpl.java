@@ -73,6 +73,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -1002,6 +1003,10 @@ class SupervisorServiceImpl implements SupervisorService {
                     .body(tokenRequest)
                     .retrieve()
                     .body(Map.class);
+        } catch (ResourceAccessException exception) {
+            throw new ValidationException(
+                "jiraOAuth",
+                "Unable to reach Atlassian token endpoint from this environment.");
         } catch (RestClientResponseException exception) {
             throw new ValidationException("jiraOAuth", buildAtlassianTokenExchangeIssue(exception));
         }
@@ -1020,6 +1025,10 @@ class SupervisorServiceImpl implements SupervisorService {
                     .accept(MediaType.APPLICATION_JSON)
                     .retrieve()
                     .body(List.class);
+        } catch (ResourceAccessException exception) {
+            throw new ValidationException(
+                "jiraOAuth",
+                "Unable to reach Atlassian API from this environment.");
         } catch (RestClientResponseException exception) {
             throw new ValidationException("jiraOAuth", "Unable to fetch Jira workspace details.");
         }
