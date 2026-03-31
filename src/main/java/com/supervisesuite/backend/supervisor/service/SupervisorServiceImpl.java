@@ -59,6 +59,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -865,7 +866,7 @@ class SupervisorServiceImpl implements SupervisorService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public JiraAuthUrlDto getProjectJiraAuthUrl(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
@@ -902,7 +903,7 @@ class SupervisorServiceImpl implements SupervisorService {
         oauthState.setExpiresAt(expiresAt);
         oauthState.setCreatedAt(now);
         oauthState.setUpdatedAt(now);
-        projectJiraOAuthStateRepository.save(oauthState);
+        projectJiraOAuthStateRepository.saveAndFlush(oauthState);
 
         String url = authTargetUrl
             + "?audience=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getAudience()), "api.atlassian.com"))
@@ -919,6 +920,8 @@ class SupervisorServiceImpl implements SupervisorService {
     public JiraOAuthCompleteResultDto completeJiraOAuth(String authenticatedUserId, JiraOAuthCompleteRequestDto request) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         String oauthError = trimToNull(request.getError());
+        String code = trimToNull(request.getCode());
+        String state = trimToNull(request.getState());
         if (oauthError != null) {
             String issue = "access_denied".equalsIgnoreCase(oauthError)
                 ? "Jira authorization was cancelled. No connection was saved."
@@ -929,8 +932,6 @@ class SupervisorServiceImpl implements SupervisorService {
                     List.of(new ApiErrorDetail("jiraOAuth", issue)));
         }
 
-        String code = trimToNull(request.getCode());
-        String state = trimToNull(request.getState());
         if (code == null || state == null) {
             throw new ValidationException("jiraOAuth", "Missing OAuth code/state.");
         }
@@ -938,7 +939,7 @@ class SupervisorServiceImpl implements SupervisorService {
         String nonce = trimToNull(state.split(":", 2)[0]);
         String projectIdRaw = state.contains(":") ? state.split(":", 2)[1] : null;
         if (nonce == null || projectIdRaw == null) {
-            throw new ValidationException("state", "Invalid OAuth state.");
+            throw new ValidationException("state", "OAuth state format is invalid. Start Jira connection again.");
         }
         UUID projectId;
         try {
@@ -947,16 +948,24 @@ class SupervisorServiceImpl implements SupervisorService {
             throw new ValidationException("state", "Invalid OAuth state project reference.");
         }
 
-        ProjectJiraOAuthState persistedState = projectJiraOAuthStateRepository
-            .findByStateNonceHash(sha256Base64(nonce))
-            .orElseThrow(() -> new ValidationException("state", "Invalid OAuth state."));
+        String nonceHash = sha256Base64(nonce);
+        Optional<ProjectJiraOAuthState> persistedStateOpt = projectJiraOAuthStateRepository.findByStateNonceHash(nonceHash);
+        if (persistedStateOpt.isEmpty()) {
+            throw new ValidationException("state", "OAuth state was not recognized. Start Jira connection again.");
+        }
+        ProjectJiraOAuthState persistedState = persistedStateOpt.get();
         Instant now = Instant.now();
-        if (persistedState.getUsedAt() != null
-            || persistedState.getExpiresAt() == null
-            || now.isAfter(persistedState.getExpiresAt())
-            || !projectId.equals(persistedState.getProjectId())
-            || !supervisor.getId().equals(persistedState.getUserId())) {
-            throw new ValidationException("state", "Invalid OAuth state.");
+        if (persistedState.getUsedAt() != null) {
+            throw new ValidationException("state", "OAuth state was already used. Start Jira connection again.");
+        }
+        if (persistedState.getExpiresAt() == null || now.isAfter(persistedState.getExpiresAt())) {
+            throw new ValidationException("state", "OAuth state expired. Start Jira connection again.");
+        }
+        if (!projectId.equals(persistedState.getProjectId())) {
+            throw new ValidationException("state", "OAuth state project does not match this callback.");
+        }
+        if (!supervisor.getId().equals(persistedState.getUserId())) {
+            throw new ValidationException("state", "OAuth state user does not match the current session.");
         }
         persistedState.setUsedAt(now);
         persistedState.setUpdatedAt(now);
@@ -1333,6 +1342,7 @@ class SupervisorServiceImpl implements SupervisorService {
         return Base64.getEncoder()
             .encodeToString(sha256Bytes((raw == null ? "" : raw).getBytes(StandardCharsets.UTF_8)));
     }
+
 
     private byte[] sha256Bytes(byte[] bytes) {
         try {

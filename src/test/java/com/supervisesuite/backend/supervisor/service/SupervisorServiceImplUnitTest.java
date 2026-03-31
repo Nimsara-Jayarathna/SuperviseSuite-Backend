@@ -382,8 +382,8 @@ class SupervisorServiceImplUnitTest {
 
         JiraAuthUrlDto result = service.getProjectJiraAuthUrl(supervisorId.toString(), projectId.toString());
 
-        assertThat(result.getUrl()).contains("https://auth.atlassian.com/authorize");
-        assertThat(result.getUrl()).contains("state=");
+        assertThat(result.url()).contains("https://auth.atlassian.com/authorize");
+        assertThat(result.url()).contains("state=");
 
         ArgumentCaptor<ProjectJiraOAuthState> captor = ArgumentCaptor.forClass(ProjectJiraOAuthState.class);
         verify(projectJiraOAuthStateRepository).save(captor.capture());
