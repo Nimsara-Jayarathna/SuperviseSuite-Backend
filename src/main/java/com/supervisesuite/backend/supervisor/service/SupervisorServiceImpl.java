@@ -757,7 +757,8 @@ class SupervisorServiceImpl implements SupervisorService {
                 githubRepositories,
                 new SupervisorProjectDetailDto.JiraIntegration(
                         jiraIntegration != null,
-                        jiraIntegration != null ? jiraIntegration.getWorkspaceName() : null),
+                        jiraIntegration != null ? jiraIntegration.getWorkspaceName() : null,
+                        jiraIntegration != null ? jiraIntegration.getWorkspaceUrl() : null),
                 project.getLastActivityAt(),
                 toDetailLeader(project.getLeaderUserId()),
                 getProjectMembers(project.getId()),

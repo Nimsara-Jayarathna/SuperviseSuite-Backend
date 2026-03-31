@@ -408,13 +408,15 @@ public class SupervisorProjectDetailDto {
     public static class JiraIntegration {
         private boolean connected;
         private String workspaceName;
+        private String workspaceUrl;
 
         public JiraIntegration() {
         }
 
-        public JiraIntegration(boolean connected, String workspaceName) {
+        public JiraIntegration(boolean connected, String workspaceName, String workspaceUrl) {
             this.connected = connected;
             this.workspaceName = workspaceName;
+            this.workspaceUrl = workspaceUrl;
         }
 
         public boolean isConnected() {
@@ -431,6 +433,14 @@ public class SupervisorProjectDetailDto {
 
         public void setWorkspaceName(String workspaceName) {
             this.workspaceName = workspaceName;
+        }
+
+        public String getWorkspaceUrl() {
+            return workspaceUrl;
+        }
+
+        public void setWorkspaceUrl(String workspaceUrl) {
+            this.workspaceUrl = workspaceUrl;
         }
     }
 }
