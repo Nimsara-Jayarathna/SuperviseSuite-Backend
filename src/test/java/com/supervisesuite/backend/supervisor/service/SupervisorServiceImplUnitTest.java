@@ -14,6 +14,7 @@ import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryReques
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
+import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
@@ -40,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.client.RestClient;
 
 @ExtendWith(MockitoExtension.class)
 class SupervisorServiceImplUnitTest {
@@ -76,6 +78,12 @@ class SupervisorServiceImplUnitTest {
 
     @Mock
     private JiraProperties jiraProperties;
+    @Mock
+    private ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
+    @Mock
+    private RestClient.Builder restClientBuilder;
+    @Mock
+    private RestClient restClient;
 
     private SupervisorServiceImpl service;
 
@@ -95,7 +103,11 @@ class SupervisorServiceImplUnitTest {
                 repositoryLinkService,
                 accessSourceService,
                 accessRequestService,
-                jiraProperties);
+                jiraProperties,
+                projectJiraIntegrationRepository,
+                restClientBuilder);
+
+        when(restClientBuilder.build()).thenReturn(restClient);
 
         supervisorId = UUID.randomUUID();
         supervisor = new User();

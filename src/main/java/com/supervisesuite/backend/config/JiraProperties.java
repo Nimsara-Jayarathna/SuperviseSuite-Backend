@@ -11,10 +11,11 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "app.jira")
 public class JiraProperties {
     private String clientId;
+    private String clientSecret;
     private String scope = "read:jira-user read:jira-work";
     private String audience = "api.atlassian.com";
     private String authTargetUrl = "https://auth.atlassian.com/authorize";
+    private String tokenTargetUrl = "https://auth.atlassian.com/oauth/token";
     private String redirectUri;
     private String oauthState = "supervisesuite_jira_state";
 }
-

@@ -12,6 +12,8 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
+import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
+import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
@@ -282,6 +284,16 @@ public class SupervisorController {
     ) {
         JiraAuthUrlDto data = supervisorService.getProjectJiraAuthUrl(authentication.getName(), projectId);
         return apiResponseFactory.ok("Jira authorization URL generated.", data, request);
+    }
+
+    @PostMapping("/jira/oauth/complete")
+    public ResponseEntity<ApiResponse<JiraOAuthCompleteResultDto>> completeJiraOAuth(
+        Authentication authentication,
+        HttpServletRequest request,
+        @RequestBody JiraOAuthCompleteRequestDto body
+    ) {
+        JiraOAuthCompleteResultDto data = supervisorService.completeJiraOAuth(authentication.getName(), body);
+        return apiResponseFactory.ok("Jira workspace connected successfully.", data, request);
     }
 
     @PostMapping("/projects")
