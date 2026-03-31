@@ -874,45 +874,17 @@ class SupervisorServiceImpl implements SupervisorService {
         }
 
         String clientId = trimToNull(jiraProperties.getClientId());
-        if (clientId == null) {
-            clientId = trimToNull(System.getenv("ATLASSIAN_CLIENT_ID"));
-        }
         String redirectUri = trimToNull(jiraProperties.getRedirectUri());
-        if (redirectUri == null) {
-            redirectUri = trimToNull(System.getenv("ATLASSIAN_REDIRECT_URI"));
-        }
         if (clientId == null || redirectUri == null) {
             throw new ValidationException("jiraConfig", "Jira OAuth is not fully configured.");
         }
 
-        String authTargetUrl = trimToNull(jiraProperties.getAuthTargetUrl());
-        if (authTargetUrl == null) {
-            authTargetUrl = trimToNull(System.getenv("ATLASSIAN_AUTH_TARGET_URL"));
-        }
-        if (authTargetUrl == null) {
-            authTargetUrl = "https://auth.atlassian.com/authorize";
-        }
-        String statePrefix = trimToNull(jiraProperties.getOauthState());
-        if (statePrefix == null) {
-            statePrefix = trimToNull(System.getenv("ATLASSIAN_OAUTH_STATE"));
-        }
-        if (statePrefix == null) {
-            statePrefix = "supervisesuite_jira_state";
-        }
+        String authTargetUrl = defaultIfBlank(trimToNull(jiraProperties.getAuthTargetUrl()), "https://auth.atlassian.com/authorize");
+        String statePrefix = defaultIfBlank(trimToNull(jiraProperties.getOauthState()), "supervisesuite_jira_state");
         String url = authTargetUrl
-            + "?audience=" + urlencode(defaultIfBlank(
-                trimToNull(jiraProperties.getAudience()) != null
-                    ? jiraProperties.getAudience()
-                    : System.getenv("ATLASSIAN_AUDIENCE"),
-                "api.atlassian.com"
-            ))
+            + "?audience=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getAudience()), "api.atlassian.com"))
             + "&client_id=" + urlencode(clientId)
-            + "&scope=" + urlencode(defaultIfBlank(
-                trimToNull(jiraProperties.getScope()) != null
-                    ? jiraProperties.getScope()
-                    : System.getenv("ATLASSIAN_SCOPE"),
-                "read:jira-user read:jira-work"
-            ))
+            + "&scope=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getScope()), "read:jira-user read:jira-work"))
             + "&redirect_uri=" + urlencode(redirectUri)
             + "&state=" + urlencode(statePrefix + ":" + parsedProjectId)
             + "&response_type=code&prompt=consent";
@@ -940,10 +912,7 @@ class SupervisorServiceImpl implements SupervisorService {
             throw new ValidationException("jiraOAuth", "Missing OAuth code/state.");
         }
 
-        String statePrefix = defaultIfBlank(
-                trimToNull(jiraProperties.getOauthState()) != null ? jiraProperties.getOauthState()
-                        : System.getenv("ATLASSIAN_OAUTH_STATE"),
-                "supervisesuite_jira_state");
+        String statePrefix = defaultIfBlank(trimToNull(jiraProperties.getOauthState()), "supervisesuite_jira_state");
         if (!state.startsWith(statePrefix + ":")) {
             throw new ValidationException("state", "Invalid OAuth state.");
         }
@@ -959,16 +928,16 @@ class SupervisorServiceImpl implements SupervisorService {
                 .findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId())
                 .orElseThrow(EntityNotFoundException::new);
 
-        String clientId = defaultIfBlank(trimToNull(jiraProperties.getClientId()), trimToNull(System.getenv("ATLASSIAN_CLIENT_ID")));
-        String clientSecret = defaultIfBlank(trimToNull(jiraProperties.getClientSecret()), trimToNull(System.getenv("ATLASSIAN_CLIENT_SECRET")));
-        String redirectUri = defaultIfBlank(trimToNull(jiraProperties.getRedirectUri()), trimToNull(System.getenv("ATLASSIAN_REDIRECT_URI")));
+        String clientId = trimToNull(jiraProperties.getClientId());
+        String clientSecret = trimToNull(jiraProperties.getClientSecret());
+        String redirectUri = trimToNull(jiraProperties.getRedirectUri());
         if (clientId == null || clientSecret == null || redirectUri == null) {
             throw new ValidationException("jiraConfig", "Jira OAuth is not fully configured.");
         }
 
         String tokenTargetUrl = defaultIfBlank(
                 trimToNull(jiraProperties.getTokenTargetUrl()),
-                defaultIfBlank(trimToNull(System.getenv("ATLASSIAN_TOKEN_TARGET_URL")), "https://auth.atlassian.com/oauth/token"));
+                "https://auth.atlassian.com/oauth/token");
 
         Map<String, Object> tokenRequest = new LinkedHashMap<>();
         tokenRequest.put("grant_type", "authorization_code");
