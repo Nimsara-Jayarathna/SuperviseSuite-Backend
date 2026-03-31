@@ -1,6 +1,7 @@
 package com.supervisesuite.backend.supervisor.service;
 
 import com.supervisesuite.backend.common.constants.Roles;
+import com.supervisesuite.backend.common.error.ApiErrorDetail;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.common.util.NormalizationUtils;
@@ -66,6 +67,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
 import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService;
@@ -77,6 +80,7 @@ import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService
 
 @Service
 class SupervisorServiceImpl implements SupervisorService {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private static final String DEFAULT_LIFECYCLE_STATUS = "PLANNING";
     private static final String DEFAULT_MILESTONE_STATUS = "PLANNED";
@@ -851,9 +855,19 @@ class SupervisorServiceImpl implements SupervisorService {
     public JiraAuthUrlDto getProjectJiraAuthUrl(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-        projectRepository
+        Project project = projectRepository
             .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
             .orElseThrow(EntityNotFoundException::new);
+
+        ProjectJiraIntegration activeIntegration = projectJiraIntegrationRepository
+                .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
+                .orElse(null);
+        if (activeIntegration != null) {
+            String issue = "Jira is already connected for this project (" + activeIntegration.getWorkspaceName() + ").";
+            throw new ValidationException(
+                    issue,
+                    List.of(new ApiErrorDetail("jira", issue)));
+        }
 
         String clientId = trimToNull(jiraProperties.getClientId());
         if (clientId == null) {
@@ -966,7 +980,7 @@ class SupervisorServiceImpl implements SupervisorService {
                     .retrieve()
                     .body(Map.class);
         } catch (RestClientResponseException exception) {
-            throw new ValidationException("jiraOAuth", "Atlassian token exchange failed.");
+            throw new ValidationException("jiraOAuth", buildAtlassianTokenExchangeIssue(exception));
         }
 
         String accessToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("access_token")));
@@ -1246,5 +1260,24 @@ class SupervisorServiceImpl implements SupervisorService {
             throw new ValidationException("lifecycleStatus", "Lifecycle status is invalid.");
         }
         return lifecycleStatus;
+    }
+
+    private String buildAtlassianTokenExchangeIssue(RestClientResponseException exception) {
+        String body = trimToNull(exception.getResponseBodyAsString());
+        if (body != null) {
+            try {
+                JsonNode node = OBJECT_MAPPER.readTree(body);
+                String error = trimToNull(node.path("error").asText(null));
+                String errorDescription = trimToNull(node.path("error_description").asText(null));
+                if (error != null && errorDescription != null) {
+                    return "Atlassian token exchange failed: " + error + " (" + errorDescription + ")";
+                }
+                if (error != null) {
+                    return "Atlassian token exchange failed: " + error;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return "Atlassian token exchange failed (HTTP " + exception.getStatusCode().value() + ").";
     }
 }
