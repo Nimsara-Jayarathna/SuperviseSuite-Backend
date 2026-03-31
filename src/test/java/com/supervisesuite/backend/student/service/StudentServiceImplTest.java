@@ -12,6 +12,7 @@ import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.entity.Project;
+import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.service.ProjectService;
@@ -50,6 +51,8 @@ class StudentServiceImplTest {
 
     @Mock
     private RepositoryLinkService repositoryLinkService;
+    @Mock
+    private ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
 
     private StudentServiceImpl studentService;
 
@@ -64,7 +67,8 @@ class StudentServiceImplTest {
             projectRepository,
             projectMilestoneRepository,
             projectService,
-            repositoryLinkService
+            repositoryLinkService,
+            projectJiraIntegrationRepository
         );
 
         studentId = UUID.randomUUID();

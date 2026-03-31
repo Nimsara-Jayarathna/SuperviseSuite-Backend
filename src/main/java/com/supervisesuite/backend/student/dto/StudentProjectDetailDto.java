@@ -20,6 +20,7 @@ public class StudentProjectDetailDto {
     private String healthNote;
     private ProjectGitHubPreviewDto github;
     private ProjectGitHubRepositoriesDto githubRepositories;
+    private JiraIntegration jira;
     private Leader leader;
     private List<Member> members;
     private List<Milestone> milestones;
@@ -40,6 +41,7 @@ public class StudentProjectDetailDto {
         String healthNote,
         ProjectGitHubPreviewDto github,
         ProjectGitHubRepositoriesDto githubRepositories,
+        JiraIntegration jira,
         Leader leader,
         List<Member> members,
         List<Milestone> milestones
@@ -56,6 +58,7 @@ public class StudentProjectDetailDto {
         this.healthNote = healthNote;
         this.github = github;
         this.githubRepositories = githubRepositories;
+        this.jira = jira;
         this.leader = leader;
         this.members = members;
         this.milestones = milestones;
@@ -157,6 +160,14 @@ public class StudentProjectDetailDto {
 
     public void setGithubRepositories(ProjectGitHubRepositoriesDto githubRepositories) {
         this.githubRepositories = githubRepositories;
+    }
+
+    public JiraIntegration getJira() {
+        return jira;
+    }
+
+    public void setJira(JiraIntegration jira) {
+        this.jira = jira;
     }
 
     public Leader getLeader() {
@@ -397,6 +408,45 @@ public class StudentProjectDetailDto {
 
         public void setSequenceNo(Integer sequenceNo) {
             this.sequenceNo = sequenceNo;
+        }
+    }
+
+    public static class JiraIntegration {
+        private boolean connected;
+        private String workspaceName;
+        private String workspaceUrl;
+
+        public JiraIntegration() {
+        }
+
+        public JiraIntegration(boolean connected, String workspaceName, String workspaceUrl) {
+            this.connected = connected;
+            this.workspaceName = workspaceName;
+            this.workspaceUrl = workspaceUrl;
+        }
+
+        public boolean isConnected() {
+            return connected;
+        }
+
+        public void setConnected(boolean connected) {
+            this.connected = connected;
+        }
+
+        public String getWorkspaceName() {
+            return workspaceName;
+        }
+
+        public void setWorkspaceName(String workspaceName) {
+            this.workspaceName = workspaceName;
+        }
+
+        public String getWorkspaceUrl() {
+            return workspaceUrl;
+        }
+
+        public void setWorkspaceUrl(String workspaceUrl) {
+            this.workspaceUrl = workspaceUrl;
         }
     }
 }

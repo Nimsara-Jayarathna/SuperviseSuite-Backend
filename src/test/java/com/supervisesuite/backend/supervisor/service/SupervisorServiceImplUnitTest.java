@@ -107,8 +107,6 @@ class SupervisorServiceImplUnitTest {
                 projectJiraIntegrationRepository,
                 restClientBuilder);
 
-        when(restClientBuilder.build()).thenReturn(restClient);
-
         supervisorId = UUID.randomUUID();
         supervisor = new User();
         supervisor.setId(supervisorId);
