@@ -28,9 +28,11 @@ import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
+import com.supervisesuite.backend.projects.entity.ProjectJiraOAuthState;
 import com.supervisesuite.backend.projects.integration.github.GitHubInstallationDisconnectedException;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
+import com.supervisesuite.backend.projects.repository.ProjectJiraOAuthStateRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionService;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
@@ -49,6 +51,9 @@ import com.supervisesuite.backend.users.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -61,6 +66,7 @@ import java.util.UUID;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.Base64;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpHeaders;
@@ -111,8 +117,10 @@ class SupervisorServiceImpl implements SupervisorService {
     private final AccessRequestService accessRequestService;
     private final JiraProperties jiraProperties;
     private final ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
+    private final ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository;
     private final JiraTokenEncryptionService jiraTokenEncryptionService;
     private final RestClient restClient;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     SupervisorServiceImpl(
             UserRepository userRepository,
@@ -127,6 +135,7 @@ class SupervisorServiceImpl implements SupervisorService {
             AccessRequestService accessRequestService,
             JiraProperties jiraProperties,
             ProjectJiraIntegrationRepository projectJiraIntegrationRepository,
+            ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository,
             JiraTokenEncryptionService jiraTokenEncryptionService,
             RestClient.Builder restClientBuilder) {
         this.userRepository = userRepository;
@@ -141,6 +150,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.accessRequestService = accessRequestService;
         this.jiraProperties = jiraProperties;
         this.projectJiraIntegrationRepository = projectJiraIntegrationRepository;
+        this.projectJiraOAuthStateRepository = projectJiraOAuthStateRepository;
         this.jiraTokenEncryptionService = jiraTokenEncryptionService;
         this.restClient = restClientBuilder.build();
     }
@@ -880,13 +890,26 @@ class SupervisorServiceImpl implements SupervisorService {
         }
 
         String authTargetUrl = defaultIfBlank(trimToNull(jiraProperties.getAuthTargetUrl()), "https://auth.atlassian.com/authorize");
-        String statePrefix = defaultIfBlank(trimToNull(jiraProperties.getOauthState()), "supervisesuite_jira_state");
+        String nonce = generateOpaqueToken();
+        String state = nonce + ":" + parsedProjectId;
+        Instant now = Instant.now();
+        Instant expiresAt = now.plusSeconds(Math.max(60, jiraProperties.getOauthStateTtlSeconds()));
+
+        ProjectJiraOAuthState oauthState = new ProjectJiraOAuthState();
+        oauthState.setStateNonceHash(sha256Base64(nonce));
+        oauthState.setProjectId(parsedProjectId);
+        oauthState.setUserId(supervisor.getId());
+        oauthState.setExpiresAt(expiresAt);
+        oauthState.setCreatedAt(now);
+        oauthState.setUpdatedAt(now);
+        projectJiraOAuthStateRepository.save(oauthState);
+
         String url = authTargetUrl
             + "?audience=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getAudience()), "api.atlassian.com"))
             + "&client_id=" + urlencode(clientId)
             + "&scope=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getScope()), "read:jira-user read:jira-work"))
             + "&redirect_uri=" + urlencode(redirectUri)
-            + "&state=" + urlencode(statePrefix + ":" + parsedProjectId)
+            + "&state=" + urlencode(state)
             + "&response_type=code&prompt=consent";
         return new JiraAuthUrlDto(url);
     }
@@ -912,17 +935,32 @@ class SupervisorServiceImpl implements SupervisorService {
             throw new ValidationException("jiraOAuth", "Missing OAuth code/state.");
         }
 
-        String statePrefix = defaultIfBlank(trimToNull(jiraProperties.getOauthState()), "supervisesuite_jira_state");
-        if (!state.startsWith(statePrefix + ":")) {
+        String nonce = trimToNull(state.split(":", 2)[0]);
+        String projectIdRaw = state.contains(":") ? state.split(":", 2)[1] : null;
+        if (nonce == null || projectIdRaw == null) {
             throw new ValidationException("state", "Invalid OAuth state.");
         }
-
         UUID projectId;
         try {
-            projectId = UUID.fromString(state.substring(state.lastIndexOf(':') + 1));
+            projectId = UUID.fromString(projectIdRaw);
         } catch (IllegalArgumentException ex) {
             throw new ValidationException("state", "Invalid OAuth state project reference.");
         }
+
+        ProjectJiraOAuthState persistedState = projectJiraOAuthStateRepository
+            .findByStateNonceHash(sha256Base64(nonce))
+            .orElseThrow(() -> new ValidationException("state", "Invalid OAuth state."));
+        Instant now = Instant.now();
+        if (persistedState.getUsedAt() != null
+            || persistedState.getExpiresAt() == null
+            || now.isAfter(persistedState.getExpiresAt())
+            || !projectId.equals(persistedState.getProjectId())
+            || !supervisor.getId().equals(persistedState.getUserId())) {
+            throw new ValidationException("state", "Invalid OAuth state.");
+        }
+        persistedState.setUsedAt(now);
+        persistedState.setUpdatedAt(now);
+        projectJiraOAuthStateRepository.save(persistedState);
 
         Project project = projectRepository
                 .findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId())
@@ -989,14 +1027,15 @@ class SupervisorServiceImpl implements SupervisorService {
             throw new ValidationException("jiraOAuth", "Jira workspace details are incomplete.");
         }
 
-        Instant now = Instant.now();
+        Instant revokeTimestamp = Instant.now();
         projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
                 .ifPresent(existing -> {
-                    existing.setRevokedAt(now);
-                    existing.setUpdatedAt(now);
+                    existing.setRevokedAt(revokeTimestamp);
+                    existing.setUpdatedAt(revokeTimestamp);
                     projectJiraIntegrationRepository.save(existing);
                 });
 
+        now = Instant.now();
         ProjectJiraIntegration integration = new ProjectJiraIntegration();
         integration.setProjectId(project.getId());
         integration.setCloudId(cloudId);
@@ -1282,5 +1321,24 @@ class SupervisorServiceImpl implements SupervisorService {
             }
         }
         return "Atlassian token exchange failed (HTTP " + exception.getStatusCode().value() + ").";
+    }
+
+    private String generateOpaqueToken() {
+        byte[] bytes = new byte[32];
+        secureRandom.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private String sha256Base64(String raw) {
+        return Base64.getEncoder()
+            .encodeToString(sha256Bytes((raw == null ? "" : raw).getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private byte[] sha256Bytes(byte[] bytes) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(bytes == null ? new byte[0] : bytes);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 algorithm not available", exception);
+        }
     }
 }

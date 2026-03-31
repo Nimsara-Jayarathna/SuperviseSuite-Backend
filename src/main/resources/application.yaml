@@ -91,4 +91,5 @@ app:
     token-target-url: ${ATLASSIAN_TOKEN_TARGET_URL:https://auth.atlassian.com/oauth/token}
     redirect-uri: ${ATLASSIAN_REDIRECT_URI:}
     oauth-state: ${ATLASSIAN_OAUTH_STATE:supervisesuite_jira_state}
+    oauth-state-ttl-seconds: ${ATLASSIAN_OAUTH_STATE_TTL_SECONDS:900}
     token-encryption-secret: ${ATLASSIAN_TOKEN_ENCRYPTION_SECRET:${JWT_SECRET:}}

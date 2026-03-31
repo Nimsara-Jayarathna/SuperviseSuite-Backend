@@ -18,5 +18,6 @@ public class JiraProperties {
     private String tokenTargetUrl = "https://auth.atlassian.com/oauth/token";
     private String redirectUri;
     private String oauthState = "supervisesuite_jira_state";
+    private long oauthStateTtlSeconds = 900;
     private String tokenEncryptionSecret;
 }
