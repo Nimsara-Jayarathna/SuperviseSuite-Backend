@@ -40,6 +40,9 @@ public class ProjectJiraIntegration {
     @Column(columnDefinition = "TEXT")
     private String scope;
 
+    @Column(name = "jira_project_key", length = 32)
+    private String jiraProjectKey;
+
     private UUID connectedBy;
 
     @Column(nullable = false)

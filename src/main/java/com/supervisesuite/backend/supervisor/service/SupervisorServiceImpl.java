@@ -1051,6 +1051,35 @@ class SupervisorServiceImpl implements SupervisorService {
             throw new ValidationException("jiraOAuth", "Jira workspace details are incomplete.");
         }
 
+        Map<?, ?> projectSearchResponse = null;
+        try {
+            projectSearchResponse = restClient.get()
+                    .uri("https://api.atlassian.com/ex/jira/" + cloudId + "/rest/api/3/project/search")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(Map.class);
+        } catch (ResourceAccessException exception) {
+            throw new ValidationException(
+                "jiraOAuth",
+                "Unable to reach Atlassian API from this environment.");
+        } catch (RestClientResponseException exception) {
+            throw new ValidationException("jiraOAuth", "Unable to fetch Jira projects.");
+        }
+
+        String projectKey = null;
+        if (projectSearchResponse != null && projectSearchResponse.get("values") instanceof List<?> valuesList) {
+            if (!valuesList.isEmpty()) {
+                Object firstProject = valuesList.get(0);
+                if (firstProject instanceof Map<?, ?> projectMap) {
+                    Object keyRaw = projectMap.get("key");
+                    if (keyRaw instanceof String strKey) {
+                        projectKey = trimToNull(strKey);
+                    }
+                }
+            }
+        }
+
         Instant revokeTimestamp = Instant.now();
         projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
                 .ifPresent(existing -> {
@@ -1067,6 +1096,7 @@ class SupervisorServiceImpl implements SupervisorService {
         integration.setWorkspaceUrl(workspaceUrl);
         integration.setAccessTokenEncrypted(jiraTokenEncryptionService.encrypt(accessToken));
         integration.setScope(scopes);
+        integration.setJiraProjectKey(projectKey);
         integration.setConnectedBy(supervisor.getId());
         integration.setConnectedAt(now);
         integration.setUpdatedAt(now);
@@ -1076,7 +1106,7 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setLastActivityAt(now);
         projectRepository.save(project);
 
-        return new JiraOAuthCompleteResultDto(project.getId().toString(), workspaceName);
+        return new JiraOAuthCompleteResultDto(project.getId().toString(), workspaceName, projectKey);
     }
 
     @Override
