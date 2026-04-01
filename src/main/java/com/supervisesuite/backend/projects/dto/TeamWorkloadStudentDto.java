@@ -88,6 +88,10 @@ public class TeamWorkloadStudentDto {
         this.accountId = accountId;
     }
 
+    public int getOpenIssues() {
+        return Math.max(0, assigned - completed);
+    }
+
     public int getAssigned() {
         return assigned;
     }

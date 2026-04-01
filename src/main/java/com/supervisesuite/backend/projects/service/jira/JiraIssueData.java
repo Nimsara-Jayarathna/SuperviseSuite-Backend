@@ -40,6 +40,11 @@ public class JiraIssueData {
      */
     private String statusCategory;
 
+    /**
+     * Stable status category key from Jira ("new", "indeterminate", "done").
+     */
+    private String statusCategoryKey;
+
     /** Jira account ID of the assignee; null when unassigned. */
     private String assigneeAccountId;
 
@@ -66,6 +71,7 @@ public class JiraIssueData {
             String parentKey,
             String statusName,
             String statusCategory,
+            String statusCategoryKey,
             String assigneeAccountId,
             String assigneeDisplayName,
             Double storyPoints,
@@ -78,6 +84,7 @@ public class JiraIssueData {
         this.parentKey = parentKey;
         this.statusName = statusName;
         this.statusCategory = statusCategory;
+        this.statusCategoryKey = statusCategoryKey;
         this.assigneeAccountId = assigneeAccountId;
         this.assigneeDisplayName = assigneeDisplayName;
         this.storyPoints = storyPoints;

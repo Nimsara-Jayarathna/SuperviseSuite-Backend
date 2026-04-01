@@ -63,6 +63,13 @@ class JiraIssueClientImpl implements JiraIssueClient {
 
     @Override
     public List<JiraIssueData> fetchProjectIssues(ProjectJiraIntegration integration) {
+        String projectKey = integration.getJiraProjectKey();
+        if (projectKey == null || projectKey.isBlank()) {
+            throw new ServiceUnavailableException("Jira project key is not configured for this integration.");
+        }
+        
+        String jql = "project = \"" + projectKey + "\" ORDER BY created DESC";
+
         String cloudId = integration.getCloudId();
         String bearerToken = jiraTokenEncryptionService.decrypt(integration.getAccessTokenEncrypted());
         String url = String.format(JIRA_ISSUE_SEARCH_URL, cloudId);
@@ -72,7 +79,7 @@ class JiraIssueClientImpl implements JiraIssueClient {
 
         try {
             while (true) {
-                Map<String, Object> requestBody = buildRequestBody(startAt);
+                Map<String, Object> requestBody = buildRequestBody(jql, startAt);
 
                 LOGGER.debug("POST Jira issue search: url={} startAt={}", url, startAt);
 
@@ -133,9 +140,9 @@ class JiraIssueClientImpl implements JiraIssueClient {
         return allIssues;
     }
 
-    private Map<String, Object> buildRequestBody(int startAt) {
+    private Map<String, Object> buildRequestBody(String jql, int startAt) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("jql", "ORDER BY created DESC");
+        body.put("jql", jql);
         body.put("fields", FIELDS);
         body.put("maxResults", PAGE_SIZE);
         body.put("startAt", startAt);
@@ -199,6 +206,7 @@ class JiraIssueClientImpl implements JiraIssueClient {
         JsonNode statusNode = fields.path("status");
         String statusName = statusNode.path("name").asText(null);
         String statusCategory = statusNode.path("statusCategory").path("name").asText(null);
+        String statusCategoryKey = statusNode.path("statusCategory").path("key").asText(null);
 
         JsonNode assigneeNode = fields.path("assignee");
         String assigneeAccountId = assigneeNode.path("accountId").asText(null);
@@ -216,6 +224,7 @@ class JiraIssueClientImpl implements JiraIssueClient {
                 parentKey,
                 statusName,
                 statusCategory,
+                statusCategoryKey,
                 assigneeAccountId,
                 assigneeDisplayName,
                 storyPoints,
