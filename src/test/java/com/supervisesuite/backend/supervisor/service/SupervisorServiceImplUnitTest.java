@@ -30,6 +30,7 @@ import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
 import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
+import com.supervisesuite.backend.projects.service.jira.TeamWorkloadService;
 import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionService;
 import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
@@ -94,6 +95,8 @@ class SupervisorServiceImplUnitTest {
     @Mock
     private JiraTokenEncryptionService jiraTokenEncryptionService;
     @Mock
+    private TeamWorkloadService teamWorkloadService;
+    @Mock
     private RestClient.Builder restClientBuilder;
     @Mock
     private RestClient restClient;
@@ -120,6 +123,7 @@ class SupervisorServiceImplUnitTest {
                 projectJiraIntegrationRepository,
                 projectJiraOAuthStateRepository,
                 jiraTokenEncryptionService,
+                teamWorkloadService,
                 restClientBuilder);
 
         supervisorId = UUID.randomUUID();
@@ -449,6 +453,50 @@ class SupervisorServiceImplUnitTest {
         assertThat(result.getJira()).isNotNull();
         assertThat(result.getJira().isConnected()).isFalse();
         verify(projectJiraIntegrationRepository).delete(integration);
+    }
+
+    @Test
+    void getTeamWorkload_whenJiraNotConnected_throwsServiceUnavailableException() {
+        UUID projectId = UUID.randomUUID();
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+            .thenReturn(Optional.of(project));
+        when(projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
+            .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getTeamWorkload(supervisorId.toString(), projectId.toString()))
+            .isInstanceOf(com.supervisesuite.backend.common.error.ServiceUnavailableException.class)
+            .hasMessageContaining("Jira is not connected");
+    }
+
+    @Test
+    void getTeamWorkload_whenConnected_delegatesToTeamWorkloadService() {
+        UUID projectId = UUID.randomUUID();
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        ProjectJiraIntegration integration = new ProjectJiraIntegration();
+        integration.setProjectId(projectId);
+        integration.setWorkspaceName("supervise-suite");
+
+        com.supervisesuite.backend.projects.dto.TeamWorkloadResponseDto expected =
+            new com.supervisesuite.backend.projects.dto.TeamWorkloadResponseDto(List.of(), 0, false, null, false);
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+            .thenReturn(Optional.of(project));
+        when(projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
+            .thenReturn(Optional.of(integration));
+        when(teamWorkloadService.computeWorkload(integration)).thenReturn(expected);
+
+        com.supervisesuite.backend.projects.dto.TeamWorkloadResponseDto result =
+            service.getTeamWorkload(supervisorId.toString(), projectId.toString());
+
+        assertThat(result).isSameAs(expected);
+        verify(teamWorkloadService).computeWorkload(integration);
     }
 
     private static Project project(String title, String status, LocalDate milestoneDate) {
