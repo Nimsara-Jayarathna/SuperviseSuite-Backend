@@ -14,6 +14,7 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
+import com.supervisesuite.backend.projects.dto.TeamWorkloadResponseDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
@@ -304,6 +305,16 @@ public class SupervisorController {
     ) {
         SupervisorProjectDetailDto data = supervisorService.disconnectProjectJira(authentication.getName(), projectId);
         return apiResponseFactory.ok("Jira workspace disconnected successfully.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/jira/team-workload")
+    public ResponseEntity<ApiResponse<TeamWorkloadResponseDto>> getTeamWorkload(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        TeamWorkloadResponseDto data = supervisorService.getTeamWorkload(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Team workload loaded.", data, request);
     }
 
     @PostMapping("/projects")

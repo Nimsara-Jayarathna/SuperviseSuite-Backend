@@ -92,6 +92,11 @@ class JiraIssueClientImpl implements JiraIssueClient {
                 JsonNode issuesNode = response.path("issues");
                 int returnedCount = issuesNode.isArray() ? issuesNode.size() : 0;
 
+                if (currentStartAt == 0 && total == 0 && returnedCount == 0) {
+                    LOGGER.debug("Jira returned no issues for cloudId={}", cloudId);
+                    return List.of();
+                }
+
                 LOGGER.debug(
                         "Fetched Jira issues page: startAt={}, returned={}, total={}",
                         currentStartAt, returnedCount, total);

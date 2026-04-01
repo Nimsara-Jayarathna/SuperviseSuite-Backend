@@ -26,6 +26,7 @@ import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto
 import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
+import com.supervisesuite.backend.projects.dto.TeamWorkloadResponseDto;
 import java.util.List;
 
 public interface SupervisorService {
@@ -164,4 +165,6 @@ public interface SupervisorService {
     JiraOAuthCompleteResultDto completeJiraOAuth(String authenticatedUserId, JiraOAuthCompleteRequestDto request);
 
     SupervisorProjectDetailDto disconnectProjectJira(String authenticatedUserId, String projectId);
+
+    TeamWorkloadResponseDto getTeamWorkload(String authenticatedUserId, String projectId);
 }

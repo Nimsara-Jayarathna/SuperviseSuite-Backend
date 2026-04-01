@@ -32,6 +32,10 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
     @Override
     public TeamWorkloadResponseDto computeWorkload(ProjectJiraIntegration integration) {
         List<JiraIssueData> rawIssues = jiraIssueClient.fetchProjectIssues(integration);
+                if (rawIssues == null || rawIssues.isEmpty()) {
+                        return new TeamWorkloadResponseDto(List.of(), 0, false, null, false);
+                }
+
         List<JiraIssueData> resolvedIssues = jiraAssigneeResolver.resolveAssigneeWorkUnits(rawIssues);
                 LocalDate today = LocalDate.now();
 

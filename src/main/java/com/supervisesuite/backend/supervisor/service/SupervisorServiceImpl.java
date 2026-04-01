@@ -2,6 +2,7 @@ package com.supervisesuite.backend.supervisor.service;
 
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.ApiErrorDetail;
+import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.common.util.NormalizationUtils;
@@ -25,6 +26,7 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
+import com.supervisesuite.backend.projects.dto.TeamWorkloadResponseDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
@@ -35,6 +37,7 @@ import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepo
 import com.supervisesuite.backend.projects.repository.ProjectJiraOAuthStateRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionService;
+import com.supervisesuite.backend.projects.service.jira.TeamWorkloadService;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
@@ -121,6 +124,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
     private final ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository;
     private final JiraTokenEncryptionService jiraTokenEncryptionService;
+    private final TeamWorkloadService teamWorkloadService;
     private final RestClient restClient;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -139,6 +143,7 @@ class SupervisorServiceImpl implements SupervisorService {
             ProjectJiraIntegrationRepository projectJiraIntegrationRepository,
             ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository,
             JiraTokenEncryptionService jiraTokenEncryptionService,
+            TeamWorkloadService teamWorkloadService,
             RestClient.Builder restClientBuilder) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
@@ -154,6 +159,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.projectJiraIntegrationRepository = projectJiraIntegrationRepository;
         this.projectJiraOAuthStateRepository = projectJiraOAuthStateRepository;
         this.jiraTokenEncryptionService = jiraTokenEncryptionService;
+        this.teamWorkloadService = teamWorkloadService;
         this.restClient = restClientBuilder.build();
     }
 
@@ -1098,6 +1104,25 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setLastActivityAt(now);
         Project savedProject = projectRepository.save(project);
         return toProjectDetail(savedProject);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TeamWorkloadResponseDto getTeamWorkload(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+        Project project = projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+
+        ProjectJiraIntegration activeIntegration = projectJiraIntegrationRepository
+                .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
+                .orElse(null);
+        if (activeIntegration == null) {
+            throw new ServiceUnavailableException("Jira is not connected for this project.");
+        }
+
+        return teamWorkloadService.computeWorkload(activeIntegration);
     }
 
     private ProjectMember buildProjectMember(
