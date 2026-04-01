@@ -48,23 +48,24 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
                 .sorted(Comparator.comparingInt(TeamWorkloadStudentDto::getAssigned).reversed())
                 .toList();
 
+        ImbalanceResult imbalance = computeImbalance(students);
         boolean dueDateAvailable = rawIssues.stream().anyMatch(issue -> issue.getDueDate() != null);
 
         return new TeamWorkloadResponseDto(
                 students,
                 unassignedIssues,
-                false,
-                null,
+                imbalance.detected(),
+                imbalance.message(),
                 dueDateAvailable);
     }
 
-        private TeamWorkloadStudentDto toStudentWorkload(String accountId, List<JiraIssueData> issues, LocalDate today) {
+    private TeamWorkloadStudentDto toStudentWorkload(String accountId, List<JiraIssueData> issues, LocalDate today) {
         int assigned = issues.size();
         int completed = (int) issues.stream().filter(issue -> STATUS_DONE.equals(issue.getStatusCategory())).count();
         int inProgress = (int) issues.stream()
                 .filter(issue -> STATUS_IN_PROGRESS.equals(issue.getStatusCategory()))
                 .count();
-                int overdue = (int) issues.stream().filter(issue -> isIssueOverdue(issue, today)).count();
+        int overdue = (int) issues.stream().filter(issue -> isIssueOverdue(issue, today)).count();
 
         double storyPointsAssigned = issues.stream()
                 .mapToDouble(issue -> issue.getStoryPoints() == null ? 0.0 : issue.getStoryPoints())
@@ -124,6 +125,41 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
                 LocalDate staleCutoff = today.minusDays(STALE_OVERDUE_DAYS);
                 LocalDate lastUpdatedDate = lastUpdated.atZone(ZoneOffset.UTC).toLocalDate();
                 return lastUpdatedDate.isBefore(staleCutoff);
+        }
+
+        private ImbalanceResult computeImbalance(List<TeamWorkloadStudentDto> students) {
+                List<TeamWorkloadStudentDto> activeStudents = students.stream()
+                                .filter(student -> student.getAssigned() > 0)
+                                .toList();
+
+                if (activeStudents.size() < 2) {
+                        return new ImbalanceResult(false, null);
+                }
+
+                TeamWorkloadStudentDto maxStudent = activeStudents.stream()
+                                .max(Comparator.comparingInt(TeamWorkloadStudentDto::getAssigned))
+                                .orElse(null);
+                TeamWorkloadStudentDto minStudent = activeStudents.stream()
+                                .min(Comparator.comparingInt(TeamWorkloadStudentDto::getAssigned))
+                                .orElse(null);
+
+                if (maxStudent == null || minStudent == null) {
+                        return new ImbalanceResult(false, null);
+                }
+
+                boolean detected = maxStudent.getAssigned() > 3 * minStudent.getAssigned();
+                if (!detected) {
+                        return new ImbalanceResult(false, null);
+                }
+
+                String message = String.format(
+                                "%s has 3x more open issues than %s",
+                                maxStudent.getDisplayName(),
+                                minStudent.getDisplayName());
+                return new ImbalanceResult(true, message);
+        }
+
+        private static record ImbalanceResult(boolean detected, String message) {
         }
 
     private boolean hasText(String value) {
