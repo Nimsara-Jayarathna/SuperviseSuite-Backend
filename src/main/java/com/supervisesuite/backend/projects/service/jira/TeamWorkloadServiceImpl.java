@@ -16,8 +16,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class TeamWorkloadServiceImpl implements TeamWorkloadService {
 
-    private static final String STATUS_CATEGORY_KEY_DONE = "done";
-    private static final String STATUS_CATEGORY_KEY_IN_PROGRESS = "indeterminate";
+    private static final String STATUS_DONE = "Done";
+    private static final String STATUS_IN_PROGRESS = "In Progress";
         private static final int STALE_OVERDUE_DAYS = 7;
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
@@ -65,9 +65,9 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
 
     private TeamWorkloadStudentDto toStudentWorkload(String accountId, List<JiraIssueData> issues, LocalDate today) {
         int assigned = issues.size();
-        int completed = (int) issues.stream().filter(issue -> STATUS_CATEGORY_KEY_DONE.equals(issue.getStatusCategoryKey())).count();
+        int completed = (int) issues.stream().filter(issue -> STATUS_DONE.equals(issue.getStatusCategory())).count();
         int inProgress = (int) issues.stream()
-                .filter(issue -> STATUS_CATEGORY_KEY_IN_PROGRESS.equals(issue.getStatusCategoryKey()))
+                .filter(issue -> STATUS_IN_PROGRESS.equals(issue.getStatusCategory()))
                 .count();
         int overdue = (int) issues.stream().filter(issue -> isIssueOverdue(issue, today)).count();
 
@@ -76,7 +76,7 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
                 .sum();
 
         double storyPointsCompleted = issues.stream()
-                .filter(issue -> STATUS_CATEGORY_KEY_DONE.equals(issue.getStatusCategoryKey()))
+                .filter(issue -> STATUS_DONE.equals(issue.getStatusCategory()))
                 .mapToDouble(issue -> issue.getStoryPoints() == null ? 0.0 : issue.getStoryPoints())
                 .sum();
 
@@ -112,7 +112,7 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
     }
 
         private boolean isIssueOverdue(JiraIssueData issue, LocalDate today) {
-                if (STATUS_CATEGORY_KEY_DONE.equals(issue.getStatusCategoryKey())) {
+                if (STATUS_DONE.equals(issue.getStatusCategory())) {
                         return false;
                 }
 
@@ -141,28 +141,25 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
                 }
 
                 TeamWorkloadStudentDto maxStudent = activeStudents.stream()
-                                .max(Comparator.comparingInt(TeamWorkloadStudentDto::getOpenIssues))
+                                .max(Comparator.comparingInt(TeamWorkloadStudentDto::getAssigned))
                                 .orElse(null);
                 TeamWorkloadStudentDto minStudent = activeStudents.stream()
-                                .min(Comparator.comparingInt(TeamWorkloadStudentDto::getOpenIssues))
+                                .min(Comparator.comparingInt(TeamWorkloadStudentDto::getAssigned))
                                 .orElse(null);
 
                 if (maxStudent == null || minStudent == null) {
                         return new ImbalanceResult(false, null);
                 }
 
-                boolean detected = maxStudent.getOpenIssues() > 3 * minStudent.getOpenIssues()
-                                && maxStudent.getOpenIssues() >= 3;
+                boolean detected = maxStudent.getAssigned() > 3 * minStudent.getAssigned();
                 if (!detected) {
                         return new ImbalanceResult(false, null);
                 }
 
                 String message = String.format(
-                                "%s has significantly more open issues than %s (%d vs %d)",
+                                "%s has 3x more open issues than %s",
                                 maxStudent.getDisplayName(),
-                                minStudent.getDisplayName(),
-                                maxStudent.getOpenIssues(),
-                                minStudent.getOpenIssues());
+                                minStudent.getDisplayName());
                 return new ImbalanceResult(true, message);
         }
 
