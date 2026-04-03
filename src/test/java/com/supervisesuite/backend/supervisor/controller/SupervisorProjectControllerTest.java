@@ -8,6 +8,8 @@ import com.supervisesuite.backend.auth.security.JwtService;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
+import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
+import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.users.entity.User;
@@ -53,6 +55,9 @@ class SupervisorProjectControllerTest {
     private ProjectRepository projectRepository;
 
     @Autowired
+    private ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
+
+    @Autowired
     private ProjectMemberRepository projectMemberRepository;
 
     @Autowired
@@ -62,8 +67,48 @@ class SupervisorProjectControllerTest {
     void cleanUp() {
         projectMilestoneRepository.deleteAll();
         projectMemberRepository.deleteAll();
+        projectJiraIntegrationRepository.deleteAll();
         projectRepository.deleteAll();
         userRepository.deleteAll();
+    }
+
+    @Test
+    void getTeamWorkload_whenJiraNotConnected_returns503() {
+        User supervisor = persistUser(Roles.SUPERVISOR, "supervisor-workload-1@university.ac.lk");
+        Project project = persistProject(supervisor);
+        String token = jwtService.generateAccessToken(supervisor);
+
+        ResponseEntity<Map> response = getTeamWorkload(project.getId(), token);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().get("success")).isEqualTo(false);
+        assertThat(response.getBody().get("message").toString()).contains("Jira is not connected");
+        assertThat(error(response).get("code")).isEqualTo("SERVICE_UNAVAILABLE");
+    }
+
+    @Test
+    void getTeamWorkload_whenIntegrationExistsButProjectKeyMissing_returns503() {
+        User supervisor = persistUser(Roles.SUPERVISOR, "supervisor-workload-2@university.ac.lk");
+        Project project = persistProject(supervisor);
+        String token = jwtService.generateAccessToken(supervisor);
+
+        ProjectJiraIntegration integration = new ProjectJiraIntegration();
+        integration.setProjectId(project.getId());
+        integration.setCloudId("cloud-1");
+        integration.setWorkspaceName("workspace");
+        integration.setAccessTokenEncrypted("encrypted-token");
+        integration.setConnectedAt(Instant.now());
+        integration.setUpdatedAt(Instant.now());
+        projectJiraIntegrationRepository.save(integration);
+
+        ResponseEntity<Map> response = getTeamWorkload(project.getId(), token);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().get("success")).isEqualTo(false);
+        assertThat(response.getBody().get("message").toString()).contains("project key is missing");
+        assertThat(error(response).get("code")).isEqualTo("SERVICE_UNAVAILABLE");
     }
 
     @Test
@@ -188,6 +233,21 @@ class SupervisorProjectControllerTest {
             "/api/supervisor/projects/" + projectId + "/repository",
             HttpMethod.PATCH,
             new HttpEntity<>(body, headers),
+            Map.class
+        );
+    }
+
+    private ResponseEntity<Map> getTeamWorkload(UUID projectId, String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        if (accessToken != null) {
+            headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + accessToken);
+        }
+
+        return restTemplate.exchange(
+            "/api/supervisor/projects/" + projectId + "/jira/team-workload",
+            HttpMethod.GET,
+            new HttpEntity<>(headers),
             Map.class
         );
     }
