@@ -1,6 +1,7 @@
 package com.supervisesuite.backend.student.service;
 
 import com.supervisesuite.backend.common.constants.Roles;
+import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.memberships.entity.ProjectMember;
@@ -10,6 +11,7 @@ import com.supervisesuite.backend.projects.entity.ProjectMilestone;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.projects.dto.TeamWorkloadResponseDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
@@ -21,6 +23,7 @@ import com.supervisesuite.backend.users.repository.UserRepository;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
+import com.supervisesuite.backend.projects.service.jira.TeamWorkloadService;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -41,6 +44,7 @@ class StudentServiceImpl implements StudentService {
     private final ProjectService projectService;
     private final RepositoryLinkService repositoryLinkService;
     private final ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
+    private final TeamWorkloadService teamWorkloadService;
 
     StudentServiceImpl(
          UserRepository userRepository,
@@ -49,7 +53,8 @@ class StudentServiceImpl implements StudentService {
          ProjectMilestoneRepository projectMilestoneRepository,
          ProjectService projectService,
          RepositoryLinkService repositoryLinkService,
-         ProjectJiraIntegrationRepository projectJiraIntegrationRepository
+            ProjectJiraIntegrationRepository projectJiraIntegrationRepository,
+            TeamWorkloadService teamWorkloadService
     ) {
          this.userRepository = userRepository;
          this.projectMemberRepository = projectMemberRepository;
@@ -58,6 +63,7 @@ class StudentServiceImpl implements StudentService {
          this.projectService = projectService;
          this.repositoryLinkService = repositoryLinkService;
          this.projectJiraIntegrationRepository = projectJiraIntegrationRepository;
+         this.teamWorkloadService = teamWorkloadService;
     }
 
     @Override
@@ -244,6 +250,41 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
         return projectService.getGitHubContributorsPage(project.getId(), null, parsedLinkedRepositoryId, page, size);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public TeamWorkloadResponseDto getTeamWorkload(String authenticatedUserId, String projectId) {
+        User student = resolveStudent(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
+            student.getId(),
+            parsedProjectId,
+            Roles.STUDENT
+        );
+        if (!hasAccess) {
+            throw new EntityNotFoundException();
+        }
+
+        Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
+            .orElseThrow(EntityNotFoundException::new);
+
+        ProjectJiraIntegration activeIntegration = projectJiraIntegrationRepository
+            .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
+            .orElse(null);
+        if (activeIntegration == null) {
+            throw new ServiceUnavailableException("Jira is not connected for this project.");
+        }
+
+        String jiraProjectKey = trimToNull(project.getJiraProjectKey());
+        if (jiraProjectKey == null) {
+            throw new ServiceUnavailableException(
+                "Jira project key is missing for this project. Disconnect and reconnect Jira.");
+        }
+        activeIntegration.setJiraProjectKey(jiraProjectKey);
+
+        return teamWorkloadService.computeWorkload(activeIntegration);
+    }
+
     private User resolveStudent(String authenticatedUserId) {
         UUID studentId;
         try {
@@ -338,5 +379,13 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
         } catch (IllegalArgumentException exception) {
             throw new ValidationException("linkedRepositoryId", "linkedRepositoryId must be a valid UUID.");
         }
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

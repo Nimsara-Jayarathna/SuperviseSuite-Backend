@@ -2,7 +2,9 @@ package com.supervisesuite.backend.projects.service.jira;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.supervisesuite.backend.common.error.ApiErrorDetail;
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
+import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -132,6 +134,11 @@ class JiraIssueClientImpl implements JiraIssueClient {
                 }
             }
         } catch (RestClientResponseException exception) {
+            int status = exception.getStatusCode().value();
+            if (status == 401 || status == 403) {
+                String issue = buildJiraIssueFetchMessage(exception);
+                throw new ValidationException(issue, List.of(new ApiErrorDetail("jiraOAuth", issue)));
+            }
             throw new ServiceUnavailableException(buildJiraIssueFetchMessage(exception), exception);
         } catch (ResourceAccessException exception) {
             throw new ServiceUnavailableException(
@@ -319,9 +326,20 @@ class JiraIssueClientImpl implements JiraIssueClient {
     }
 
     private List<String> resolveStoryPointsFieldIds(String cloudId, String bearerToken) {
-        return storyPointsFieldCacheByCloudId.computeIfAbsent(
-                cloudId,
-                key -> discoverStoryPointsFieldIdsFromJira(key, bearerToken));
+        List<String> cached = storyPointsFieldCacheByCloudId.get(cloudId);
+        if (cached != null && !cached.isEmpty()) {
+            return cached;
+        }
+
+        List<String> discovered = discoverStoryPointsFieldIdsFromJira(cloudId, bearerToken);
+        if (discovered.isEmpty()) {
+            // Avoid sticky empty cache after temporary auth/network failures.
+            storyPointsFieldCacheByCloudId.remove(cloudId);
+            return List.of();
+        }
+
+        storyPointsFieldCacheByCloudId.put(cloudId, discovered);
+        return discovered;
     }
 
     private List<String> discoverStoryPointsFieldIdsFromJira(String cloudId, String bearerToken) {

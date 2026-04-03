@@ -5,6 +5,7 @@ import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import java.util.List;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.projects.dto.TeamWorkloadResponseDto;
 
 public interface StudentService {
     List<StudentProjectSummaryDto> getProjects(String authenticatedUserId);
@@ -32,4 +33,6 @@ public interface StudentService {
         int page,
         int size
     );
+
+    TeamWorkloadResponseDto getTeamWorkload(String authenticatedUserId, String projectId);
 }

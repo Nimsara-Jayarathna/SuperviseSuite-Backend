@@ -4,6 +4,7 @@ import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.projects.dto.TeamWorkloadResponseDto;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.student.service.StudentService;
@@ -102,5 +103,15 @@ public class StudentController {
             size == null ? 0 : size
         );
         return apiResponseFactory.ok("GitHub contributors page loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/jira/team-workload")
+    public ResponseEntity<ApiResponse<TeamWorkloadResponseDto>> getTeamWorkload(
+        Authentication authentication,
+        @PathVariable String projectId,
+        HttpServletRequest request
+    ) {
+        TeamWorkloadResponseDto data = studentService.getTeamWorkload(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Team workload loaded.", data, request);
     }
 }
