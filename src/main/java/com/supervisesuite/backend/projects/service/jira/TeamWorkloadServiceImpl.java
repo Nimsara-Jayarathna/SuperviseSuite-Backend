@@ -16,8 +16,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class TeamWorkloadServiceImpl implements TeamWorkloadService {
 
-    private static final String STATUS_DONE = "Done";
-    private static final String STATUS_IN_PROGRESS = "In Progress";
+        private static final String STATUS_CATEGORY_DONE_KEY = "done";
+        private static final String STATUS_CATEGORY_IN_PROGRESS_KEY = "indeterminate";
         private static final int STALE_OVERDUE_DAYS = 7;
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
@@ -32,12 +32,12 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
     @Override
     public TeamWorkloadResponseDto computeWorkload(ProjectJiraIntegration integration) {
         List<JiraIssueData> rawIssues = jiraIssueClient.fetchProjectIssues(integration);
-                if (rawIssues == null || rawIssues.isEmpty()) {
-                        return new TeamWorkloadResponseDto(List.of(), 0, false, null, false);
-                }
+        if (rawIssues == null || rawIssues.isEmpty()) {
+            return new TeamWorkloadResponseDto(List.of(), 0, false, null, false);
+        }
 
         List<JiraIssueData> resolvedIssues = jiraAssigneeResolver.resolveAssigneeWorkUnits(rawIssues);
-                LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now();
 
         int unassignedIssues = (int) resolvedIssues.stream()
                 .filter(issue -> !hasText(issue.getAssigneeAccountId()))
@@ -49,7 +49,7 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
 
         List<TeamWorkloadStudentDto> students = issuesByAssignee.entrySet().stream()
                 .map(entry -> toStudentWorkload(entry.getKey(), entry.getValue(), today))
-                .sorted(Comparator.comparingInt(TeamWorkloadStudentDto::getAssigned).reversed())
+                .sorted(Comparator.comparingInt(this::openIssueCount).reversed())
                 .toList();
 
         ImbalanceResult imbalance = computeImbalance(students);
@@ -65,9 +65,9 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
 
     private TeamWorkloadStudentDto toStudentWorkload(String accountId, List<JiraIssueData> issues, LocalDate today) {
         int assigned = issues.size();
-        int completed = (int) issues.stream().filter(issue -> STATUS_DONE.equals(issue.getStatusCategory())).count();
+        int completed = (int) issues.stream().filter(this::isDoneCategory).count();
         int inProgress = (int) issues.stream()
-                .filter(issue -> STATUS_IN_PROGRESS.equals(issue.getStatusCategory()))
+                .filter(this::isInProgressCategory)
                 .count();
         int overdue = (int) issues.stream().filter(issue -> isIssueOverdue(issue, today)).count();
 
@@ -76,7 +76,7 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
                 .sum();
 
         double storyPointsCompleted = issues.stream()
-                .filter(issue -> STATUS_DONE.equals(issue.getStatusCategory()))
+                .filter(this::isDoneCategory)
                 .mapToDouble(issue -> issue.getStoryPoints() == null ? 0.0 : issue.getStoryPoints())
                 .sum();
 
@@ -112,7 +112,7 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
     }
 
         private boolean isIssueOverdue(JiraIssueData issue, LocalDate today) {
-                if (STATUS_DONE.equals(issue.getStatusCategory())) {
+                if (isDoneCategory(issue)) {
                         return false;
                 }
 
@@ -133,7 +133,7 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
 
         private ImbalanceResult computeImbalance(List<TeamWorkloadStudentDto> students) {
                 List<TeamWorkloadStudentDto> activeStudents = students.stream()
-                                .filter(student -> student.getAssigned() > 0)
+                                .filter(student -> openIssueCount(student) > 0)
                                 .toList();
 
                 if (activeStudents.size() < 2) {
@@ -141,17 +141,20 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
                 }
 
                 TeamWorkloadStudentDto maxStudent = activeStudents.stream()
-                                .max(Comparator.comparingInt(TeamWorkloadStudentDto::getAssigned))
+                                .max(Comparator.comparingInt(this::openIssueCount))
                                 .orElse(null);
                 TeamWorkloadStudentDto minStudent = activeStudents.stream()
-                                .min(Comparator.comparingInt(TeamWorkloadStudentDto::getAssigned))
+                                .min(Comparator.comparingInt(this::openIssueCount))
                                 .orElse(null);
 
                 if (maxStudent == null || minStudent == null) {
                         return new ImbalanceResult(false, null);
                 }
 
-                boolean detected = maxStudent.getAssigned() > 3 * minStudent.getAssigned();
+                int maxOpen = openIssueCount(maxStudent);
+                int minOpen = openIssueCount(minStudent);
+
+                boolean detected = minOpen == 0 ? maxOpen > 0 : maxOpen > 3 * minOpen;
                 if (!detected) {
                         return new ImbalanceResult(false, null);
                 }
@@ -161,6 +164,27 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
                                 maxStudent.getDisplayName(),
                                 minStudent.getDisplayName());
                 return new ImbalanceResult(true, message);
+        }
+
+        private int openIssueCount(TeamWorkloadStudentDto student) {
+                return Math.max(0, student.getAssigned() - student.getCompleted());
+        }
+
+        private boolean isDoneCategory(JiraIssueData issue) {
+                String normalized = normalizeCategory(issue == null ? null : issue.getStatusCategory());
+                return STATUS_CATEGORY_DONE_KEY.equals(normalized) || "done".equals(normalized);
+        }
+
+        private boolean isInProgressCategory(JiraIssueData issue) {
+                String normalized = normalizeCategory(issue == null ? null : issue.getStatusCategory());
+                return STATUS_CATEGORY_IN_PROGRESS_KEY.equals(normalized) || "in progress".equals(normalized);
+        }
+
+        private String normalizeCategory(String value) {
+                if (value == null) {
+                        return "";
+                }
+                return value.trim().toLowerCase();
         }
 
         private static record ImbalanceResult(boolean detected, String message) {

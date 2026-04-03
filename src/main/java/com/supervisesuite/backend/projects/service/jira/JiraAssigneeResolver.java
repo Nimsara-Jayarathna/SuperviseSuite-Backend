@@ -11,9 +11,8 @@ import org.springframework.stereotype.Service;
  *
  * <p>Resolution rules:
  * <ul>
- *   <li>Subtask: keep and attribute using its own assignee.
- *   <li>Story/Task with subtasks present in the same list: skip to avoid double counting.
- *   <li>Story/Task without subtasks: keep and attribute using its own assignee.
+ *   <li>Keep every issue as a countable unit of work for assignee-based metrics.
+ *   <li>Drop duplicate issue keys when the same issue appears more than once.
  * </ul>
  */
 @Service
@@ -30,25 +29,15 @@ public class JiraAssigneeResolver {
             return List.of();
         }
 
-        Set<String> parentKeysWithSubtasks = new HashSet<>();
-        for (JiraIssueData issue : issues) {
-            if (issue != null && issue.isSubtask() && hasText(issue.getParentKey())) {
-                parentKeysWithSubtasks.add(issue.getParentKey());
-            }
-        }
-
+        Set<String> seenIssueKeys = new HashSet<>();
         List<JiraIssueData> resolvedIssues = new ArrayList<>();
         for (JiraIssueData issue : issues) {
             if (issue == null) {
                 continue;
             }
 
-            if (issue.isSubtask()) {
-                resolvedIssues.add(issue);
-                continue;
-            }
-
-            if (hasText(issue.getIssueKey()) && parentKeysWithSubtasks.contains(issue.getIssueKey())) {
+            String issueKey = issue.getIssueKey();
+            if (hasText(issueKey) && !seenIssueKeys.add(issueKey)) {
                 continue;
             }
 

@@ -71,6 +71,8 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Base64;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpHeaders;
@@ -92,6 +94,7 @@ import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService
 @Service
 class SupervisorServiceImpl implements SupervisorService {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final Logger LOGGER = LoggerFactory.getLogger(SupervisorServiceImpl.class);
 
     private static final String DEFAULT_LIFECYCLE_STATUS = "PLANNING";
     private static final String DEFAULT_MILESTONE_STATUS = "PLANNED";
@@ -898,6 +901,11 @@ class SupervisorServiceImpl implements SupervisorService {
         }
 
         String authTargetUrl = defaultIfBlank(trimToNull(jiraProperties.getAuthTargetUrl()), "https://auth.atlassian.com/authorize");
+        String scope = defaultIfBlank(trimToNull(jiraProperties.getScope()),
+            "read:jira-user read:jira-work offline_access");
+        if (!scope.contains("offline_access")) {
+            scope = scope + " offline_access";
+        }
         String nonce = generateOpaqueToken();
         String state = nonce + ":" + parsedProjectId;
         Instant now = Instant.now();
@@ -915,7 +923,7 @@ class SupervisorServiceImpl implements SupervisorService {
         String url = authTargetUrl
             + "?audience=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getAudience()), "api.atlassian.com"))
             + "&client_id=" + urlencode(clientId)
-            + "&scope=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getScope()), "read:jira-user read:jira-work"))
+            + "&scope=" + urlencode(scope)
             + "&redirect_uri=" + urlencode(redirectUri)
             + "&state=" + urlencode(state)
             + "&response_type=code&prompt=consent";
@@ -1000,6 +1008,8 @@ class SupervisorServiceImpl implements SupervisorService {
         tokenRequest.put("code", code);
         tokenRequest.put("redirect_uri", redirectUri);
 
+        // NOTE: refresh_token is available when offline_access scope is granted.
+        // Token refresh handling should be added when token expiry recovery is implemented.
         Map<?, ?> tokenResponse;
         try {
             tokenResponse = restClient.post()
@@ -1016,6 +1026,10 @@ class SupervisorServiceImpl implements SupervisorService {
         } catch (RestClientResponseException exception) {
             throw new ValidationException("jiraOAuth", buildAtlassianTokenExchangeIssue(exception));
         }
+
+        String refreshToken = tokenResponse == null ? null
+            : trimToNull(String.valueOf(tokenResponse.get("refresh_token")));
+        LOGGER.debug("Jira OAuth token exchange: refreshToken present={}", refreshToken != null);
 
         String accessToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("access_token")));
         if (accessToken == null || "null".equalsIgnoreCase(accessToken)) {
@@ -1051,6 +1065,29 @@ class SupervisorServiceImpl implements SupervisorService {
             throw new ValidationException("jiraOAuth", "Jira workspace details are incomplete.");
         }
 
+        Map<?, ?> projectSearchResponse;
+        try {
+            projectSearchResponse = restClient.get()
+                    .uri("https://api.atlassian.com/ex/jira/" + cloudId + "/rest/api/3/project/search?maxResults=1")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(Map.class);
+        } catch (ResourceAccessException exception) {
+            throw new ValidationException(
+                "jiraOAuth",
+                "Unable to reach Atlassian API from this environment.");
+        } catch (RestClientResponseException exception) {
+            throw new ValidationException("jiraOAuth", "Unable to fetch Jira project details.");
+        }
+
+        List<?> projectValues = projectSearchResponse == null ? null : (List<?>) projectSearchResponse.get("values");
+        Map<?, ?> firstProject = (projectValues == null || projectValues.isEmpty()) ? null : (Map<?, ?>) projectValues.get(0);
+        String jiraProjectKey = trimToNull(firstProject == null ? null : String.valueOf(firstProject.get("key")));
+        if (jiraProjectKey == null || "null".equalsIgnoreCase(jiraProjectKey)) {
+            throw new ValidationException("jiraOAuth", "No Jira project key was returned for this workspace.");
+        }
+
         Instant revokeTimestamp = Instant.now();
         projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
                 .ifPresent(existing -> {
@@ -1072,6 +1109,7 @@ class SupervisorServiceImpl implements SupervisorService {
         integration.setUpdatedAt(now);
         projectJiraIntegrationRepository.save(integration);
 
+        project.setJiraProjectKey(jiraProjectKey);
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
         projectRepository.save(project);
@@ -1100,6 +1138,7 @@ class SupervisorServiceImpl implements SupervisorService {
         Instant now = Instant.now();
         projectJiraIntegrationRepository.delete(activeIntegration);
 
+        project.setJiraProjectKey(null);
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
         Project savedProject = projectRepository.save(project);
@@ -1121,6 +1160,13 @@ class SupervisorServiceImpl implements SupervisorService {
         if (activeIntegration == null) {
             throw new ServiceUnavailableException("Jira is not connected for this project.");
         }
+
+        String jiraProjectKey = trimToNull(project.getJiraProjectKey());
+        if (jiraProjectKey == null) {
+            throw new ServiceUnavailableException(
+                    "Jira project key is missing for this project. Disconnect and reconnect Jira.");
+        }
+        activeIntegration.setJiraProjectKey(jiraProjectKey);
 
         return teamWorkloadService.computeWorkload(activeIntegration);
     }

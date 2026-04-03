@@ -161,13 +161,13 @@ class TeamWorkloadServiceImplTest {
 
         TeamWorkloadResponseDto result = serviceWithRealResolver.computeWorkload(integration);
 
-        assertThat(result.getStudents()).hasSize(2);
+        assertThat(result.getStudents()).hasSize(3);
         assertThat(result.getStudents())
                 .extracting(TeamWorkloadStudentDto::getAccountId)
-                .containsExactlyInAnyOrder("acc-student", "acc-student-2");
+                .containsExactlyInAnyOrder("acc-po", "acc-student", "acc-student-2");
         assertThat(result.getStudents())
                 .extracting(TeamWorkloadStudentDto::getAccountId)
-                .doesNotContain("acc-po");
+                .contains("acc-po");
     }
 
     private static JiraIssueData issue(

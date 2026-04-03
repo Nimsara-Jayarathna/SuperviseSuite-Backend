@@ -18,7 +18,7 @@ class JiraAssigneeResolverTest {
     }
 
     @Test
-    void resolveAssigneeWorkUnits_skipsParentWhenSubtasksExist_andKeepsSubtasksAndStandaloneIssues() {
+        void resolveAssigneeWorkUnits_keepsParentAndSubtasks_andStandaloneIssues() {
         JiraIssueData parentStory = issue(
                 "SCRUM-100",
                 false,
@@ -68,7 +68,49 @@ class JiraAssigneeResolverTest {
 
         assertThat(result)
                 .extracting(JiraIssueData::getIssueKey)
-                .containsExactly("SCRUM-101", "SCRUM-102", "SCRUM-200");
+                .containsExactly("SCRUM-100", "SCRUM-101", "SCRUM-102", "SCRUM-200");
+    }
+
+    @Test
+    void resolveAssigneeWorkUnits_deduplicatesDuplicateIssueKeys() {
+        JiraIssueData first = issue(
+                "SCRUM-400",
+                false,
+                null,
+                "student-a",
+                "Alice",
+                "In Progress",
+                3.0,
+                LocalDate.now().plusDays(1),
+                Instant.now());
+
+        JiraIssueData duplicate = issue(
+                "SCRUM-400",
+                false,
+                null,
+                "student-a",
+                "Alice",
+                "Done",
+                3.0,
+                LocalDate.now().plusDays(1),
+                Instant.now());
+
+        JiraIssueData another = issue(
+                "SCRUM-401",
+                true,
+                "SCRUM-400",
+                "student-a",
+                "Alice",
+                "In Progress",
+                1.0,
+                LocalDate.now().plusDays(2),
+                Instant.now());
+
+        List<JiraIssueData> result = resolver.resolveAssigneeWorkUnits(List.of(first, duplicate, another));
+
+        assertThat(result)
+                .extracting(JiraIssueData::getIssueKey)
+                .containsExactly("SCRUM-400", "SCRUM-401");
     }
 
     @Test

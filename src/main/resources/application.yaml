@@ -85,7 +85,7 @@ app:
   jira:
     client-id: ${ATLASSIAN_CLIENT_ID:}
     client-secret: ${ATLASSIAN_CLIENT_SECRET:}
-    scope: ${ATLASSIAN_SCOPE:read:jira-user read:jira-work}
+    scope: ${ATLASSIAN_SCOPE:read:jira-user read:jira-work offline_access}
     audience: ${ATLASSIAN_AUDIENCE:api.atlassian.com}
     auth-target-url: ${ATLASSIAN_AUTH_TARGET_URL:https://auth.atlassian.com/authorize}
     token-target-url: ${ATLASSIAN_TOKEN_TARGET_URL:https://auth.atlassian.com/oauth/token}

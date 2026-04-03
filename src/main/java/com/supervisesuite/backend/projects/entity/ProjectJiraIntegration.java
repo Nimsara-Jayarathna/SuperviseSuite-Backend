@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -48,5 +49,8 @@ public class ProjectJiraIntegration {
     private Instant updatedAt;
 
     private Instant revokedAt;
+
+    @Transient
+    private String jiraProjectKey;
 }
 

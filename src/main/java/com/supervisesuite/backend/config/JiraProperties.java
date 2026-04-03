@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 public class JiraProperties {
     private String clientId;
     private String clientSecret;
-    private String scope = "read:jira-user read:jira-work";
+    private String scope = "read:jira-user read:jira-work offline_access";
     private String audience = "api.atlassian.com";
     private String authTargetUrl = "https://auth.atlassian.com/authorize";
     private String tokenTargetUrl = "https://auth.atlassian.com/oauth/token";
