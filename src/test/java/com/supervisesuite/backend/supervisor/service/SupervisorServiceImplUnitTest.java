@@ -478,6 +478,7 @@ class SupervisorServiceImplUnitTest {
         Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
         project.setId(projectId);
         project.setSupervisor(supervisor);
+        project.setJiraProjectKey("PROJ");
 
         ProjectJiraIntegration integration = new ProjectJiraIntegration();
         integration.setProjectId(projectId);
