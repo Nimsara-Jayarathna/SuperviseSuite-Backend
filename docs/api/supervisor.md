@@ -22,6 +22,7 @@ All endpoints in this document:
 - `GET /api/supervisor/projects/{projectId}/github`
 - `GET /api/supervisor/projects/{projectId}/github/activity?page=...&size=...`
 - `GET /api/supervisor/projects/{projectId}/github/contributors?page=...&size=...`
+- `GET /api/supervisor/projects/{projectId}/jira/team-workload`
 - `GET /api/supervisor/projects/{projectId}/github/installations/{installationId}/repositories?page=...&size=...`
 - `POST /api/supervisor/projects/{projectId}/github/access-requests`
 - `GET /api/supervisor/projects/{projectId}/github/access-requests/validate?token=...`
@@ -448,6 +449,46 @@ Triggers backend GitHub sync and updates DB cache for the linked repository.
 - `401 UNAUTHORIZED` - not authenticated
 - `403 FORBIDDEN` - authenticated but not supervisor role
 - `404 NOT_FOUND` - project missing or not owned by authenticated supervisor
+
+---
+
+## GET /api/supervisor/projects/{projectId}/jira/team-workload
+
+Returns Jira team workload analytics for the supervisor Jira tab.
+
+### Response fields
+
+- `students[]`:
+  - `displayName`
+  - `accountId`
+  - `assigned`
+  - `completed`
+  - `inProgress`
+  - `overdue`
+  - `storyPointsAssigned`
+  - `storyPointsCompleted`
+  - `lastActiveDate` (nullable, `YYYY-MM-DD`)
+  - `completionRate`
+- `unassignedIssues`
+- `imbalanceDetected`
+- `imbalanceMessage` (nullable)
+- `dueDateAvailable`
+
+### Behavior
+
+- Requires active Jira integration for the project.
+- Requires project Jira key to be present.
+- Jira issues are deduplicated by issue key before workload aggregation.
+- Student rows are sorted by open issues descending (`assigned - completed`).
+- Overdue uses Jira due date when present; otherwise falls back to stale activity threshold.
+
+### Status codes
+
+- `200 OK` - workload loaded
+- `401 UNAUTHORIZED` - not authenticated
+- `403 FORBIDDEN` - authenticated but not supervisor role
+- `404 NOT_FOUND` - project missing or not owned by authenticated supervisor
+- `503 SERVICE_UNAVAILABLE` - Jira not connected, missing project key, or Jira workspace unavailable
 
 ---
 

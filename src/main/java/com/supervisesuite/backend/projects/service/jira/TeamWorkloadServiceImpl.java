@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,8 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
         private static final String STATUS_CATEGORY_DONE_KEY = "done";
         private static final String STATUS_CATEGORY_IN_PROGRESS_KEY = "indeterminate";
         private static final int STALE_OVERDUE_DAYS = 7;
+        private static final int IMBALANCE_MULTIPLIER = 3;
+        private static final int MIN_ASSIGNED_FOR_IMBALANCE = 3;
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
     private final JiraIssueClient jiraIssueClient;
@@ -39,21 +42,11 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
         List<JiraIssueData> resolvedIssues = jiraAssigneeResolver.resolveAssigneeWorkUnits(rawIssues);
         LocalDate today = LocalDate.now();
 
-        int unassignedIssues = (int) resolvedIssues.stream()
-                .filter(issue -> !hasText(issue.getAssigneeAccountId()))
-                .count();
-
-        Map<String, List<JiraIssueData>> issuesByAssignee = resolvedIssues.stream()
-                .filter(issue -> hasText(issue.getAssigneeAccountId()))
-                .collect(Collectors.groupingBy(JiraIssueData::getAssigneeAccountId));
-
-        List<TeamWorkloadStudentDto> students = issuesByAssignee.entrySet().stream()
-                .map(entry -> toStudentWorkload(entry.getKey(), entry.getValue(), today))
-                .sorted(Comparator.comparingInt(this::openIssueCount).reversed())
-                .toList();
+        int unassignedIssues = countUnassignedIssues(resolvedIssues);
+        List<TeamWorkloadStudentDto> students = buildStudentWorkloads(resolvedIssues, today);
 
         ImbalanceResult imbalance = computeImbalance(students);
-        boolean dueDateAvailable = rawIssues.stream().anyMatch(issue -> issue.getDueDate() != null);
+        boolean dueDateAvailable = hasAnyIssueDueDate(rawIssues);
 
         return new TeamWorkloadResponseDto(
                 students,
@@ -61,6 +54,27 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
                 imbalance.detected(),
                 imbalance.message(),
                 dueDateAvailable);
+    }
+
+    private int countUnassignedIssues(List<JiraIssueData> resolvedIssues) {
+        return (int) resolvedIssues.stream()
+                .filter(issue -> !hasText(issue.getAssigneeAccountId()))
+                .count();
+    }
+
+    private List<TeamWorkloadStudentDto> buildStudentWorkloads(List<JiraIssueData> resolvedIssues, LocalDate today) {
+        Map<String, List<JiraIssueData>> issuesByAssignee = resolvedIssues.stream()
+                .filter(issue -> hasText(issue.getAssigneeAccountId()))
+                .collect(Collectors.groupingBy(JiraIssueData::getAssigneeAccountId));
+
+        return issuesByAssignee.entrySet().stream()
+                .map(entry -> toStudentWorkload(entry.getKey(), entry.getValue(), today))
+                .sorted(Comparator.comparingInt(this::openIssueCount).reversed())
+                .toList();
+    }
+
+    private boolean hasAnyIssueDueDate(List<JiraIssueData> rawIssues) {
+        return rawIssues.stream().anyMatch(issue -> issue.getDueDate() != null);
     }
 
     private TeamWorkloadStudentDto toStudentWorkload(String accountId, List<JiraIssueData> issues, LocalDate today) {
@@ -71,30 +85,15 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
                 .count();
         int overdue = (int) issues.stream().filter(issue -> isIssueOverdue(issue, today)).count();
 
-        double storyPointsAssigned = issues.stream()
-                .mapToDouble(issue -> issue.getStoryPoints() == null ? 0.0 : issue.getStoryPoints())
-                .sum();
+        double storyPointsAssigned = sumStoryPoints(issues);
 
         double storyPointsCompleted = issues.stream()
                 .filter(this::isDoneCategory)
-                .mapToDouble(issue -> issue.getStoryPoints() == null ? 0.0 : issue.getStoryPoints())
+                .mapToDouble(issue -> toStoryPoints(issue.getStoryPoints()))
                 .sum();
 
-        String displayName = issues.stream()
-                .map(JiraIssueData::getAssigneeDisplayName)
-                .filter(this::hasText)
-                .findFirst()
-                .orElse(null);
-
-        Instant lastActiveInstant = issues.stream()
-                .map(JiraIssueData::getLastUpdated)
-                .filter(value -> value != null)
-                .max(Comparator.naturalOrder())
-                .orElse(null);
-
-        String lastActiveDate = lastActiveInstant == null
-                ? null
-                : DATE_FORMATTER.format(lastActiveInstant.atZone(ZoneOffset.UTC).toLocalDate());
+        String displayName = resolveDisplayName(issues);
+        String lastActiveDate = resolveLastActiveDate(issues);
 
         int completionRate = assigned > 0 ? (completed * 100 / assigned) : 0;
 
@@ -104,91 +103,122 @@ public class TeamWorkloadServiceImpl implements TeamWorkloadService {
                 assigned,
                 completed,
                 inProgress,
-                                overdue,
+                overdue,
                 storyPointsAssigned,
                 storyPointsCompleted,
                 lastActiveDate,
                 completionRate);
     }
 
-        private boolean isIssueOverdue(JiraIssueData issue, LocalDate today) {
-                if (isDoneCategory(issue)) {
-                        return false;
-                }
+    private double sumStoryPoints(List<JiraIssueData> issues) {
+        return issues.stream()
+                .mapToDouble(issue -> toStoryPoints(issue.getStoryPoints()))
+                .sum();
+    }
 
-                LocalDate dueDate = issue.getDueDate();
-                if (dueDate != null) {
-                        return dueDate.isBefore(today);
-                }
+    private double toStoryPoints(Double storyPoints) {
+        return storyPoints == null ? 0.0 : storyPoints;
+    }
 
-                Instant lastUpdated = issue.getLastUpdated();
-                if (lastUpdated == null) {
-                        return false;
-                }
+    private String resolveDisplayName(List<JiraIssueData> issues) {
+        return issues.stream()
+                .map(JiraIssueData::getAssigneeDisplayName)
+                .filter(this::hasText)
+                .findFirst()
+                .orElse(null);
+    }
 
-                LocalDate staleCutoff = today.minusDays(STALE_OVERDUE_DAYS);
-                LocalDate lastUpdatedDate = lastUpdated.atZone(ZoneOffset.UTC).toLocalDate();
-                return lastUpdatedDate.isBefore(staleCutoff);
+    private String resolveLastActiveDate(List<JiraIssueData> issues) {
+        Instant lastActiveInstant = issues.stream()
+                .map(JiraIssueData::getLastUpdated)
+                .filter(value -> value != null)
+                .max(Comparator.naturalOrder())
+                .orElse(null);
+
+        return lastActiveInstant == null
+                ? null
+                : DATE_FORMATTER.format(lastActiveInstant.atZone(ZoneOffset.UTC).toLocalDate());
+    }
+
+    private boolean isIssueOverdue(JiraIssueData issue, LocalDate today) {
+        if (isDoneCategory(issue)) {
+            return false;
         }
 
-        private ImbalanceResult computeImbalance(List<TeamWorkloadStudentDto> students) {
-                List<TeamWorkloadStudentDto> activeStudents = students.stream()
-                                .filter(student -> openIssueCount(student) > 0)
-                                .toList();
-
-                if (activeStudents.size() < 2) {
-                        return new ImbalanceResult(false, null);
-                }
-
-                TeamWorkloadStudentDto maxStudent = activeStudents.stream()
-                                .max(Comparator.comparingInt(this::openIssueCount))
-                                .orElse(null);
-                TeamWorkloadStudentDto minStudent = activeStudents.stream()
-                                .min(Comparator.comparingInt(this::openIssueCount))
-                                .orElse(null);
-
-                if (maxStudent == null || minStudent == null) {
-                        return new ImbalanceResult(false, null);
-                }
-
-                int maxOpen = openIssueCount(maxStudent);
-                int minOpen = openIssueCount(minStudent);
-
-                boolean detected = minOpen == 0 ? maxOpen > 0 : maxOpen > 3 * minOpen;
-                if (!detected) {
-                        return new ImbalanceResult(false, null);
-                }
-
-                String message = String.format(
-                                "%s has 3x more open issues than %s",
-                                maxStudent.getDisplayName(),
-                                minStudent.getDisplayName());
-                return new ImbalanceResult(true, message);
+        LocalDate dueDate = issue.getDueDate();
+        if (dueDate != null) {
+            return dueDate.isBefore(today);
         }
 
-        private int openIssueCount(TeamWorkloadStudentDto student) {
-                return Math.max(0, student.getAssigned() - student.getCompleted());
+        Instant lastUpdated = issue.getLastUpdated();
+        if (lastUpdated == null) {
+            return false;
         }
 
-        private boolean isDoneCategory(JiraIssueData issue) {
-                String normalized = normalizeCategory(issue == null ? null : issue.getStatusCategory());
-                return STATUS_CATEGORY_DONE_KEY.equals(normalized) || "done".equals(normalized);
+        LocalDate staleCutoff = today.minusDays(STALE_OVERDUE_DAYS);
+        LocalDate lastUpdatedDate = lastUpdated.atZone(ZoneOffset.UTC).toLocalDate();
+        return lastUpdatedDate.isBefore(staleCutoff);
+    }
+
+    private ImbalanceResult computeImbalance(List<TeamWorkloadStudentDto> students) {
+        List<TeamWorkloadStudentDto> activeStudents = students.stream()
+                .filter(student -> openIssueCount(student) > 0)
+                .toList();
+
+        if (activeStudents.size() < 2) {
+            return new ImbalanceResult(false, null);
         }
 
-        private boolean isInProgressCategory(JiraIssueData issue) {
-                String normalized = normalizeCategory(issue == null ? null : issue.getStatusCategory());
-                return STATUS_CATEGORY_IN_PROGRESS_KEY.equals(normalized) || "in progress".equals(normalized);
+        TeamWorkloadStudentDto maxStudent = activeStudents.stream()
+                .max(Comparator.comparingInt(this::openIssueCount))
+                .orElse(null);
+        TeamWorkloadStudentDto minStudent = activeStudents.stream()
+                .min(Comparator.comparingInt(this::openIssueCount))
+                .orElse(null);
+
+        if (maxStudent == null || minStudent == null) {
+            return new ImbalanceResult(false, null);
         }
 
-        private String normalizeCategory(String value) {
-                if (value == null) {
-                        return "";
-                }
-                return value.trim().toLowerCase();
+        int maxOpen = openIssueCount(maxStudent);
+        int minOpen = openIssueCount(minStudent);
+
+        boolean exceedsRatio = minOpen == 0 ? maxOpen > 0 : maxOpen > IMBALANCE_MULTIPLIER * minOpen;
+        boolean detected = exceedsRatio && maxStudent.getAssigned() >= MIN_ASSIGNED_FOR_IMBALANCE;
+        if (!detected) {
+            return new ImbalanceResult(false, null);
         }
 
-        private static record ImbalanceResult(boolean detected, String message) {
+        String message = String.format(
+                "%s has 3x more open issues than %s",
+                maxStudent.getDisplayName(),
+                minStudent.getDisplayName());
+        return new ImbalanceResult(true, message);
+    }
+
+    private int openIssueCount(TeamWorkloadStudentDto student) {
+        return Math.max(0, student.getAssigned() - student.getCompleted());
+    }
+
+    private boolean isDoneCategory(JiraIssueData issue) {
+        String normalized = normalizeCategory(issue == null ? null : issue.getStatusCategory());
+        return STATUS_CATEGORY_DONE_KEY.equals(normalized);
+    }
+
+    private boolean isInProgressCategory(JiraIssueData issue) {
+        String normalized = normalizeCategory(issue == null ? null : issue.getStatusCategory());
+        return STATUS_CATEGORY_IN_PROGRESS_KEY.equals(normalized) || "in progress".equals(normalized);
+    }
+
+    private String normalizeCategory(String value) {
+        if (value == null) {
+            return "";
         }
+        return value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static record ImbalanceResult(boolean detected, String message) {
+    }
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();

@@ -18,7 +18,7 @@ class JiraAssigneeResolverTest {
     }
 
     @Test
-        void resolveAssigneeWorkUnits_keepsParentAndSubtasks_andStandaloneIssues() {
+                void resolveAssigneeWorkUnits_keepsParentAndSubtasks_andStandaloneIssues() {
         JiraIssueData parentStory = issue(
                 "SCRUM-100",
                 false,

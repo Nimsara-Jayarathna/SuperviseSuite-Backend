@@ -16,6 +16,7 @@ All endpoints in this document:
 - [GET /api/student/projects/{projectId}/github](#get-apistudentprojectsprojectidgithub)
 - [GET /api/student/projects/{projectId}/github/activity?page=...&size=...](#get-apistudentprojectsprojectidgithubactivitypagesize)
 - [GET /api/student/projects/{projectId}/github/contributors?page=...&size=...](#get-apistudentprojectsprojectidgithubcontributorspagesize)
+- [GET /api/student/projects/{projectId}/jira/team-workload](#get-apistudentprojectsprojectidjirateam-workload)
 
 ---
 
@@ -223,3 +224,38 @@ Returns paginated contributors for the contributors modal.
 
 - `items[]` (`name`, `commitCount`)
 - `page`, `size`, `total`, `hasMore`
+
+---
+
+## GET /api/student/projects/{projectId}/jira/team-workload
+
+Returns read-only Jira team workload analytics for the student Jira tab.
+
+### Response fields
+
+- `students[]`:
+  - `displayName`
+  - `accountId`
+  - `assigned`
+  - `completed`
+  - `inProgress`
+  - `overdue`
+  - `storyPointsAssigned`
+  - `storyPointsCompleted`
+  - `lastActiveDate` (nullable, `YYYY-MM-DD`)
+  - `completionRate`
+- `unassignedIssues`
+- `imbalanceDetected`
+- `imbalanceMessage` (nullable)
+- `dueDateAvailable`
+
+### Notes
+
+- Uses the same backend workload computation as supervisor Jira workload endpoint.
+- Read-only from student perspective (no mutation controls exposed).
+- Student must be assigned to the project as `member_role = STUDENT`.
+
+### Common errors
+
+- `404 NOT_FOUND` for invalid UUID, missing project, deleted project, or non-member student
+- `503 SERVICE_UNAVAILABLE` when Jira is not connected or project Jira key is missing
