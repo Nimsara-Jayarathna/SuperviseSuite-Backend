@@ -13,6 +13,8 @@ public class SupervisorDashboardDto {
     private int behindProjects;
     private int completedProjects;
     private int upcomingMilestonesCount;
+    private int jiraAtRiskCount;
+    private int jiraBehindCount;
     private List<ProjectItem> projects;
     private List<ProjectItem> recentProjects;
 
@@ -113,6 +115,22 @@ public class SupervisorDashboardDto {
         this.recentProjects = recentProjects;
     }
 
+    public int getJiraAtRiskCount() {
+        return jiraAtRiskCount;
+    }
+
+    public void setJiraAtRiskCount(int jiraAtRiskCount) {
+        this.jiraAtRiskCount = jiraAtRiskCount;
+    }
+
+    public int getJiraBehindCount() {
+        return jiraBehindCount;
+    }
+
+    public void setJiraBehindCount(int jiraBehindCount) {
+        this.jiraBehindCount = jiraBehindCount;
+    }
+
     public static class ProjectItem {
         private UUID id;
         private String title;
@@ -122,6 +140,7 @@ public class SupervisorDashboardDto {
         private Instant lastActivityAt;
         private Integer progressPercent;
         private String healthNote;
+        private String jiraHealthIndicator;
 
         public ProjectItem() {
         }
@@ -208,6 +227,14 @@ public class SupervisorDashboardDto {
 
         public void setHealthNote(String healthNote) {
             this.healthNote = healthNote;
+        }
+
+        public String getJiraHealthIndicator() {
+            return jiraHealthIndicator;
+        }
+
+        public void setJiraHealthIndicator(String jiraHealthIndicator) {
+            this.jiraHealthIndicator = jiraHealthIndicator;
         }
     }
 }

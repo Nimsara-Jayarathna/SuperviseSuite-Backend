@@ -21,6 +21,7 @@ import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
 import com.supervisesuite.backend.projects.entity.ProjectJiraOAuthState;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
+import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
 import com.supervisesuite.backend.projects.repository.ProjectJiraOAuthStateRepository;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
@@ -96,6 +97,8 @@ class SupervisorServiceImplUnitTest {
     @Mock
     private JiraTokenEncryptionService jiraTokenEncryptionService;
     @Mock
+    private ProjectJiraIssueRepository projectJiraIssueRepository;
+    @Mock
     private JiraIssueSyncService jiraIssueSyncService;
     @Mock
     private JiraHealthService jiraHealthService;
@@ -126,6 +129,7 @@ class SupervisorServiceImplUnitTest {
                 projectJiraIntegrationRepository,
                 projectJiraOAuthStateRepository,
                 jiraTokenEncryptionService,
+                projectJiraIssueRepository,
                 jiraIssueSyncService,
                 jiraHealthService,
                 restClientBuilder);

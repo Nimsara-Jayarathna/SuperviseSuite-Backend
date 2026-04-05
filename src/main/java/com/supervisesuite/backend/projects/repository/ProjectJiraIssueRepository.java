@@ -2,6 +2,7 @@ package com.supervisesuite.backend.projects.repository;
 
 import com.supervisesuite.backend.projects.entity.ProjectJiraIssue;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,6 +14,13 @@ import org.springframework.data.repository.query.Param;
 public interface ProjectJiraIssueRepository extends JpaRepository<ProjectJiraIssue, UUID> {
 
     List<ProjectJiraIssue> findAllByProjectId(UUID projectId);
+
+    long countByProjectId(UUID projectId);
+
+    long countByProjectIdAndStatusCategoryKey(UUID projectId, String statusCategoryKey);
+
+    long countByProjectIdAndDueDateBeforeAndStatusCategoryKeyNot(
+            UUID projectId, LocalDate today, String statusCategoryKey);
 
     @Modifying
     void deleteAllByProjectIdAndIssueKeyNotIn(UUID projectId, List<String> issueKeys);
