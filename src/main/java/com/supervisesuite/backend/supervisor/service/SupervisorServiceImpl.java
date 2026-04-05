@@ -77,6 +77,7 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
 import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService;
@@ -85,6 +86,7 @@ import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
 import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
+import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
 
 @Service
 class SupervisorServiceImpl implements SupervisorService {
@@ -121,6 +123,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
     private final ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository;
     private final JiraTokenEncryptionService jiraTokenEncryptionService;
+    private final JiraHealthService jiraHealthService;
     private final RestClient restClient;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -139,6 +142,7 @@ class SupervisorServiceImpl implements SupervisorService {
             ProjectJiraIntegrationRepository projectJiraIntegrationRepository,
             ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository,
             JiraTokenEncryptionService jiraTokenEncryptionService,
+            JiraHealthService jiraHealthService,
             RestClient.Builder restClientBuilder) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
@@ -154,6 +158,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.projectJiraIntegrationRepository = projectJiraIntegrationRepository;
         this.projectJiraOAuthStateRepository = projectJiraOAuthStateRepository;
         this.jiraTokenEncryptionService = jiraTokenEncryptionService;
+        this.jiraHealthService = jiraHealthService;
         this.restClient = restClientBuilder.build();
     }
 
@@ -1098,6 +1103,19 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setLastActivityAt(now);
         Project savedProject = projectRepository.save(project);
         return toProjectDetail(savedProject);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public JiraHealthDto getJiraHealthOverview(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+
+        return jiraHealthService.getHealthOverview(parsedProjectId);
     }
 
     private ProjectMember buildProjectMember(

@@ -19,6 +19,7 @@ import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
+import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.users.entity.User;
@@ -56,6 +57,8 @@ class StudentServiceImplTest {
     private RepositoryLinkService repositoryLinkService;
     @Mock
     private ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
+    @Mock
+    private JiraHealthService jiraHealthService;
 
     private StudentServiceImpl studentService;
 
@@ -71,7 +74,8 @@ class StudentServiceImplTest {
             projectMilestoneRepository,
             projectService,
             repositoryLinkService,
-            projectJiraIntegrationRepository
+            projectJiraIntegrationRepository,
+            jiraHealthService
         );
 
         studentId = UUID.randomUUID();
