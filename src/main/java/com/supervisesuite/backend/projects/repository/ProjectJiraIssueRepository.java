@@ -12,8 +12,13 @@ import org.springframework.data.repository.query.Param;
 
 public interface ProjectJiraIssueRepository extends JpaRepository<ProjectJiraIssue, UUID> {
 
+    List<ProjectJiraIssue> findAllByProjectId(UUID projectId);
+
     @Modifying
     void deleteAllByProjectIdAndIssueKeyNotIn(UUID projectId, List<String> issueKeys);
+
+    @Modifying
+    void deleteAllByProjectId(UUID projectId);
 
     @Query("SELECT MAX(i.syncedAt) FROM ProjectJiraIssue i WHERE i.projectId = :projectId")
     Optional<Instant> findMaxSyncedAtByProjectId(@Param("projectId") UUID projectId);
