@@ -19,6 +19,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -44,7 +45,7 @@ class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void syncProjectIssues(UUID projectId) {
         // Step 1: Resolve active integration
         ProjectJiraIntegration integration = jiraIntegrationRepository

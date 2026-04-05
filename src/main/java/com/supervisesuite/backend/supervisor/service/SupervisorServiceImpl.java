@@ -87,9 +87,13 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
 import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
 import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
+import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
 
 @Service
 class SupervisorServiceImpl implements SupervisorService {
+
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(SupervisorServiceImpl.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private static final String DEFAULT_LIFECYCLE_STATUS = "PLANNING";
@@ -123,6 +127,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
     private final ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository;
     private final JiraTokenEncryptionService jiraTokenEncryptionService;
+    private final JiraIssueSyncService jiraIssueSyncService;
     private final JiraHealthService jiraHealthService;
     private final RestClient restClient;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -142,6 +147,7 @@ class SupervisorServiceImpl implements SupervisorService {
             ProjectJiraIntegrationRepository projectJiraIntegrationRepository,
             ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository,
             JiraTokenEncryptionService jiraTokenEncryptionService,
+            JiraIssueSyncService jiraIssueSyncService,
             JiraHealthService jiraHealthService,
             RestClient.Builder restClientBuilder) {
         this.userRepository = userRepository;
@@ -158,6 +164,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.projectJiraIntegrationRepository = projectJiraIntegrationRepository;
         this.projectJiraOAuthStateRepository = projectJiraOAuthStateRepository;
         this.jiraTokenEncryptionService = jiraTokenEncryptionService;
+        this.jiraIssueSyncService = jiraIssueSyncService;
         this.jiraHealthService = jiraHealthService;
         this.restClient = restClientBuilder.build();
     }
@@ -1074,6 +1081,14 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
         projectRepository.save(project);
+
+        try {
+            jiraIssueSyncService.syncProjectIssues(project.getId());
+        } catch (Exception ex) {
+            log.warn("Initial Jira issue sync failed for project {} after OAuth completion. " +
+                     "Connection was saved successfully; cache will populate on next sync. Error: {}",
+                     project.getId(), ex.getMessage());
+        }
 
         return new JiraOAuthCompleteResultDto(project.getId().toString(), workspaceName);
     }
