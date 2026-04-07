@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
+import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
@@ -129,5 +130,29 @@ class StudentControllerTest {
 
         assertThat(response).isSameAs(expected);
         verify(studentService).getProjectGitHubContributorsPage("student-id", "project-1", null, 3, 25);
+    }
+
+    @Test
+    void getProjectJiraHealth_delegatesToServiceAndFactory() {
+        JiraHealthDto data = new JiraHealthDto(
+            66.7,
+            3,
+            1,
+            1,
+            new JiraHealthDto.StatusBreakdown(1, 2, 6),
+            List.of(),
+            33.3,
+            null
+        );
+        ResponseEntity<ApiResponse<JiraHealthDto>> expected = ResponseEntity.ok(new ApiResponse<>());
+
+        when(studentService.getJiraHealthOverview("student-id", "project-1")).thenReturn(data);
+        when(apiResponseFactory.ok("Jira health overview loaded.", data, request)).thenReturn(expected);
+
+        ResponseEntity<ApiResponse<JiraHealthDto>> response =
+            controller.getProjectJiraHealth(authentication, "project-1", request);
+
+        assertThat(response).isSameAs(expected);
+        verify(studentService).getJiraHealthOverview("student-id", "project-1");
     }
 }

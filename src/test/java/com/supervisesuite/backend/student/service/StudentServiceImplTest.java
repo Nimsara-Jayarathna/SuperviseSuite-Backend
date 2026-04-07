@@ -9,6 +9,7 @@ import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
+import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto;
@@ -211,6 +212,45 @@ class StudentServiceImplTest {
         assertThat(result.getJira()).isNotNull();
         assertThat(result.getJira().isConnected()).isTrue();
         assertThat(result.getJira().getWorkspaceName()).isEqualTo("supervise-suite");
+    }
+
+    @Test
+    void getJiraHealthOverview_whenMember_delegatesToHealthService() {
+        UUID projectId = UUID.randomUUID();
+        JiraHealthDto health = new JiraHealthDto(
+            55.0,
+            9,
+            3,
+            2,
+            new JiraHealthDto.StatusBreakdown(4, 5, 11),
+            List.of(),
+            22.2,
+            Instant.now()
+        );
+
+        when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
+        when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(studentId, projectId, Roles.STUDENT))
+            .thenReturn(true);
+        when(jiraHealthService.getHealthOverview(projectId)).thenReturn(health);
+
+        JiraHealthDto result = studentService.getJiraHealthOverview(studentId.toString(), projectId.toString());
+
+        assertThat(result).isSameAs(health);
+        verify(jiraHealthService).getHealthOverview(projectId);
+    }
+
+    @Test
+    void getJiraHealthOverview_whenNotMember_throwsEntityNotFound() {
+        UUID projectId = UUID.randomUUID();
+
+        when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
+        when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(studentId, projectId, Roles.STUDENT))
+            .thenReturn(false);
+
+        assertThatThrownBy(() -> studentService.getJiraHealthOverview(studentId.toString(), projectId.toString()))
+            .isInstanceOf(EntityNotFoundException.class);
+
+        verify(projectMemberRepository).existsByUserIdAndProjectIdAndMemberRole(studentId, projectId, Roles.STUDENT);
     }
 
     private static ProjectMember membership(UUID userId, UUID projectId) {

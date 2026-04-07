@@ -177,6 +177,37 @@ class SupervisorProjectControllerTest {
         assertThat(error(response).get("code")).isEqualTo("FORBIDDEN");
     }
 
+    @Test
+    void getProjectJiraHealth_validRequest_returns200AndHealthPayload() {
+        User supervisor = persistUser(Roles.SUPERVISOR, "supervisor-jira@university.ac.lk");
+        Project project = persistProject(supervisor);
+        String token = jwtService.generateAccessToken(supervisor);
+
+        ResponseEntity<Map> response = getProjectJiraHealth(project.getId(), token);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().get("success")).isEqualTo(true);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        assertThat(data).isNotNull();
+        assertThat(data).containsKeys("completionPercent", "openIssues", "statusBreakdown", "bugRatio");
+    }
+
+    @Test
+    void refreshProjectJira_withoutActiveIntegration_returns400() {
+        User supervisor = persistUser(Roles.SUPERVISOR, "supervisor-jira-refresh@university.ac.lk");
+        Project project = persistProject(supervisor);
+        String token = jwtService.generateAccessToken(supervisor);
+
+        ResponseEntity<Map> response = refreshProjectJira(project.getId(), token);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
+    }
+
     private ResponseEntity<Map> patchRepository(UUID projectId, Map<String, Object> body, String accessToken) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -188,6 +219,34 @@ class SupervisorProjectControllerTest {
             "/api/supervisor/projects/" + projectId + "/repository",
             HttpMethod.PATCH,
             new HttpEntity<>(body, headers),
+            Map.class
+        );
+    }
+
+    private ResponseEntity<Map> getProjectJiraHealth(UUID projectId, String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        if (accessToken != null) {
+            headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + accessToken);
+        }
+
+        return restTemplate.exchange(
+            "/api/supervisor/projects/" + projectId + "/jira/health",
+            HttpMethod.GET,
+            new HttpEntity<>(headers),
+            Map.class
+        );
+    }
+
+    private ResponseEntity<Map> refreshProjectJira(UUID projectId, String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        if (accessToken != null) {
+            headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + accessToken);
+        }
+
+        return restTemplate.exchange(
+            "/api/supervisor/projects/" + projectId + "/jira/refresh",
+            HttpMethod.POST,
+            new HttpEntity<>(headers),
             Map.class
         );
     }

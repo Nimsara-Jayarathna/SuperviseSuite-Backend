@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
+import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
@@ -168,6 +169,54 @@ class SupervisorControllerTest {
 
         assertThat(response).isSameAs(expected);
         verify(supervisorService).refreshProjectGitHubData("supervisor-id", "project-1");
+    }
+
+    @Test
+    void getProjectJiraHealth_delegatesToServiceAndFactory() {
+        JiraHealthDto data = new JiraHealthDto(
+            75.0,
+            5,
+            2,
+            1,
+            new JiraHealthDto.StatusBreakdown(2, 3, 15),
+            List.of(),
+            20.0,
+            null
+        );
+        ResponseEntity<ApiResponse<JiraHealthDto>> expected = ResponseEntity.ok(new ApiResponse<>());
+
+        when(supervisorService.getJiraHealthOverview("supervisor-id", "project-1")).thenReturn(data);
+        when(apiResponseFactory.ok("Jira health overview loaded.", data, request)).thenReturn(expected);
+
+        ResponseEntity<ApiResponse<JiraHealthDto>> response =
+            controller.getProjectJiraHealth(authentication, request, "project-1");
+
+        assertThat(response).isSameAs(expected);
+        verify(supervisorService).getJiraHealthOverview("supervisor-id", "project-1");
+    }
+
+    @Test
+    void refreshProjectJira_delegatesToServiceAndFactory() {
+        JiraHealthDto data = new JiraHealthDto(
+            80.0,
+            4,
+            1,
+            1,
+            new JiraHealthDto.StatusBreakdown(1, 3, 16),
+            List.of(),
+            25.0,
+            null
+        );
+        ResponseEntity<ApiResponse<JiraHealthDto>> expected = ResponseEntity.ok(new ApiResponse<>());
+
+        when(supervisorService.refreshProjectJiraData("supervisor-id", "project-1")).thenReturn(data);
+        when(apiResponseFactory.ok("Jira data refreshed successfully.", data, request)).thenReturn(expected);
+
+        ResponseEntity<ApiResponse<JiraHealthDto>> response =
+            controller.refreshProjectJira(authentication, request, "project-1");
+
+        assertThat(response).isSameAs(expected);
+        verify(supervisorService).refreshProjectJiraData("supervisor-id", "project-1");
     }
 
     @Test
