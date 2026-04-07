@@ -16,6 +16,7 @@ All endpoints in this document:
 - [GET /api/student/projects/{projectId}/github](#get-apistudentprojectsprojectidgithub)
 - [GET /api/student/projects/{projectId}/github/activity?page=...&size=...](#get-apistudentprojectsprojectidgithubactivitypagesize)
 - [GET /api/student/projects/{projectId}/github/contributors?page=...&size=...](#get-apistudentprojectsprojectidgithubcontributorspagesize)
+- [GET /api/student/projects/{projectId}/jira/health](#get-apistudentprojectsprojectidjirahealth)
 
 ---
 
@@ -93,6 +94,7 @@ The detail payload currently includes backend-backed fields only:
 - `progressPercent`
 - `healthNote`
 - `github`
+- `jira`
 - `members[]`
 - `milestones[]`
 
@@ -121,6 +123,12 @@ The detail payload currently includes backend-backed fields only:
 - `activitySummary` (`totalCommits`, `lastActivityAt`, `status`)
 - `contributorsPreview[]` (top 4)
 - `recentCommitsPreview[]` (preview list)
+
+`jira` integration fields:
+
+- `connected`
+- `workspaceName`
+- `workspaceUrl`
 
 ### 200 OK
 
@@ -223,3 +231,28 @@ Returns paginated contributors for the contributors modal.
 
 - `items[]` (`name`, `commitCount`)
 - `page`, `size`, `total`, `hasMore`
+
+---
+
+## GET /api/student/projects/{projectId}/jira/health
+
+Returns read-only Jira health overview for the student Jira tab.
+
+### Response fields
+
+- `completionPercent`
+- `openIssues`
+- `overdueIssues`
+- `highPriorityOpen`
+- `statusBreakdown`:
+  - `toDo`, `inProgress`, `done`
+- `typeDistribution[]`:
+  - `type`, `count`
+- `bugRatio`
+- `lastSyncedAt` (nullable)
+
+### Rules
+
+- student must be assigned to project with `member_role = STUDENT`
+- endpoint is read-only for student role
+- response is computed from backend Jira cache data

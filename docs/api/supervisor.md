@@ -30,6 +30,11 @@ All endpoints in this document:
 - `POST /api/supervisor/projects/{projectId}/github/link`
 - `POST /api/supervisor/projects/{projectId}/github/access/remove`
 - `POST /api/supervisor/projects/{projectId}/github/refresh`
+- `GET /api/supervisor/projects/{projectId}/jira/auth-url`
+- `POST /api/supervisor/jira/oauth/complete`
+- `POST /api/supervisor/projects/{projectId}/jira/disconnect`
+- `GET /api/supervisor/projects/{projectId}/jira/health`
+- `POST /api/supervisor/projects/{projectId}/jira/refresh`
 - `POST /api/supervisor/projects/{projectId}/members`
 - `POST /api/supervisor/projects/{projectId}/milestones`
 - `PATCH /api/supervisor/projects/{projectId}/milestones/{milestoneId}`
@@ -58,7 +63,7 @@ Returns dashboard aggregates and lightweight project records for `/supervisor/da
 
 - Includes only supervisor-owned, non-deleted projects.
 - `projects[]` item fields:
-  - `id`, `title`, `summary`, `lifecycleStatus`, `milestoneDate`, `lastActivityAt`, `progressPercent`, `healthNote`
+  - `id`, `title`, `summary`, `lifecycleStatus`, `milestoneDate`, `lastActivityAt`, `progressPercent`, `healthNote`, `jiraHealthIndicator`
 
 ---
 
@@ -103,6 +108,10 @@ Returns one supervisor-owned project detail record.
   - `github.activitySummary` (`totalCommits`, `lastActivityAt`, `status`)
   - `github.contributorsPreview[]` (top 4)
   - `github.recentCommitsPreview[]` (small preview list)
+- Jira integration block:
+  - `jira.connected`
+  - `jira.workspaceName`
+  - `jira.workspaceUrl`
 - `leader` (nullable):
   - `id`, `firstName`, `lastName`, `email`, `registrationNumber`
 - `members[]`:
@@ -445,6 +454,98 @@ Triggers backend GitHub sync and updates DB cache for the linked repository.
 
 - `200 OK` - GitHub repository data refreshed
 - `400 BAD_REQUEST` - validation failure
+- `401 UNAUTHORIZED` - not authenticated
+- `403 FORBIDDEN` - authenticated but not supervisor role
+- `404 NOT_FOUND` - project missing or not owned by authenticated supervisor
+
+---
+
+## GET /api/supervisor/projects/{projectId}/jira/auth-url
+
+Returns a short-lived Atlassian authorization URL for connecting Jira to a supervisor-owned project.
+
+### Response fields
+
+- `url` (Atlassian OAuth authorize URL)
+
+### Rules
+
+- project must belong to authenticated supervisor
+- endpoint fails with validation error when a non-revoked Jira integration already exists for project
+
+---
+
+## POST /api/supervisor/jira/oauth/complete
+
+Completes Jira OAuth callback processing and stores project-scoped Jira integration details.
+
+### Request fields
+
+- `code` (OAuth authorization code)
+- `state` (backend-issued nonce/state value)
+- `error` (optional OAuth error code)
+- `errorDescription` (optional OAuth error detail)
+
+### Response fields
+
+- `projectId`
+- `workspaceName`
+
+---
+
+## POST /api/supervisor/projects/{projectId}/jira/disconnect
+
+Revokes project-scoped Jira integration and returns refreshed project detail payload.
+
+### Behavior
+
+- validates supervisor ownership
+- deletes active Jira integration for project
+- updates project activity timestamps
+- returns refreshed `SupervisorProjectDetailDto`
+
+---
+
+## GET /api/supervisor/projects/{projectId}/jira/health
+
+Returns Jira health overview derived from cached Jira issues for the project.
+
+### Response fields
+
+- `completionPercent`
+- `openIssues`
+- `overdueIssues`
+- `highPriorityOpen`
+- `statusBreakdown`:
+  - `toDo`, `inProgress`, `done`
+- `typeDistribution[]`:
+  - `type`, `count`
+- `bugRatio`
+- `lastSyncedAt` (nullable)
+
+### Notes
+
+- served from backend Jira cache table (`project_jira_issues`)
+- `lastSyncedAt = null` indicates first sync not completed yet
+
+---
+
+## POST /api/supervisor/projects/{projectId}/jira/refresh
+
+Triggers Jira issue resync for a connected project, then returns recomputed Jira health overview.
+
+### Behavior
+
+- validates supervisor ownership
+- requires active Jira integration for project
+- syncs Jira issues via backend integration service
+- updates project activity timestamps
+- returns same payload shape as `GET .../jira/health`
+
+### Status codes
+
+- `200 OK` - Jira data refreshed and health overview returned
+- `400 BAD_REQUEST` - validation failure (for example Jira not connected)
 - `401 UNAUTHORIZED` - not authenticated
 - `403 FORBIDDEN` - authenticated but not supervisor role
 - `404 NOT_FOUND` - project missing or not owned by authenticated supervisor
