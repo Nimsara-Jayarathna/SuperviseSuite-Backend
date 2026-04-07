@@ -15,15 +15,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class JiraHealthServiceImpl implements JiraHealthService {
 
-    /** Jira status category keys — defined by Atlassian, not configurable. */
-    private static final String STATUS_TODO        = "new";
-    private static final String STATUS_IN_PROGRESS = "indeterminate";
-    private static final String STATUS_DONE        = "done";
-
     private final ProjectJiraIssueRepository jiraIssueRepository;
+    private final JiraHealthClassifier jiraHealthClassifier;
 
-    JiraHealthServiceImpl(ProjectJiraIssueRepository jiraIssueRepository) {
+    JiraHealthServiceImpl(
+            ProjectJiraIssueRepository jiraIssueRepository,
+            JiraHealthClassifier jiraHealthClassifier) {
         this.jiraIssueRepository = jiraIssueRepository;
+        this.jiraHealthClassifier = jiraHealthClassifier;
     }
 
     @Override
@@ -55,16 +54,19 @@ class JiraHealthServiceImpl implements JiraHealthService {
 
         for (ProjectJiraIssue issue : issues) {
             String statusKey = issue.getStatusCategoryKey();
-            boolean isDone = STATUS_DONE.equals(statusKey);
+            boolean isDone = jiraHealthClassifier.isDoneStatus(statusKey);
 
             if (isDone) {
                 doneCount++;
             } else {
                 // Status breakdown buckets
-                if (STATUS_TODO.equals(statusKey)) {
+                if (jiraHealthClassifier.isToDoStatus(statusKey)) {
                     toDoCount++;
-                } else if (STATUS_IN_PROGRESS.equals(statusKey)) {
+                } else if (jiraHealthClassifier.isInProgressStatus(statusKey)) {
                     inProgressCount++;
+                } else {
+                    // Unknown non-done category still belongs to open work.
+                    toDoCount++;
                 }
 
                 // Overdue: has a due date and that date is in the past
@@ -75,12 +77,12 @@ class JiraHealthServiceImpl implements JiraHealthService {
 
                 // High / Highest priority open issues
                 String priority = issue.getPriorityName();
-                if ("High".equals(priority) || "Highest".equals(priority)) {
+                if (jiraHealthClassifier.isHighPriority(priority)) {
                     highPriorityOpen++;
                 }
 
                 // Open bugs
-                if ("Bug".equals(issue.getIssueType())) {
+                if (jiraHealthClassifier.isBugType(issue.getIssueType())) {
                     openBugCount++;
                 }
             }

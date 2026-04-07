@@ -6,11 +6,7 @@ import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIssue;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
-import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -25,23 +21,23 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
 
-    private static final DateTimeFormatter JIRA_TIMESTAMP_FORMAT =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
-
     private final ProjectJiraIntegrationRepository jiraIntegrationRepository;
     private final ProjectJiraIssueRepository jiraIssueRepository;
     private final JiraClient jiraClient;
     private final JiraTokenEncryptionService jiraTokenEncryptionService;
+    private final JiraIssueMapper jiraIssueMapper;
 
     JiraIssueSyncServiceImpl(
             ProjectJiraIntegrationRepository jiraIntegrationRepository,
             ProjectJiraIssueRepository jiraIssueRepository,
             JiraClient jiraClient,
-            JiraTokenEncryptionService jiraTokenEncryptionService) {
+            JiraTokenEncryptionService jiraTokenEncryptionService,
+            JiraIssueMapper jiraIssueMapper) {
         this.jiraIntegrationRepository = jiraIntegrationRepository;
         this.jiraIssueRepository = jiraIssueRepository;
         this.jiraClient = jiraClient;
         this.jiraTokenEncryptionService = jiraTokenEncryptionService;
+        this.jiraIssueMapper = jiraIssueMapper;
     }
 
     @Override
@@ -77,7 +73,7 @@ class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
                 continue;
             }
             ProjectJiraIssue issue = existingByKey.getOrDefault(issueKey, new ProjectJiraIssue());
-            mapDtoToEntity(issue, dto, projectId, now);
+            jiraIssueMapper.mapToEntity(issue, dto, projectId, now);
             toSave.add(issue);
         }
         jiraIssueRepository.saveAll(toSave);
@@ -96,76 +92,4 @@ class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
         }
     }
 
-    private void mapDtoToEntity(
-            ProjectJiraIssue issue,
-            JiraIssueDto dto,
-            UUID projectId,
-            Instant syncedAt) {
-        issue.setProjectId(projectId);
-        issue.setIssueKey(dto.getKey());
-        issue.setSyncedAt(syncedAt);
-
-        JiraIssueDto.Fields fields = dto.getFields();
-        if (fields == null) {
-            return;
-        }
-
-        issue.setSummary(fields.getSummary());
-
-        JiraIssueDto.IssueType issueType = fields.getIssueType();
-        issue.setIssueType(issueType != null ? issueType.getName() : null);
-
-        JiraIssueDto.Status status = fields.getStatus();
-        if (status != null) {
-            issue.setStatusName(status.getName());
-            JiraIssueDto.StatusCategory category = status.getStatusCategory();
-            issue.setStatusCategoryKey(category != null ? category.getKey() : null);
-        }
-
-        JiraIssueDto.Assignee assignee = fields.getAssignee();
-        if (assignee != null) {
-            issue.setAssigneeAccountId(assignee.getAccountId());
-            issue.setAssigneeDisplayName(assignee.getDisplayName());
-        }
-
-        JiraIssueDto.Priority priority = fields.getPriority();
-        issue.setPriorityName(priority != null ? priority.getName() : null);
-
-        Double storyPoints = fields.getStoryPoints();
-        issue.setStoryPoints(storyPoints != null ? BigDecimal.valueOf(storyPoints) : null);
-
-        issue.setDueDate(parseLocalDate(fields.getDueDate()));
-        issue.setResolutionDate(parseInstant(fields.getResolutionDate()));
-        issue.setJiraCreatedAt(parseInstant(fields.getCreated()));
-        issue.setJiraUpdatedAt(parseInstant(fields.getUpdated()));
-
-        JiraIssueDto.Parent parent = fields.getParent();
-        issue.setParentKey(parent != null ? parent.getKey() : null);
-    }
-
-    private static LocalDate parseLocalDate(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return LocalDate.parse(value);
-        } catch (Exception ex) {
-            return null;
-        }
-    }
-
-    private static Instant parseInstant(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return OffsetDateTime.parse(value, JIRA_TIMESTAMP_FORMAT).toInstant();
-        } catch (Exception ex) {
-            try {
-                return Instant.parse(value);
-            } catch (Exception fallback) {
-                return null;
-            }
-        }
-    }
 }
