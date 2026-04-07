@@ -167,4 +167,6 @@ public interface SupervisorService {
     SupervisorProjectDetailDto disconnectProjectJira(String authenticatedUserId, String projectId);
 
     JiraHealthDto getJiraHealthOverview(String authenticatedUserId, String projectId);
+
+    JiraHealthDto refreshProjectJiraData(String authenticatedUserId, String projectId);
 }

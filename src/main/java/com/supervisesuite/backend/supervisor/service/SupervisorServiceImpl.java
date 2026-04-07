@@ -1181,6 +1181,35 @@ class SupervisorServiceImpl implements SupervisorService {
         return jiraHealthService.getHealthOverview(parsedProjectId);
     }
 
+    @Override
+    @Transactional
+    public JiraHealthDto refreshProjectJiraData(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+
+        ProjectJiraIntegration activeIntegration = projectJiraIntegrationRepository
+                .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
+                .orElse(null);
+        if (activeIntegration == null) {
+            throw new ValidationException(
+                    "Jira is not connected for this project.",
+                    List.of(new ApiErrorDetail("jira", "Jira is not connected for this project.")));
+        }
+
+        jiraIssueSyncService.syncProjectIssues(project.getId());
+
+        Instant now = Instant.now();
+        project.setUpdatedAt(now);
+        project.setLastActivityAt(now);
+        projectRepository.save(project);
+
+        return jiraHealthService.getHealthOverview(project.getId());
+    }
+
     private ProjectMember buildProjectMember(
             UUID projectId,
             UUID userId,

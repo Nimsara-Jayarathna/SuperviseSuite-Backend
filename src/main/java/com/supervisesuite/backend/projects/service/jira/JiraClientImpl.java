@@ -1,11 +1,13 @@
 package com.supervisesuite.backend.projects.service.jira;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.projects.dto.JiraIssueDto;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.ResourceAccessException;
@@ -16,9 +18,22 @@ import org.springframework.web.client.RestClientResponseException;
 class JiraClientImpl implements JiraClient {
 
     private static final int PAGE_SIZE = 100;
-    private static final String FIELDS =
-            "summary,issuetype,status,assignee,priority,duedate,resolutiondate," +
-            "created,updated,parent,customfield_10016";
+    private static final List<String> BASE_FIELDS = List.of(
+            "summary",
+            "issuetype",
+            "status",
+            "assignee",
+            "priority",
+            "duedate",
+            "resolutiondate",
+            "created",
+            "updated",
+        "parent");
+    private static final List<List<String>> FIELD_CANDIDATES = List.of(
+        appendField(BASE_FIELDS, "customfield_10016"),
+        appendField(BASE_FIELDS, "customfield_10026"),
+        BASE_FIELDS);
+    private static final String DEFAULT_JQL = "issuekey IS NOT EMPTY ORDER BY updated DESC";
 
     private final RestClient restClient;
 
@@ -28,11 +43,100 @@ class JiraClientImpl implements JiraClient {
 
     @Override
     public List<JiraIssueDto> fetchAllIssues(String cloudId, String accessToken) {
+        RestClientResponseException lastBadRequest = null;
+
+        // Prefer enhanced endpoint first (supported replacement for deprecated search routes).
+        for (List<String> fields : FIELD_CANDIDATES) {
+            try {
+                return fetchAllIssuesEnhanced(cloudId, accessToken, fields);
+            } catch (RestClientResponseException ex) {
+                if (ex.getStatusCode() == HttpStatus.BAD_REQUEST) {
+                    lastBadRequest = ex;
+                    continue;
+                }
+                if (ex.getStatusCode() == HttpStatus.GONE || ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+                    break;
+                }
+                throw new ServiceUnavailableException(
+                        "Jira API returned an error: " + summarizeResponse(ex), ex);
+            } catch (ResourceAccessException ex) {
+                throw new ServiceUnavailableException(
+                        "Unable to reach Jira API. Check network connectivity.", ex);
+            }
+        }
+
+        // Fallback to legacy endpoint for older tenants still accepting /search.
+        for (List<String> fields : FIELD_CANDIDATES) {
+            try {
+                return fetchAllIssuesLegacy(cloudId, accessToken, fields);
+            } catch (RestClientResponseException ex) {
+                if (ex.getStatusCode() == HttpStatus.BAD_REQUEST) {
+                    lastBadRequest = ex;
+                    continue;
+                }
+                if (ex.getStatusCode() == HttpStatus.GONE || ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+                    continue;
+                }
+                throw new ServiceUnavailableException(
+                        "Jira API returned an error: " + summarizeResponse(ex), ex);
+            } catch (ResourceAccessException ex) {
+                throw new ServiceUnavailableException(
+                        "Unable to reach Jira API. Check network connectivity.", ex);
+            }
+        }
+
+        if (lastBadRequest != null) {
+            throw new ServiceUnavailableException(
+                    "Jira API returned an error: " + summarizeResponse(lastBadRequest),
+                    lastBadRequest);
+        }
+
+        throw new ServiceUnavailableException("Jira API search endpoint is unavailable.");
+    }
+
+    private List<JiraIssueDto> fetchAllIssuesEnhanced(
+            String cloudId,
+            String accessToken,
+            List<String> fields) {
+        List<JiraIssueDto> allIssues = new ArrayList<>();
+        String nextPageToken = null;
+
+        while (true) {
+            EnhancedSearchRequest body = new EnhancedSearchRequest(
+                    DEFAULT_JQL,
+                    PAGE_SIZE,
+                    fields,
+                    nextPageToken);
+            EnhancedSearchResponse page = fetchEnhancedPage(cloudId, accessToken, body);
+
+            List<JiraIssueDto> issues = (page != null && page.issues() != null)
+                    ? page.issues()
+                    : List.of();
+            if (issues.isEmpty()) {
+                break;
+            }
+
+            allIssues.addAll(issues);
+
+            if (page == null || page.isLast() || page.nextPageToken() == null || page.nextPageToken().isBlank()) {
+                break;
+            }
+            nextPageToken = page.nextPageToken();
+        }
+
+        return allIssues;
+    }
+
+    private List<JiraIssueDto> fetchAllIssuesLegacy(
+            String cloudId,
+            String accessToken,
+            List<String> fields) {
         List<JiraIssueDto> allIssues = new ArrayList<>();
         int startAt = 0;
 
         while (true) {
-            JiraSearchResponse page = fetchPage(cloudId, accessToken, startAt);
+            LegacySearchRequest body = new LegacySearchRequest(DEFAULT_JQL, startAt, PAGE_SIZE, fields);
+            LegacySearchResponse page = fetchLegacyPage(cloudId, accessToken, body);
 
             List<JiraIssueDto> issues = (page != null && page.issues() != null)
                     ? page.issues()
@@ -54,31 +158,76 @@ class JiraClientImpl implements JiraClient {
         return allIssues;
     }
 
-    private JiraSearchResponse fetchPage(String cloudId, String accessToken, int startAt) {
-        String uri = "https://api.atlassian.com/ex/jira/" + cloudId
-                + "/rest/api/3/search"
-                + "?fields=" + FIELDS
-                + "&startAt=" + startAt
-                + "&maxResults=" + PAGE_SIZE;
-
-        try {
-            return restClient.get()
-                    .uri(uri)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .retrieve()
-                    .body(JiraSearchResponse.class);
-        } catch (ResourceAccessException ex) {
-            throw new ServiceUnavailableException(
-                    "Unable to reach Jira API. Check network connectivity.", ex);
-        } catch (RestClientResponseException ex) {
-            throw new ServiceUnavailableException(
-                    "Jira API returned an error: " + ex.getStatusCode(), ex);
-        }
+    private EnhancedSearchResponse fetchEnhancedPage(
+            String cloudId,
+            String accessToken,
+            EnhancedSearchRequest body) {
+        String modernUri = "https://api.atlassian.com/ex/jira/" + cloudId + "/rest/api/3/search/jql";
+        return restClient.post()
+                .uri(modernUri)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(EnhancedSearchResponse.class);
     }
 
+    private LegacySearchResponse fetchLegacyPage(
+            String cloudId,
+            String accessToken,
+            LegacySearchRequest body) {
+        String legacyUri = "https://api.atlassian.com/ex/jira/" + cloudId + "/rest/api/3/search";
+        return restClient.post()
+                .uri(legacyUri)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(LegacySearchResponse.class);
+    }
+
+    private static List<String> appendField(List<String> base, String field) {
+        List<String> next = new ArrayList<>(base);
+        next.add(field);
+        return List.copyOf(next);
+    }
+
+    private static String summarizeResponse(RestClientResponseException ex) {
+        String body = ex.getResponseBodyAsString();
+        if (body == null || body.isBlank()) {
+            return String.valueOf(ex.getStatusCode());
+        }
+        String compact = body.replaceAll("\\s+", " ").trim();
+        if (compact.length() > 220) {
+            compact = compact.substring(0, 220) + "...";
+        }
+        return ex.getStatusCode() + " - " + compact;
+    }
+
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private record EnhancedSearchRequest(
+            String jql,
+            int maxResults,
+            List<String> fields,
+            String nextPageToken) {}
+
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private record LegacySearchRequest(
+            String jql,
+            int startAt,
+            int maxResults,
+            List<String> fields) {}
+
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record JiraSearchResponse(
+        private record EnhancedSearchResponse(
+            boolean isLast,
+            String nextPageToken,
+            List<JiraIssueDto> issues) {}
+
+        @JsonIgnoreProperties(ignoreUnknown = true)
+        private record LegacySearchResponse(
             int total,
             int startAt,
             int maxResults,

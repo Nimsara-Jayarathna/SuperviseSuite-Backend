@@ -317,6 +317,16 @@ public class SupervisorController {
         return apiResponseFactory.ok("Jira health overview loaded.", data, request);
     }
 
+    @PostMapping("/projects/{projectId}/jira/refresh")
+    public ResponseEntity<ApiResponse<JiraHealthDto>> refreshProjectJira(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        JiraHealthDto data = supervisorService.refreshProjectJiraData(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Jira data refreshed successfully.", data, request);
+    }
+
     @PostMapping("/projects")
     public ResponseEntity<ApiResponse<CreateSupervisorProjectResponse>> createProject(
         Authentication authentication,
