@@ -7,6 +7,7 @@ import com.supervisesuite.backend.projects.entity.ProjectJiraIssue;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -144,5 +145,32 @@ class DefaultJiraIssueMapperTest {
         assertThat(entity.getSprintState()).isNull();
         assertThat(entity.getSprintStartDate()).isNull();
         assertThat(entity.getSprintEndDate()).isNull();
+    }
+
+    @Test
+    void mapToEntity_readsSprintFromAlternativeCustomFieldPayload() {
+        UUID projectId = UUID.randomUUID();
+        Instant syncedAt = Instant.parse("2026-04-07T12:34:56Z");
+
+        JiraIssueDto dto = new JiraIssueDto();
+        dto.setKey("PROJ-500");
+
+        JiraIssueDto.Fields fields = new JiraIssueDto.Fields();
+        fields.setSprintField10021(List.of(Map.of(
+                "id", 777,
+                "name", "Sprint Alt",
+                "state", "active",
+                "startDate", "2026-04-11T09:00:00.000+0000",
+                "endDate", "2026-04-20T09:00:00.000+0000")));
+        dto.setFields(fields);
+
+        ProjectJiraIssue entity = new ProjectJiraIssue();
+        mapper.mapToEntity(entity, dto, projectId, syncedAt);
+
+        assertThat(entity.getSprintId()).isEqualTo(777L);
+        assertThat(entity.getSprintName()).isEqualTo("Sprint Alt");
+        assertThat(entity.getSprintState()).isEqualTo("active");
+        assertThat(entity.getSprintStartDate()).isNotNull();
+        assertThat(entity.getSprintEndDate()).isNotNull();
     }
 }
