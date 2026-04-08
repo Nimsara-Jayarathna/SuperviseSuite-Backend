@@ -415,14 +415,16 @@ public class StudentProjectDetailDto {
         private boolean connected;
         private String workspaceName;
         private String workspaceUrl;
+        private Instant lastSyncedAt;
 
         public JiraIntegration() {
         }
 
-        public JiraIntegration(boolean connected, String workspaceName, String workspaceUrl) {
+        public JiraIntegration(boolean connected, String workspaceName, String workspaceUrl, Instant lastSyncedAt) {
             this.connected = connected;
             this.workspaceName = workspaceName;
             this.workspaceUrl = workspaceUrl;
+            this.lastSyncedAt = lastSyncedAt;
         }
 
         public boolean isConnected() {
@@ -447,6 +449,14 @@ public class StudentProjectDetailDto {
 
         public void setWorkspaceUrl(String workspaceUrl) {
             this.workspaceUrl = workspaceUrl;
+        }
+
+        public Instant getLastSyncedAt() {
+            return lastSyncedAt;
+        }
+
+        public void setLastSyncedAt(Instant lastSyncedAt) {
+            this.lastSyncedAt = lastSyncedAt;
         }
     }
 }

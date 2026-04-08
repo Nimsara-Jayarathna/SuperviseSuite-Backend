@@ -9,11 +9,10 @@ import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,6 +56,18 @@ class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
         List<JiraIssueDto> fetchedIssues = jiraClient.fetchAllIssues(
                 integration.getCloudId(), accessToken);
 
+        // Step 3.1: Jira can occasionally return duplicate issue keys across pages.
+        // Deduplicate to avoid unique-constraint conflicts on (project_id, issue_key).
+        Map<String, JiraIssueDto> uniqueDtosByKey = new LinkedHashMap<>();
+        for (JiraIssueDto dto : fetchedIssues) {
+            String issueKey = dto.getKey();
+            if (issueKey == null || issueKey.isBlank()) {
+                continue;
+            }
+            uniqueDtosByKey.putIfAbsent(issueKey, dto);
+        }
+        List<JiraIssueDto> uniqueFetchedIssues = new ArrayList<>(uniqueDtosByKey.values());
+
         // Step 4: Build lookup map of existing cached issues for this project
         List<ProjectJiraIssue> existingIssues = jiraIssueRepository.findAllByProjectId(projectId);
         Map<String, ProjectJiraIssue> existingByKey = new HashMap<>();
@@ -67,11 +78,8 @@ class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
         // Step 5: Upsert — update existing rows, create new rows for unseen keys
         Instant now = Instant.now();
         List<ProjectJiraIssue> toSave = new ArrayList<>();
-        for (JiraIssueDto dto : fetchedIssues) {
+        for (JiraIssueDto dto : uniqueFetchedIssues) {
             String issueKey = dto.getKey();
-            if (issueKey == null || issueKey.isBlank()) {
-                continue;
-            }
             ProjectJiraIssue issue = existingByKey.getOrDefault(issueKey, new ProjectJiraIssue());
             jiraIssueMapper.mapToEntity(issue, dto, projectId, now);
             toSave.add(issue);
@@ -79,10 +87,7 @@ class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
         jiraIssueRepository.saveAll(toSave);
 
         // Step 6: Delete stale rows — only reached because the full fetch succeeded above
-        List<String> fetchedKeys = fetchedIssues.stream()
-                .map(JiraIssueDto::getKey)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        List<String> fetchedKeys = new ArrayList<>(uniqueDtosByKey.keySet());
 
         if (!fetchedKeys.isEmpty()) {
             jiraIssueRepository.deleteAllByProjectIdAndIssueKeyNotIn(projectId, fetchedKeys);

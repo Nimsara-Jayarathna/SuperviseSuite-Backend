@@ -159,7 +159,8 @@ class StudentServiceImpl implements StudentService {
             new StudentProjectDetailDto.JiraIntegration(
                 jiraIntegration != null,
                 jiraIntegration != null ? jiraIntegration.getWorkspaceName() : null,
-                jiraIntegration != null ? jiraIntegration.getWorkspaceUrl() : null
+                jiraIntegration != null ? jiraIntegration.getWorkspaceUrl() : null,
+                jiraIntegration != null ? jiraIntegration.getConnectedAt() : null
             ),
             leader,
             members,
