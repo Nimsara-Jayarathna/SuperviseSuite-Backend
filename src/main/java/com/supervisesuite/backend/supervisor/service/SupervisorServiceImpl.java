@@ -77,6 +77,8 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.supervisesuite.backend.projects.dto.JiraHealthDto;
+import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
 import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService;
@@ -85,9 +87,14 @@ import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
 import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
+import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
+import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
 
 @Service
 class SupervisorServiceImpl implements SupervisorService {
+
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(SupervisorServiceImpl.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private static final String DEFAULT_LIFECYCLE_STATUS = "PLANNING";
@@ -121,6 +128,9 @@ class SupervisorServiceImpl implements SupervisorService {
     private final ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
     private final ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository;
     private final JiraTokenEncryptionService jiraTokenEncryptionService;
+    private final ProjectJiraIssueRepository projectJiraIssueRepository;
+    private final JiraIssueSyncService jiraIssueSyncService;
+    private final JiraHealthService jiraHealthService;
     private final RestClient restClient;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -139,6 +149,9 @@ class SupervisorServiceImpl implements SupervisorService {
             ProjectJiraIntegrationRepository projectJiraIntegrationRepository,
             ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository,
             JiraTokenEncryptionService jiraTokenEncryptionService,
+            ProjectJiraIssueRepository projectJiraIssueRepository,
+            JiraIssueSyncService jiraIssueSyncService,
+            JiraHealthService jiraHealthService,
             RestClient.Builder restClientBuilder) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
@@ -154,6 +167,9 @@ class SupervisorServiceImpl implements SupervisorService {
         this.projectJiraIntegrationRepository = projectJiraIntegrationRepository;
         this.projectJiraOAuthStateRepository = projectJiraOAuthStateRepository;
         this.jiraTokenEncryptionService = jiraTokenEncryptionService;
+        this.projectJiraIssueRepository = projectJiraIssueRepository;
+        this.jiraIssueSyncService = jiraIssueSyncService;
+        this.jiraHealthService = jiraHealthService;
         this.restClient = restClientBuilder.build();
     }
 
@@ -196,8 +212,49 @@ class SupervisorServiceImpl implements SupervisorService {
             }
         }
 
+        // Jira health signals — additive, independent of the manual status counters above
+        List<UUID> projectIds = projects.stream().map(Project::getId).toList();
+        Set<UUID> connectedProjectIds = projectJiraIntegrationRepository
+                .findAllByProjectIdInAndRevokedAtIsNull(projectIds)
+                .stream()
+                .map(com.supervisesuite.backend.projects.entity.ProjectJiraIntegration::getProjectId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        int jiraAtRiskCount = 0;
+        int jiraBehindCount = 0;
+        Map<UUID, String> jiraIndicators = new HashMap<>();
+
+        // TODO: optimize to single aggregate query per project batch (currently 3 queries per connected project)
+        for (Project project : projects) {
+            UUID pid = project.getId();
+            if (!connectedProjectIds.contains(pid)) {
+                jiraIndicators.put(pid, "NOT_CONNECTED");
+                continue;
+            }
+            long total = projectJiraIssueRepository.countByProjectId(pid);
+            if (total == 0) {
+                jiraIndicators.put(pid, "HEALTHY");
+                continue;
+            }
+            long done = projectJiraIssueRepository.countByProjectIdAndStatusCategoryKey(pid, "done");
+            long overdue = projectJiraIssueRepository
+                    .countByProjectIdAndDueDateBeforeAndStatusCategoryKeyNot(pid, today, "done");
+            double completionPct = (double) done / total * 100.0;
+            String indicator;
+            if (overdue > 2) {
+                indicator = "AT_RISK";
+                jiraAtRiskCount++;
+            } else if (completionPct < 50.0) {
+                indicator = "BEHIND";
+                jiraBehindCount++;
+            } else {
+                indicator = "HEALTHY";
+            }
+            jiraIndicators.put(pid, indicator);
+        }
+
         List<SupervisorDashboardDto.ProjectItem> dashboardProjects = projects.stream()
-                .map(this::toDashboardProjectItem)
+                .map(p -> toDashboardProjectItem(p, jiraIndicators.getOrDefault(p.getId(), "NOT_CONNECTED")))
                 .toList();
 
         List<SupervisorDashboardDto.ProjectItem> recentProjects = projects.stream()
@@ -205,10 +262,10 @@ class SupervisorServiceImpl implements SupervisorService {
                         .comparing(Project::getLastActivityAt, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(Project::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(5)
-                .map(this::toDashboardProjectItem)
+                .map(p -> toDashboardProjectItem(p, jiraIndicators.getOrDefault(p.getId(), "NOT_CONNECTED")))
                 .toList();
 
-        return new SupervisorDashboardDto(
+        SupervisorDashboardDto dashboard = new SupervisorDashboardDto(
                 projects.size(),
                 planningProjects,
                 activeProjects,
@@ -218,6 +275,9 @@ class SupervisorServiceImpl implements SupervisorService {
                 upcomingMilestonesCount,
                 dashboardProjects,
                 recentProjects);
+        dashboard.setJiraAtRiskCount(jiraAtRiskCount);
+        dashboard.setJiraBehindCount(jiraBehindCount);
+        return dashboard;
     }
 
     @Override
@@ -1070,6 +1130,14 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setLastActivityAt(now);
         projectRepository.save(project);
 
+        try {
+            jiraIssueSyncService.syncProjectIssues(project.getId());
+        } catch (Exception ex) {
+            log.warn("Initial Jira issue sync failed for project {} after OAuth completion. " +
+                     "Connection was saved successfully; cache will populate on next sync. Error: {}",
+                     project.getId(), ex.getMessage());
+        }
+
         return new JiraOAuthCompleteResultDto(project.getId().toString(), workspaceName);
     }
 
@@ -1098,6 +1166,48 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setLastActivityAt(now);
         Project savedProject = projectRepository.save(project);
         return toProjectDetail(savedProject);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public JiraHealthDto getJiraHealthOverview(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+
+        return jiraHealthService.getHealthOverview(parsedProjectId);
+    }
+
+    @Override
+    @Transactional
+    public JiraHealthDto refreshProjectJiraData(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        Project project = projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+
+        ProjectJiraIntegration activeIntegration = projectJiraIntegrationRepository
+                .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
+                .orElse(null);
+        if (activeIntegration == null) {
+            throw new ValidationException(
+                    "Jira is not connected for this project.",
+                    List.of(new ApiErrorDetail("jira", "Jira is not connected for this project.")));
+        }
+
+        jiraIssueSyncService.syncProjectIssues(project.getId());
+
+        Instant now = Instant.now();
+        project.setUpdatedAt(now);
+        project.setLastActivityAt(now);
+        projectRepository.save(project);
+
+        return jiraHealthService.getHealthOverview(project.getId());
     }
 
     private ProjectMember buildProjectMember(
@@ -1164,8 +1274,8 @@ class SupervisorServiceImpl implements SupervisorService {
                 projectMemberRepository.countByProjectId(project.getId()));
     }
 
-    private SupervisorDashboardDto.ProjectItem toDashboardProjectItem(Project project) {
-        return new SupervisorDashboardDto.ProjectItem(
+    private SupervisorDashboardDto.ProjectItem toDashboardProjectItem(Project project, String jiraHealthIndicator) {
+        SupervisorDashboardDto.ProjectItem item = new SupervisorDashboardDto.ProjectItem(
                 project.getId(),
                 project.getName(),
                 project.getDescription(),
@@ -1174,6 +1284,8 @@ class SupervisorServiceImpl implements SupervisorService {
                 project.getLastActivityAt(),
                 project.getProgressPercent(),
                 project.getHealthNote());
+        item.setJiraHealthIndicator(jiraHealthIndicator);
+        return item;
     }
 
     private SupervisorProjectDetailDto.Member toDetailMember(ProjectMember member, User user) {

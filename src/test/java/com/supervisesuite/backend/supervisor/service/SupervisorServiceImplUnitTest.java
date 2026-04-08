@@ -13,6 +13,7 @@ import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
 import com.supervisesuite.backend.projects.dto.GitHubInstallStartDto;
 import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
+import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
@@ -21,6 +22,7 @@ import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
 import com.supervisesuite.backend.projects.entity.ProjectJiraOAuthState;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
+import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
 import com.supervisesuite.backend.projects.repository.ProjectJiraOAuthStateRepository;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
@@ -30,6 +32,8 @@ import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
 import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
+import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
+import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
 import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionService;
 import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
@@ -94,6 +98,12 @@ class SupervisorServiceImplUnitTest {
     @Mock
     private JiraTokenEncryptionService jiraTokenEncryptionService;
     @Mock
+    private ProjectJiraIssueRepository projectJiraIssueRepository;
+    @Mock
+    private JiraIssueSyncService jiraIssueSyncService;
+    @Mock
+    private JiraHealthService jiraHealthService;
+    @Mock
     private RestClient.Builder restClientBuilder;
     @Mock
     private RestClient restClient;
@@ -120,6 +130,9 @@ class SupervisorServiceImplUnitTest {
                 projectJiraIntegrationRepository,
                 projectJiraOAuthStateRepository,
                 jiraTokenEncryptionService,
+                projectJiraIssueRepository,
+                jiraIssueSyncService,
+                jiraHealthService,
                 restClientBuilder);
 
         supervisorId = UUID.randomUUID();
@@ -449,6 +462,88 @@ class SupervisorServiceImplUnitTest {
         assertThat(result.getJira()).isNotNull();
         assertThat(result.getJira().isConnected()).isFalse();
         verify(projectJiraIntegrationRepository).delete(integration);
+    }
+
+    @Test
+    void getJiraHealthOverview_whenOwnedProject_delegatesToHealthService() {
+        UUID projectId = UUID.randomUUID();
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        JiraHealthDto health = new JiraHealthDto(
+            90.0,
+            2,
+            1,
+            1,
+            new JiraHealthDto.StatusBreakdown(1, 1, 18),
+            List.of(),
+            50.0,
+            Instant.now()
+        );
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+            .thenReturn(Optional.of(project));
+        when(jiraHealthService.getHealthOverview(projectId)).thenReturn(health);
+
+        JiraHealthDto result = service.getJiraHealthOverview(supervisorId.toString(), projectId.toString());
+
+        assertThat(result).isSameAs(health);
+        verify(jiraHealthService).getHealthOverview(projectId);
+    }
+
+    @Test
+    void refreshProjectJiraData_whenConnected_syncsAndReturnsHealthOverview() {
+        UUID projectId = UUID.randomUUID();
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        ProjectJiraIntegration integration = new ProjectJiraIntegration();
+        integration.setProjectId(projectId);
+
+        JiraHealthDto health = new JiraHealthDto(
+            70.0,
+            6,
+            2,
+            2,
+            new JiraHealthDto.StatusBreakdown(2, 4, 14),
+            List.of(),
+            33.3,
+            Instant.now()
+        );
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+            .thenReturn(Optional.of(project));
+        when(projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
+            .thenReturn(Optional.of(integration));
+        when(projectRepository.save(project)).thenReturn(project);
+        when(jiraHealthService.getHealthOverview(projectId)).thenReturn(health);
+
+        JiraHealthDto result = service.refreshProjectJiraData(supervisorId.toString(), projectId.toString());
+
+        assertThat(result).isSameAs(health);
+        verify(jiraIssueSyncService).syncProjectIssues(projectId);
+        verify(jiraHealthService).getHealthOverview(projectId);
+    }
+
+    @Test
+    void refreshProjectJiraData_whenJiraNotConnected_throwsValidationException() {
+        UUID projectId = UUID.randomUUID();
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+            .thenReturn(Optional.of(project));
+        when(projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
+            .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.refreshProjectJiraData(supervisorId.toString(), projectId.toString()))
+            .isInstanceOf(ValidationException.class)
+            .hasMessageContaining("Jira is not connected");
+
+        verify(jiraIssueSyncService, never()).syncProjectIssues(projectId);
     }
 
     private static Project project(String title, String status, LocalDate milestoneDate) {

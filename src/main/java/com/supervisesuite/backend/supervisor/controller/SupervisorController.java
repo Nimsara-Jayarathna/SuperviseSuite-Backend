@@ -12,6 +12,7 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
+import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
@@ -304,6 +305,26 @@ public class SupervisorController {
     ) {
         SupervisorProjectDetailDto data = supervisorService.disconnectProjectJira(authentication.getName(), projectId);
         return apiResponseFactory.ok("Jira workspace disconnected successfully.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/jira/health")
+    public ResponseEntity<ApiResponse<JiraHealthDto>> getProjectJiraHealth(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        JiraHealthDto data = supervisorService.getJiraHealthOverview(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Jira health overview loaded.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/jira/refresh")
+    public ResponseEntity<ApiResponse<JiraHealthDto>> refreshProjectJira(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        JiraHealthDto data = supervisorService.refreshProjectJiraData(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Jira data refreshed successfully.", data, request);
     }
 
     @PostMapping("/projects")
