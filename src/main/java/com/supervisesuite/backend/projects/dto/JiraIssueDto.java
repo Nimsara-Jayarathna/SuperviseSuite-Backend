@@ -2,6 +2,7 @@ package com.supervisesuite.backend.projects.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -36,6 +37,10 @@ public class JiraIssueDto {
         @JsonProperty("customfield_10016")
         private Double storyPoints;
 
+        /** Sprint metadata — Jira commonly stores this in customfield_10020. */
+        @JsonProperty("customfield_10020")
+        private List<Sprint> sprints;
+
         @JsonProperty("duedate")
         private String dueDate;
 
@@ -47,6 +52,25 @@ public class JiraIssueDto {
         private String updated;
 
         private Parent parent;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Sprint {
+
+        private Long id;
+
+        private String name;
+
+        private String state;
+
+        @JsonProperty("startDate")
+        private String startDate;
+
+        @JsonProperty("endDate")
+        private String endDate;
     }
 
     @Getter

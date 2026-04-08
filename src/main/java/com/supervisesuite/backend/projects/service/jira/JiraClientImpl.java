@@ -31,7 +31,9 @@ class JiraClientImpl implements JiraClient {
         "parent");
     private static final List<List<String>> FIELD_CANDIDATES = List.of(
         appendField(BASE_FIELDS, "customfield_10016"),
+        appendField(BASE_FIELDS, "customfield_10020"),
         appendField(BASE_FIELDS, "customfield_10026"),
+        appendField(appendField(BASE_FIELDS, "customfield_10016"), "customfield_10020"),
         BASE_FIELDS);
     private static final String DEFAULT_JQL = "issuekey IS NOT EMPTY ORDER BY updated DESC";
 

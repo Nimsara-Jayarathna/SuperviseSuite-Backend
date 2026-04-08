@@ -61,6 +61,18 @@ public class ProjectJiraIssue {
     @Column(length = 32)
     private String parentKey;
 
+    private Long sprintId;
+
+    @Column(length = 255)
+    private String sprintName;
+
+    @Column(length = 32)
+    private String sprintState;
+
+    private Instant sprintStartDate;
+
+    private Instant sprintEndDate;
+
     private Instant jiraCreatedAt;
 
     private Instant jiraUpdatedAt;
