@@ -34,6 +34,7 @@ import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
 import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
 import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
 import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
+import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressService;
 import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionService;
 import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
@@ -104,6 +105,8 @@ class SupervisorServiceImplUnitTest {
     @Mock
     private JiraHealthService jiraHealthService;
     @Mock
+    private JiraSprintProgressService jiraSprintProgressService;
+    @Mock
     private RestClient.Builder restClientBuilder;
     @Mock
     private RestClient restClient;
@@ -133,6 +136,7 @@ class SupervisorServiceImplUnitTest {
                 projectJiraIssueRepository,
                 jiraIssueSyncService,
                 jiraHealthService,
+                jiraSprintProgressService,
                 restClientBuilder);
 
         supervisorId = UUID.randomUUID();

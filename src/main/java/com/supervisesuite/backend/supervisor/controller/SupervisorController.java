@@ -15,6 +15,7 @@ import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
+import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
@@ -315,6 +316,16 @@ public class SupervisorController {
     ) {
         JiraHealthDto data = supervisorService.getJiraHealthOverview(authentication.getName(), projectId);
         return apiResponseFactory.ok("Jira health overview loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/jira/sprint-progress")
+    public ResponseEntity<ApiResponse<JiraSprintProgressDto>> getProjectJiraSprintProgress(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        JiraSprintProgressDto data = supervisorService.getJiraSprintProgress(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Jira sprint progress loaded.", data, request);
     }
 
     @PostMapping("/projects/{projectId}/jira/refresh")
