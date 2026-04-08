@@ -6,6 +6,8 @@ public class JiraOAuthCompleteRequestDto {
     private String state;
     private String error;
     private String errorDescription;
+    private String selectionToken;
+    private String selectedCloudId;
 
     public JiraOAuthCompleteRequestDto() {
     }
@@ -40,5 +42,21 @@ public class JiraOAuthCompleteRequestDto {
 
     public void setErrorDescription(String errorDescription) {
         this.errorDescription = errorDescription;
+    }
+
+    public String getSelectionToken() {
+        return selectionToken;
+    }
+
+    public void setSelectionToken(String selectionToken) {
+        this.selectionToken = selectionToken;
+    }
+
+    public String getSelectedCloudId() {
+        return selectedCloudId;
+    }
+
+    public void setSelectedCloudId(String selectedCloudId) {
+        this.selectedCloudId = selectedCloudId;
     }
 }

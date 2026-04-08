@@ -68,8 +68,11 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Base64;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
@@ -133,6 +136,8 @@ class SupervisorServiceImpl implements SupervisorService {
     private final JiraHealthService jiraHealthService;
     private final RestClient restClient;
     private final SecureRandom secureRandom = new SecureRandom();
+    private final Map<String, PendingJiraWorkspaceSelection> pendingJiraWorkspaceSelections = new ConcurrentHashMap<>();
+    private static final long JIRA_WORKSPACE_SELECTION_TTL_SECONDS = 600L;
 
     SupervisorServiceImpl(
             UserRepository userRepository,
@@ -981,6 +986,13 @@ class SupervisorServiceImpl implements SupervisorService {
     @Transactional
     public JiraOAuthCompleteResultDto completeJiraOAuth(String authenticatedUserId, JiraOAuthCompleteRequestDto request) {
         User supervisor = resolveSupervisor(authenticatedUserId);
+        cleanupExpiredPendingWorkspaceSelections(Instant.now());
+
+        String selectionToken = trimToNull(request.getSelectionToken());
+        if (selectionToken != null) {
+            return completeJiraOAuthWithWorkspaceSelection(supervisor, request, selectionToken);
+        }
+
         String oauthError = trimToNull(request.getError());
         String code = trimToNull(request.getCode());
         String state = trimToNull(request.getState());
@@ -1098,7 +1110,91 @@ class SupervisorServiceImpl implements SupervisorService {
             throw new ValidationException("jiraOAuth", "No Jira workspace was returned for this authorization.");
         }
 
+        if (resources.size() > 1) {
+            String pendingToken = generateOpaqueToken();
+            List<JiraOAuthCompleteResultDto.WorkspaceOption> workspaceOptions = mapWorkspaceOptions(resources);
+            pendingJiraWorkspaceSelections.put(
+                    pendingToken,
+                    new PendingJiraWorkspaceSelection(
+                            project.getId(),
+                            supervisor.getId(),
+                            accessToken,
+                            scopes,
+                            workspaceOptions,
+                            Instant.now().plusSeconds(JIRA_WORKSPACE_SELECTION_TTL_SECONDS)));
+
+            return new JiraOAuthCompleteResultDto(
+                    project.getId().toString(),
+                    null,
+                    true,
+                    pendingToken,
+                    workspaceOptions);
+        }
+
         Map<String, Object> workspace = resources.get(0);
+        return persistWorkspaceIntegration(supervisor, project, accessToken, scopes, workspace);
+    }
+
+    private JiraOAuthCompleteResultDto completeJiraOAuthWithWorkspaceSelection(
+            User supervisor,
+            JiraOAuthCompleteRequestDto request,
+            String selectionToken) {
+        PendingJiraWorkspaceSelection pending = pendingJiraWorkspaceSelections.get(selectionToken);
+        if (pending == null) {
+            throw new ValidationException(
+                    "jiraOAuth",
+                    "Jira workspace selection has expired. Start Jira connection again.");
+        }
+
+        if (!supervisor.getId().equals(pending.userId())) {
+            throw new ValidationException("jiraOAuth", "Jira workspace selection does not match the current session.");
+        }
+
+        if (Instant.now().isAfter(pending.expiresAt())) {
+            pendingJiraWorkspaceSelections.remove(selectionToken);
+            throw new ValidationException(
+                    "jiraOAuth",
+                    "Jira workspace selection has expired. Start Jira connection again.");
+        }
+
+        String selectedCloudId = trimToNull(request.getSelectedCloudId());
+        if (selectedCloudId == null) {
+            throw new ValidationException("jiraOAuth", "Select a Jira workspace to continue.");
+        }
+
+        JiraOAuthCompleteResultDto.WorkspaceOption selectedWorkspace = pending.workspaceOptions().stream()
+                .filter(option -> selectedCloudId.equals(option.cloudId()))
+                .findFirst()
+                .orElseThrow(() -> new ValidationException(
+                        "jiraOAuth",
+                        "Selected Jira workspace is invalid. Please choose from the provided list."));
+
+        Project project = projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(pending.projectId(), supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+
+        Map<String, Object> workspace = new LinkedHashMap<>();
+        workspace.put("id", selectedWorkspace.cloudId());
+        workspace.put("name", selectedWorkspace.workspaceName());
+        workspace.put("url", selectedWorkspace.workspaceUrl());
+
+        JiraOAuthCompleteResultDto result = persistWorkspaceIntegration(
+                supervisor,
+                project,
+                pending.accessToken(),
+                pending.scopes(),
+                workspace);
+
+        pendingJiraWorkspaceSelections.remove(selectionToken);
+        return result;
+    }
+
+    private JiraOAuthCompleteResultDto persistWorkspaceIntegration(
+            User supervisor,
+            Project project,
+            String accessToken,
+            String scopes,
+            Map<String, Object> workspace) {
         String cloudId = trimToNull(workspace == null ? null : (String) workspace.get("id"));
         String workspaceName = trimToNull(workspace == null ? null : (String) workspace.get("name"));
         String workspaceUrl = trimToNull(workspace == null ? null : (String) workspace.get("url"));
@@ -1114,7 +1210,7 @@ class SupervisorServiceImpl implements SupervisorService {
                     projectJiraIntegrationRepository.save(existing);
                 });
 
-        now = Instant.now();
+        Instant now = Instant.now();
         ProjectJiraIntegration integration = new ProjectJiraIntegration();
         integration.setProjectId(project.getId());
         integration.setCloudId(cloudId);
@@ -1131,15 +1227,71 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setLastActivityAt(now);
         projectRepository.save(project);
 
-        try {
-            jiraIssueSyncService.syncProjectIssues(project.getId());
-        } catch (Exception ex) {
-            log.warn("Initial Jira issue sync failed for project {} after OAuth completion. " +
-                     "Connection was saved successfully; cache will populate on next sync. Error: {}",
-                     project.getId(), ex.getMessage());
+        triggerInitialJiraSyncAfterCommit(project.getId());
+
+        return new JiraOAuthCompleteResultDto(
+                project.getId().toString(),
+                workspaceName,
+                false,
+                null,
+                List.of());
+    }
+
+    private List<JiraOAuthCompleteResultDto.WorkspaceOption> mapWorkspaceOptions(List<Map<String, Object>> resources) {
+        List<JiraOAuthCompleteResultDto.WorkspaceOption> options = new ArrayList<>();
+        for (Map<String, Object> resource : resources) {
+            String cloudId = trimToNull(resource == null ? null : (String) resource.get("id"));
+            String workspaceName = trimToNull(resource == null ? null : (String) resource.get("name"));
+            String workspaceUrl = trimToNull(resource == null ? null : (String) resource.get("url"));
+            if (cloudId == null || workspaceName == null) {
+                continue;
+            }
+            options.add(new JiraOAuthCompleteResultDto.WorkspaceOption(cloudId, workspaceName, workspaceUrl));
         }
 
-        return new JiraOAuthCompleteResultDto(project.getId().toString(), workspaceName);
+        if (options.isEmpty()) {
+            throw new ValidationException("jiraOAuth", "Jira workspace details are incomplete.");
+        }
+
+        return options;
+    }
+
+    private void cleanupExpiredPendingWorkspaceSelections(Instant now) {
+        pendingJiraWorkspaceSelections.entrySet().removeIf(entry -> now.isAfter(entry.getValue().expiresAt()));
+    }
+
+    private record PendingJiraWorkspaceSelection(
+            UUID projectId,
+            UUID userId,
+            String accessToken,
+            String scopes,
+            List<JiraOAuthCompleteResultDto.WorkspaceOption> workspaceOptions,
+            Instant expiresAt) {
+    }
+
+    private void triggerInitialJiraSyncAfterCommit(UUID projectId) {
+        Runnable syncTask = () -> {
+            try {
+                jiraIssueSyncService.syncProjectIssues(projectId);
+            } catch (Exception ex) {
+                log.warn("Initial Jira issue sync failed for project {} after OAuth completion. "
+                                + "Connection was saved successfully; cache will populate on next sync. Error: {}",
+                        projectId,
+                        ex.getMessage());
+            }
+        };
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    syncTask.run();
+                }
+            });
+            return;
+        }
+
+        syncTask.run();
     }
 
     @Override
