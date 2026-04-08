@@ -462,6 +462,7 @@ class SupervisorServiceImplUnitTest {
         assertThat(result.getJira()).isNotNull();
         assertThat(result.getJira().isConnected()).isFalse();
         verify(projectJiraIntegrationRepository).delete(integration);
+        verify(projectJiraIssueRepository).deleteAllByProjectId(projectId);
     }
 
     @Test

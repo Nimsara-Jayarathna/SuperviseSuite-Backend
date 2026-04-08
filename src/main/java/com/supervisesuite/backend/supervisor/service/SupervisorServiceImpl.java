@@ -833,7 +833,8 @@ class SupervisorServiceImpl implements SupervisorService {
                 new SupervisorProjectDetailDto.JiraIntegration(
                         jiraIntegration != null,
                         jiraIntegration != null ? jiraIntegration.getWorkspaceName() : null,
-                        jiraIntegration != null ? jiraIntegration.getWorkspaceUrl() : null),
+                    jiraIntegration != null ? jiraIntegration.getWorkspaceUrl() : null,
+                    jiraIntegration != null ? jiraIntegration.getConnectedAt() : null),
                 project.getLastActivityAt(),
                 toDetailLeader(project.getLeaderUserId()),
                 getProjectMembers(project.getId()),
@@ -1161,6 +1162,7 @@ class SupervisorServiceImpl implements SupervisorService {
 
         Instant now = Instant.now();
         projectJiraIntegrationRepository.delete(activeIntegration);
+        projectJiraIssueRepository.deleteAllByProjectId(project.getId());
 
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);

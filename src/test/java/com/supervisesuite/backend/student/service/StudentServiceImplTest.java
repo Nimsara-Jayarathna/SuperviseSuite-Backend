@@ -182,6 +182,8 @@ class StudentServiceImplTest {
         jiraIntegration.setProjectId(projectId);
         jiraIntegration.setWorkspaceName("supervise-suite");
         jiraIntegration.setWorkspaceUrl("https://supervise-suite.atlassian.net");
+        Instant connectedAt = Instant.now().minusSeconds(300);
+        jiraIntegration.setConnectedAt(connectedAt);
 
         ProjectGitHubPreviewDto preview = new ProjectGitHubPreviewDto(
             false,
@@ -212,6 +214,7 @@ class StudentServiceImplTest {
         assertThat(result.getJira()).isNotNull();
         assertThat(result.getJira().isConnected()).isTrue();
         assertThat(result.getJira().getWorkspaceName()).isEqualTo("supervise-suite");
+        assertThat(result.getJira().getLastSyncedAt()).isEqualTo(connectedAt);
     }
 
     @Test
