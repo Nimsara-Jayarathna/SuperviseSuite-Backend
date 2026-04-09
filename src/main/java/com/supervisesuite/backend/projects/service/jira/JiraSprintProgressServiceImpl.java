@@ -58,9 +58,7 @@ class JiraSprintProgressServiceImpl implements JiraSprintProgressService {
                 .findFirst()
                 .orElse(null);
 
-        List<JiraSprintProgressDto.SprintSummary> recentSprints = sprintSummaries.stream()
-            .limit(resolveRecentSprintsLimit())
-                .toList();
+        List<JiraSprintProgressDto.SprintSummary> recentSprints = sprintSummaries;
 
         List<JiraSprintProgressDto.VelocityWeek> velocityWeeks = velocityByWeek.entrySet().stream()
                 .map(entry -> new JiraSprintProgressDto.VelocityWeek(
@@ -155,7 +153,7 @@ class JiraSprintProgressServiceImpl implements JiraSprintProgressService {
 
     private boolean isBacklogGrowing(List<JiraSprintProgressDto.VelocityWeek> velocityWeeks) {
         int consecutive = 0;
-        int requiredConsecutiveWeeks = resolveBacklogGrowingConsecutiveWeeks();
+        int requiredConsecutiveWeeks = 2; // Fixed consecutive weeks logic
         for (JiraSprintProgressDto.VelocityWeek week : velocityWeeks) {
             if (week.created() > week.resolved()) {
                 consecutive += 1;
@@ -169,21 +167,7 @@ class JiraSprintProgressServiceImpl implements JiraSprintProgressService {
         return false;
     }
 
-    private int resolveRecentSprintsLimit() {
-        JiraProperties.Analytics analytics = jiraProperties.getAnalytics();
-        if (analytics == null || analytics.getRecentSprintsLimit() <= 0) {
-            return 3;
-        }
-        return analytics.getRecentSprintsLimit();
-    }
 
-    private int resolveBacklogGrowingConsecutiveWeeks() {
-        JiraProperties.Analytics analytics = jiraProperties.getAnalytics();
-        if (analytics == null || analytics.getBacklogGrowingConsecutiveWeeks() <= 0) {
-            return 2;
-        }
-        return analytics.getBacklogGrowingConsecutiveWeeks();
-    }
 
     private static Instant toWeekStart(Instant value) {
         LocalDate date = value.atZone(ZoneOffset.UTC).toLocalDate();
