@@ -91,14 +91,13 @@ class JiraWorkloadServiceImpl implements JiraWorkloadService {
         int unassignedCount = 0;
 
         for (ProjectJiraIssue issue : issues) {
-            // Skip parent issues to avoid double-counting their subtasks' work.
-            if (parentKeys.contains(issue.getIssueKey())) {
-                continue;
-            }
-
+            boolean isParent = parentKeys.contains(issue.getIssueKey());
             String accountId = issue.getAssigneeAccountId();
+            
             if (accountId == null || accountId.isBlank()) {
-                unassignedCount++;
+                if (!isParent) {
+                    unassignedCount++;
+                }
                 continue;
             }
 
@@ -106,7 +105,14 @@ class JiraWorkloadServiceImpl implements JiraWorkloadService {
                     accountId,
                     id -> new MemberAccumulator(id, issue.getAssigneeDisplayName()));
 
-            accumulator.accumulate(issue, classifier, dueDateAvailable, today, overdueThreshold);
+            if (isParent) {
+                // Parent issues (e.g. User Stories) are skipped for issue counting to avoid
+                // double-counting their subtasks, but we MUST attribute their Story Points
+                // to their assignee because SPs are typically estimated at the parent level.
+                accumulator.accumulateStoryPoints(issue, classifier);
+            } else {
+                accumulator.accumulate(issue, classifier, dueDateAvailable, today, overdueThreshold);
+            }
         }
 
         // Step 4 — Build sorted member rows: open issues (assigned - completed) descending.
@@ -219,6 +225,7 @@ class JiraWorkloadServiceImpl implements JiraWorkloadService {
         private BigDecimal storyPointsCompleted;
         private boolean storyPointsSeen;
         private Instant lastActiveDate;
+        private final Map<String, Integer> issueTypeCounts = new HashMap<>();
 
         MemberAccumulator(String accountId, String displayName) {
             this.accountId = accountId;
@@ -243,6 +250,7 @@ class JiraWorkloadServiceImpl implements JiraWorkloadService {
                 Instant overdueThreshold) {
 
             assigned++;
+            recordIssueType(issue);
 
             boolean isDone = classifier.isDoneStatus(issue.getStatusCategoryKey());
 
@@ -267,18 +275,7 @@ class JiraWorkloadServiceImpl implements JiraWorkloadService {
                 }
             }
 
-            // Story points — any non-null value across attributed issues confirms
-            // that story points are configured; we accumulate regardless of done status.
-            BigDecimal sp = issue.getStoryPoints();
-            if (sp != null) {
-                storyPointsSeen = true;
-                storyPointsAssigned = storyPointsAssigned == null
-                        ? sp : storyPointsAssigned.add(sp);
-                if (isDone) {
-                    storyPointsCompleted = storyPointsCompleted == null
-                            ? sp : storyPointsCompleted.add(sp);
-                }
-            }
+            accumulateStoryPoints(issue, classifier);
 
             // Last active date — keep the most recent jiraUpdatedAt across all issues.
             Instant updatedAt = issue.getJiraUpdatedAt();
@@ -286,6 +283,38 @@ class JiraWorkloadServiceImpl implements JiraWorkloadService {
                     && (lastActiveDate == null || updatedAt.isAfter(lastActiveDate))) {
                 lastActiveDate = updatedAt;
             }
+        }
+
+        /**
+         * Folds only the Story Points and Last Active date from a Parent Issue, bypassing
+         * the direct assignment counting to prevent double-counting subtasks.
+         */
+        void accumulateStoryPoints(ProjectJiraIssue issue, JiraHealthClassifier classifier) {
+            BigDecimal sp = issue.getStoryPoints();
+            if (sp != null) {
+                storyPointsSeen = true;
+                storyPointsAssigned = storyPointsAssigned == null
+                        ? sp : storyPointsAssigned.add(sp);
+                
+                if (classifier.isDoneStatus(issue.getStatusCategoryKey())) {
+                    storyPointsCompleted = storyPointsCompleted == null
+                            ? sp : storyPointsCompleted.add(sp);
+                }
+            }
+            
+            Instant updatedAt = issue.getJiraUpdatedAt();
+            if (updatedAt != null
+                    && (lastActiveDate == null || updatedAt.isAfter(lastActiveDate))) {
+                lastActiveDate = updatedAt;
+            }
+            
+            recordIssueType(issue);
+        }
+
+        private void recordIssueType(ProjectJiraIssue issue) {
+            String type = issue.getIssueType();
+            String key = (type == null || type.isBlank()) ? "Unknown" : type;
+            issueTypeCounts.merge(key, 1, Integer::sum);
         }
 
         /**
@@ -310,7 +339,8 @@ class JiraWorkloadServiceImpl implements JiraWorkloadService {
                     storyPointsSeen ? storyPointsAssigned : null,
                     storyPointsSeen ? storyPointsCompleted : null,
                     completionRate,
-                    lastActiveDate);
+                    lastActiveDate,
+                    Map.copyOf(issueTypeCounts));
         }
     }
 

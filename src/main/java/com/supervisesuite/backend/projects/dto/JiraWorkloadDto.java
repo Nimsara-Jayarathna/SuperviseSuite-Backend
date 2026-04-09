@@ -3,6 +3,7 @@ package com.supervisesuite.backend.projects.dto;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Immutable snapshot of team workload distribution derived from synced Jira issues.
@@ -67,6 +68,7 @@ public record JiraWorkloadDto(
      *                             {@code 0.0} when {@code assigned} is zero.
      * @param lastActiveDate       Most recent {@code jiraUpdatedAt} across attributed issues.
      *                             Used to compute "last active N days/hours ago" in the UI.
+     * @param issueTypeCounts      A count breakdown by Jira issue type (e.g. Story: 1, Sub-task: 20).
      */
     public record MemberRow(
             String accountId,
@@ -79,6 +81,7 @@ public record JiraWorkloadDto(
             BigDecimal storyPointsAssigned,
             BigDecimal storyPointsCompleted,
             double completionRate,
-            Instant lastActiveDate) {
+            Instant lastActiveDate,
+            Map<String, Integer> issueTypeCounts) {
     }
 }
