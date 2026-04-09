@@ -93,3 +93,8 @@ app:
     oauth-state: ${ATLASSIAN_OAUTH_STATE:supervisesuite_jira_state}
     oauth-state-ttl-seconds: ${ATLASSIAN_OAUTH_STATE_TTL_SECONDS:900}
     token-encryption-secret: ${ATLASSIAN_TOKEN_ENCRYPTION_SECRET:${JWT_SECRET:}}
+    analytics:
+      recent-sprints-limit: ${ATLASSIAN_ANALYTICS_RECENT_SPRINTS_LIMIT:3}
+      backlog-growing-consecutive-weeks: ${ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS:2}
+      high-priority-names: ${ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES:High,Highest}
+      bug-type-names: ${ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES:Bug}

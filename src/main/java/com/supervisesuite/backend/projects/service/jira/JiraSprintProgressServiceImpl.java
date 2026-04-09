@@ -1,5 +1,6 @@
 package com.supervisesuite.backend.projects.service.jira;
 
+import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIssue;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
@@ -23,12 +24,15 @@ class JiraSprintProgressServiceImpl implements JiraSprintProgressService {
 
     private final ProjectJiraIssueRepository jiraIssueRepository;
     private final JiraHealthClassifier jiraHealthClassifier;
+    private final JiraProperties jiraProperties;
 
     JiraSprintProgressServiceImpl(
             ProjectJiraIssueRepository jiraIssueRepository,
-            JiraHealthClassifier jiraHealthClassifier) {
+            JiraHealthClassifier jiraHealthClassifier,
+            JiraProperties jiraProperties) {
         this.jiraIssueRepository = jiraIssueRepository;
         this.jiraHealthClassifier = jiraHealthClassifier;
+        this.jiraProperties = jiraProperties;
     }
 
     @Override
@@ -55,7 +59,7 @@ class JiraSprintProgressServiceImpl implements JiraSprintProgressService {
                 .orElse(null);
 
         List<JiraSprintProgressDto.SprintSummary> recentSprints = sprintSummaries.stream()
-                .limit(3)
+            .limit(resolveRecentSprintsLimit())
                 .toList();
 
         List<JiraSprintProgressDto.VelocityWeek> velocityWeeks = velocityByWeek.entrySet().stream()
@@ -151,10 +155,11 @@ class JiraSprintProgressServiceImpl implements JiraSprintProgressService {
 
     private boolean isBacklogGrowing(List<JiraSprintProgressDto.VelocityWeek> velocityWeeks) {
         int consecutive = 0;
+        int requiredConsecutiveWeeks = resolveBacklogGrowingConsecutiveWeeks();
         for (JiraSprintProgressDto.VelocityWeek week : velocityWeeks) {
             if (week.created() > week.resolved()) {
                 consecutive += 1;
-                if (consecutive >= 2) {
+                if (consecutive >= requiredConsecutiveWeeks) {
                     return true;
                 }
             } else {
@@ -162,6 +167,22 @@ class JiraSprintProgressServiceImpl implements JiraSprintProgressService {
             }
         }
         return false;
+    }
+
+    private int resolveRecentSprintsLimit() {
+        JiraProperties.Analytics analytics = jiraProperties.getAnalytics();
+        if (analytics == null || analytics.getRecentSprintsLimit() <= 0) {
+            return 3;
+        }
+        return analytics.getRecentSprintsLimit();
+    }
+
+    private int resolveBacklogGrowingConsecutiveWeeks() {
+        JiraProperties.Analytics analytics = jiraProperties.getAnalytics();
+        if (analytics == null || analytics.getBacklogGrowingConsecutiveWeeks() <= 0) {
+            return 2;
+        }
+        return analytics.getBacklogGrowingConsecutiveWeeks();
     }
 
     private static Instant toWeekStart(Instant value) {
