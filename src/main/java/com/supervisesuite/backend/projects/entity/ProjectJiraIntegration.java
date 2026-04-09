@@ -45,6 +45,11 @@ public class ProjectJiraIntegration {
     @Column(nullable = false)
     private Instant connectedAt;
 
+    @Column(columnDefinition = "TEXT")
+    private String refreshTokenEncrypted;
+
+    private Instant tokenExpiresAt;
+
     private Instant updatedAt;
 
     private Instant revokedAt;
