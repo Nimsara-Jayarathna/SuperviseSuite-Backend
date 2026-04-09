@@ -527,6 +527,7 @@ Returns Jira health overview derived from cached Jira issues for the project.
 
 - served from backend Jira cache table (`project_jira_issues`)
 - `lastSyncedAt = null` indicates first sync not completed yet
+- health/sprint heuristics used by Jira tab data are config-backed via `app.jira.analytics.*`
 
 ---
 
@@ -549,6 +550,19 @@ Triggers Jira issue resync for a connected project, then returns recomputed Jira
 - `401 UNAUTHORIZED` - not authenticated
 - `403 FORBIDDEN` - authenticated but not supervisor role
 - `404 NOT_FOUND` - project missing or not owned by authenticated supervisor
+
+### Analytics rule configuration (Jira tab data scope)
+
+These settings affect Jira health/sprint values shown in the Jira tab:
+
+- `app.jira.analytics.recent-sprints-limit`
+- `app.jira.analytics.backlog-growing-consecutive-weeks`
+- `app.jira.analytics.high-priority-names`
+- `app.jira.analytics.bug-type-names`
+
+Scope note:
+
+- These settings do not change Jira OAuth authorization flows.
 
 ---
 
