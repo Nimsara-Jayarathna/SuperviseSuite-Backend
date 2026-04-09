@@ -82,6 +82,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
+import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
@@ -94,6 +95,7 @@ import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService
 import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
 import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
 import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressService;
+import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
 
 @Service
 class SupervisorServiceImpl implements SupervisorService {
@@ -137,6 +139,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final JiraIssueSyncService jiraIssueSyncService;
     private final JiraHealthService jiraHealthService;
     private final JiraSprintProgressService jiraSprintProgressService;
+    private final JiraWorkloadService jiraWorkloadService;
     private final RestClient restClient;
     private final SecureRandom secureRandom = new SecureRandom();
     private final Map<String, PendingJiraWorkspaceSelection> pendingJiraWorkspaceSelections = new ConcurrentHashMap<>();
@@ -161,6 +164,7 @@ class SupervisorServiceImpl implements SupervisorService {
             JiraIssueSyncService jiraIssueSyncService,
             JiraHealthService jiraHealthService,
             JiraSprintProgressService jiraSprintProgressService,
+            JiraWorkloadService jiraWorkloadService,
             RestClient.Builder restClientBuilder) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
@@ -180,6 +184,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.jiraIssueSyncService = jiraIssueSyncService;
         this.jiraHealthService = jiraHealthService;
         this.jiraSprintProgressService = jiraSprintProgressService;
+        this.jiraWorkloadService = jiraWorkloadService;
         this.restClient = restClientBuilder.build();
     }
 
@@ -1351,6 +1356,19 @@ class SupervisorServiceImpl implements SupervisorService {
                 .orElseThrow(EntityNotFoundException::new);
 
         return jiraSprintProgressService.getSprintProgress(parsedProjectId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public JiraWorkloadDto getJiraWorkload(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+
+        return jiraWorkloadService.getWorkload(parsedProjectId);
     }
 
     @Override
