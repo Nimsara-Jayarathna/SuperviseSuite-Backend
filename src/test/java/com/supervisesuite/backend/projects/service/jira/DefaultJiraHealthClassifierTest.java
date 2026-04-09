@@ -2,11 +2,13 @@ package com.supervisesuite.backend.projects.service.jira;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.supervisesuite.backend.config.JiraProperties;
 import org.junit.jupiter.api.Test;
 
 class DefaultJiraHealthClassifierTest {
 
-    private final DefaultJiraHealthClassifier classifier = new DefaultJiraHealthClassifier();
+    private final DefaultJiraHealthClassifier classifier =
+            new DefaultJiraHealthClassifier(new JiraProperties());
 
     @Test
     void isDoneStatus_matchesDoneKeyOnly() {
@@ -25,12 +27,12 @@ class DefaultJiraHealthClassifierTest {
     }
 
     @Test
-    void isHighPriority_andIsBugType_areCaseSensitiveByCurrentContract() {
+    void isHighPriority_andIsBugType_followConfiguredCaseInsensitiveNames() {
         assertThat(classifier.isHighPriority("High")).isTrue();
         assertThat(classifier.isHighPriority("Highest")).isTrue();
-        assertThat(classifier.isHighPriority("HIGH")).isFalse();
+        assertThat(classifier.isHighPriority("HIGH")).isTrue();
 
         assertThat(classifier.isBugType("Bug")).isTrue();
-        assertThat(classifier.isBugType("bug")).isFalse();
+        assertThat(classifier.isBugType("bug")).isTrue();
     }
 }

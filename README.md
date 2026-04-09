@@ -90,6 +90,10 @@ The backend reads DB and auth config from environment variables:
 - `GITHUB_REPOSITORY_REFRESH_CRON` — cron expression for scheduled refresh time (default: `0 0 0 * * *`; set `0 0 12 * * *` for daily 12:00)
 - `GITHUB_REPOSITORY_REFRESH_ZONE` — timezone for refresh cron evaluation (default: `UTC`)
 - `GITHUB_REPOSITORY_REFRESH_BATCH_SIZE` — max linked repositories refreshed per cron run (default: `50`)
+- `ATLASSIAN_ANALYTICS_RECENT_SPRINTS_LIMIT` — number of recent sprints used in sprint analytics/trend calculations (default: `3`)
+- `ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS` — consecutive negative-net weeks required to flag backlog growth (default: `2`)
+- `ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES` — comma-separated Jira priority names treated as high priority (default: `High,Highest`)
+- `ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES` — comma-separated Jira issue type names treated as bugs/defects (default: `Bug`)
 
 Setup for local development:
 
@@ -119,6 +123,10 @@ GITHUB_REPOSITORY_REFRESH_JOB_ENABLED=true
 GITHUB_REPOSITORY_REFRESH_CRON=0 0 0 * * *
 GITHUB_REPOSITORY_REFRESH_ZONE=UTC
 GITHUB_REPOSITORY_REFRESH_BATCH_SIZE=50
+ATLASSIAN_ANALYTICS_RECENT_SPRINTS_LIMIT=3
+ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS=2
+ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES=High,Highest
+ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES=Bug
 ```
 
 3. Keep hostnames consistent across FE/BE in local dev:

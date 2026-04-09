@@ -21,6 +21,7 @@ import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
+import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressService;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.users.entity.User;
@@ -60,6 +61,8 @@ class StudentServiceImplTest {
     private ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
     @Mock
     private JiraHealthService jiraHealthService;
+    @Mock
+    private JiraSprintProgressService jiraSprintProgressService;
 
     private StudentServiceImpl studentService;
 
@@ -76,7 +79,8 @@ class StudentServiceImplTest {
             projectService,
             repositoryLinkService,
             projectJiraIntegrationRepository,
-            jiraHealthService
+            jiraHealthService,
+            jiraSprintProgressService
         );
 
         studentId = UUID.randomUUID();

@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -58,6 +59,44 @@ class DefaultJiraIssueMapper implements JiraIssueMapper {
 
         JiraIssueDto.Parent parent = fields.getParent();
         issue.setParentKey(parent != null ? parent.getKey() : null);
+
+        applySprint(issue, fields.getSprints());
+    }
+
+    private void applySprint(ProjectJiraIssue issue, List<JiraIssueDto.Sprint> sprints) {
+        JiraIssueDto.Sprint selectedSprint = resolveMostRecentSprint(sprints);
+        if (selectedSprint == null) {
+            issue.setSprintId(null);
+            issue.setSprintName(null);
+            issue.setSprintState(null);
+            issue.setSprintStartDate(null);
+            issue.setSprintEndDate(null);
+            return;
+        }
+
+        issue.setSprintId(selectedSprint.getId());
+        issue.setSprintName(selectedSprint.getName());
+        issue.setSprintState(selectedSprint.getState());
+        issue.setSprintStartDate(parseInstant(selectedSprint.getStartDate()));
+        issue.setSprintEndDate(parseInstant(selectedSprint.getEndDate()));
+    }
+
+    /**
+     * Jira customfield_10020 may contain multiple sprint assignments.
+     * Keep the most recent assignment by taking the last non-null element.
+     */
+    private JiraIssueDto.Sprint resolveMostRecentSprint(List<JiraIssueDto.Sprint> sprints) {
+        if (sprints == null || sprints.isEmpty()) {
+            return null;
+        }
+
+        for (int i = sprints.size() - 1; i >= 0; i--) {
+            JiraIssueDto.Sprint sprint = sprints.get(i);
+            if (sprint != null) {
+                return sprint;
+            }
+        }
+        return null;
     }
 
     private static LocalDate parseLocalDate(String value) {
