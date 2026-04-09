@@ -25,6 +25,7 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
+import com.supervisesuite.backend.projects.dto.JiraIssueSummaryDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
@@ -91,6 +92,7 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
 import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
 import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
+import com.supervisesuite.backend.projects.service.jira.JiraIssueQueryService;
 import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
 
 @Service
@@ -134,6 +136,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final ProjectJiraIssueRepository projectJiraIssueRepository;
     private final JiraIssueSyncService jiraIssueSyncService;
     private final JiraHealthService jiraHealthService;
+    private final JiraIssueQueryService jiraIssueQueryService;
     private final RestClient restClient;
     private final SecureRandom secureRandom = new SecureRandom();
     private final Map<String, PendingJiraWorkspaceSelection> pendingJiraWorkspaceSelections = new ConcurrentHashMap<>();
@@ -157,6 +160,7 @@ class SupervisorServiceImpl implements SupervisorService {
             ProjectJiraIssueRepository projectJiraIssueRepository,
             JiraIssueSyncService jiraIssueSyncService,
             JiraHealthService jiraHealthService,
+            JiraIssueQueryService jiraIssueQueryService,
             RestClient.Builder restClientBuilder) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
@@ -175,6 +179,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.projectJiraIssueRepository = projectJiraIssueRepository;
         this.jiraIssueSyncService = jiraIssueSyncService;
         this.jiraHealthService = jiraHealthService;
+        this.jiraIssueQueryService = jiraIssueQueryService;
         this.restClient = restClientBuilder.build();
     }
 
@@ -1333,6 +1338,18 @@ class SupervisorServiceImpl implements SupervisorService {
                 .orElseThrow(EntityNotFoundException::new);
 
         return jiraHealthService.getHealthOverview(parsedProjectId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<JiraIssueSummaryDto> getProjectJiraIssues(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+        return jiraIssueQueryService.getIssuesForProject(parsedProjectId);
     }
 
     @Override
