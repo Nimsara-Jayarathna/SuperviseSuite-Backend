@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -58,6 +59,16 @@ class DefaultJiraIssueMapper implements JiraIssueMapper {
 
         JiraIssueDto.Parent parent = fields.getParent();
         issue.setParentKey(parent != null ? parent.getKey() : null);
+
+        List<JiraIssueDto.SprintField> sprints = fields.getSprint();
+        if (sprints != null && !sprints.isEmpty()) {
+            JiraIssueDto.SprintField sprint = sprints.get(sprints.size() - 1);
+            issue.setSprintId(sprint.getId());
+            issue.setSprintName(sprint.getName());
+            issue.setSprintState(sprint.getState());
+            issue.setSprintStartDate(parseInstant(sprint.getStartDate()));
+            issue.setSprintEndDate(parseInstant(sprint.getEndDate()));
+        }
     }
 
     private static LocalDate parseLocalDate(String value) {
