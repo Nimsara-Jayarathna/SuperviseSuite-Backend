@@ -28,7 +28,8 @@ class JiraClientImpl implements JiraClient {
             "resolutiondate",
             "created",
             "updated",
-        "parent");
+        "parent",
+        "customfield_10020");
     private static final List<List<String>> FIELD_CANDIDATES = List.of(
         appendField(BASE_FIELDS, "customfield_10016"),
         appendField(BASE_FIELDS, "customfield_10026"),
