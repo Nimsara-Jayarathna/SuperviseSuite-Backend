@@ -37,7 +37,7 @@ class JiraSprintProgressServiceImpl implements JiraSprintProgressService {
         List<ProjectJiraIssue> issues = jiraIssueRepository.findAllByProjectId(projectId);
 
         Map<Long, SprintAccumulator> sprintAccumulators = new HashMap<>();
-        Map<Instant, long[]> velocityByWeek = new HashMap<>();
+        Map<Instant, VelocityAccumulator> velocityByWeek = new HashMap<>();
 
         for (ProjectJiraIssue issue : issues) {
             accumulateSprint(issue, sprintAccumulators);
@@ -61,8 +61,9 @@ class JiraSprintProgressServiceImpl implements JiraSprintProgressService {
         List<JiraSprintProgressDto.VelocityWeek> velocityWeeks = velocityByWeek.entrySet().stream()
                 .map(entry -> new JiraSprintProgressDto.VelocityWeek(
                         entry.getKey(),
-                        entry.getValue()[0],
-                        entry.getValue()[1]))
+                    entry.getValue().created,
+                    entry.getValue().resolved,
+                    entry.getValue().averageCycleDays()))
                 .sorted(Comparator.comparing(JiraSprintProgressDto.VelocityWeek::weekStart))
                 .toList();
 
@@ -94,6 +95,10 @@ class JiraSprintProgressServiceImpl implements JiraSprintProgressService {
             accumulator.issuesDone += 1;
         }
 
+        if (isIncludedAtSprintStart(issue)) {
+            accumulator.sprintStartIssueCount += 1;
+        }
+
         BigDecimal storyPoints = issue.getStoryPoints();
         if (storyPoints != null) {
             accumulator.storyPointsAvailable = true;
@@ -109,16 +114,32 @@ class JiraSprintProgressServiceImpl implements JiraSprintProgressService {
         accumulator.endDate = mostRecent(accumulator.endDate, issue.getSprintEndDate());
     }
 
-    private void accumulateVelocity(ProjectJiraIssue issue, Map<Instant, long[]> velocityByWeek) {
+    private void accumulateVelocity(ProjectJiraIssue issue, Map<Instant, VelocityAccumulator> velocityByWeek) {
         if (issue.getJiraCreatedAt() != null) {
             Instant weekStart = toWeekStart(issue.getJiraCreatedAt());
-            velocityByWeek.computeIfAbsent(weekStart, ignored -> new long[2])[0] += 1;
+            velocityByWeek.computeIfAbsent(weekStart, ignored -> new VelocityAccumulator()).created += 1;
         }
 
         if (issue.getResolutionDate() != null) {
             Instant weekStart = toWeekStart(issue.getResolutionDate());
-            velocityByWeek.computeIfAbsent(weekStart, ignored -> new long[2])[1] += 1;
+            VelocityAccumulator accumulator = velocityByWeek.computeIfAbsent(
+                    weekStart,
+                    ignored -> new VelocityAccumulator());
+            accumulator.resolved += 1;
+            if (issue.getJiraCreatedAt() != null && !issue.getResolutionDate().isBefore(issue.getJiraCreatedAt())) {
+                double cycleDays = (issue.getResolutionDate().toEpochMilli() - issue.getJiraCreatedAt().toEpochMilli())
+                        / 86_400_000.0;
+                accumulator.resolvedCycleDaysTotal += cycleDays;
+                accumulator.resolvedWithCycleData += 1;
+            }
         }
+    }
+
+    private static boolean isIncludedAtSprintStart(ProjectJiraIssue issue) {
+        if (issue.getSprintStartDate() == null || issue.getJiraCreatedAt() == null) {
+            return false;
+        }
+        return !issue.getJiraCreatedAt().isAfter(issue.getSprintStartDate());
     }
 
     private Comparator<JiraSprintProgressDto.SprintSummary> sprintRecencyComparator() {
@@ -175,6 +196,7 @@ class JiraSprintProgressServiceImpl implements JiraSprintProgressService {
         private String sprintState;
         private Instant startDate;
         private Instant endDate;
+        private int sprintStartIssueCount;
         private int issuesDone;
         private int issuesTotal;
         private double sprintPointsDone;
@@ -197,12 +219,27 @@ class JiraSprintProgressServiceImpl implements JiraSprintProgressService {
                     sprintState,
                     startDate,
                     endDate,
+                    sprintStartIssueCount,
                     completionPercent,
                     issuesDone,
                     issuesTotal,
                     sprintPointsDone,
                     sprintPointsTotal,
                     storyPointsAvailable);
+        }
+    }
+
+    private static final class VelocityAccumulator {
+        private long created;
+        private long resolved;
+        private double resolvedCycleDaysTotal;
+        private long resolvedWithCycleData;
+
+        private Double averageCycleDays() {
+            if (resolvedWithCycleData == 0) {
+                return null;
+            }
+            return resolvedCycleDaysTotal / resolvedWithCycleData;
         }
     }
 }

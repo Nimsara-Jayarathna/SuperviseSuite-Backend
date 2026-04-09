@@ -58,7 +58,7 @@ class JiraSprintProgressServiceImplTest {
                 Instant.parse("2026-04-07T00:00:00Z"),
                 Instant.parse("2026-04-20T00:00:00Z"),
                 "done",
-                Instant.parse("2026-04-08T10:00:00Z"),
+                Instant.parse("2026-04-06T10:00:00Z"),
                 Instant.parse("2026-04-09T12:00:00Z"),
                 new BigDecimal("5"));
         ProjectJiraIssue s2OpenNoSp = issue(
@@ -114,6 +114,7 @@ class JiraSprintProgressServiceImplTest {
         assertThat(result.activeSprint().sprintId()).isEqualTo(2L);
         assertThat(result.activeSprint().issuesDone()).isEqualTo(1);
         assertThat(result.activeSprint().issuesTotal()).isEqualTo(2);
+        assertThat(result.activeSprint().sprintStartIssueCount()).isEqualTo(1);
         assertThat(result.activeSprint().completionPercent()).isEqualTo(50.0);
         assertThat(result.activeSprint().sprintPointsAvailable()).isTrue();
         assertThat(result.activeSprint().sprintPointsDone()).isEqualTo(5.0);
@@ -125,6 +126,7 @@ class JiraSprintProgressServiceImplTest {
         assertThat(result.recentSprints().get(2).sprintId()).isEqualTo(1L);
 
         assertThat(result.velocityWeeks()).isNotEmpty();
+        assertThat(result.velocityWeeks().stream().anyMatch(week -> week.averageCycleDays() != null)).isTrue();
         assertThat(result.backlogGrowing()).isTrue();
     }
 

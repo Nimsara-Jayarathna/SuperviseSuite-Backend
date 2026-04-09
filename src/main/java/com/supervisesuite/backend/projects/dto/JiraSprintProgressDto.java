@@ -16,6 +16,7 @@ public record JiraSprintProgressDto(
             String sprintState,
             Instant startDate,
             Instant endDate,
+            Integer sprintStartIssueCount,
             double completionPercent,
             int issuesDone,
             int issuesTotal,
@@ -27,6 +28,7 @@ public record JiraSprintProgressDto(
     public record VelocityWeek(
             Instant weekStart,
             long created,
-            long resolved) {
+            long resolved,
+            Double averageCycleDays) {
     }
 }
