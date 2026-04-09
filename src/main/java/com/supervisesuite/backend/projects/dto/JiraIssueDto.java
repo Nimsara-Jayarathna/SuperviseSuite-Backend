@@ -2,6 +2,7 @@ package com.supervisesuite.backend.projects.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -35,6 +36,9 @@ public class JiraIssueDto {
         /** Story points — Jira stores these in customfield_10016. */
         @JsonProperty("customfield_10016")
         private Double storyPoints;
+
+        @JsonProperty("customfield_10020")
+        private List<SprintField> sprint;
 
         @JsonProperty("duedate")
         private String dueDate;
@@ -89,6 +93,18 @@ public class JiraIssueDto {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Priority {
         private String name;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class SprintField {
+        private Long id;
+        private String name;
+        private String state;
+        private String startDate;
+        private String endDate;
     }
 
     @Getter
