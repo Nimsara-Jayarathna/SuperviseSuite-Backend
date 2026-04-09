@@ -3,6 +3,7 @@ package com.supervisesuite.backend.student.controller;
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
+import com.supervisesuite.backend.projects.dto.JiraIssueSummaryDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
@@ -113,5 +114,15 @@ public class StudentController {
     ) {
         JiraHealthDto data = studentService.getJiraHealthOverview(authentication.getName(), projectId);
         return apiResponseFactory.ok("Jira health overview loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/jira/issues")
+    public ResponseEntity<ApiResponse<List<JiraIssueSummaryDto>>> getProjectJiraIssues(
+            Authentication authentication,
+            @PathVariable String projectId,
+            HttpServletRequest request) {
+        List<JiraIssueSummaryDto> data = studentService.getProjectJiraIssues(
+                authentication.getName(), projectId);
+        return apiResponseFactory.ok("Jira issues loaded.", data, request);
     }
 }

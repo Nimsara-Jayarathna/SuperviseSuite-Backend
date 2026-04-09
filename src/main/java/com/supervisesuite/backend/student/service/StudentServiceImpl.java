@@ -9,6 +9,7 @@ import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
+import com.supervisesuite.backend.projects.dto.JiraIssueSummaryDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
@@ -23,6 +24,7 @@ import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
 import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
+import com.supervisesuite.backend.projects.service.jira.JiraIssueQueryService;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -44,6 +46,7 @@ class StudentServiceImpl implements StudentService {
     private final RepositoryLinkService repositoryLinkService;
     private final ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
     private final JiraHealthService jiraHealthService;
+    private final JiraIssueQueryService jiraIssueQueryService;
 
     StudentServiceImpl(
          UserRepository userRepository,
@@ -53,7 +56,8 @@ class StudentServiceImpl implements StudentService {
          ProjectService projectService,
          RepositoryLinkService repositoryLinkService,
          ProjectJiraIntegrationRepository projectJiraIntegrationRepository,
-         JiraHealthService jiraHealthService
+            JiraHealthService jiraHealthService,
+            JiraIssueQueryService jiraIssueQueryService
     ) {
          this.userRepository = userRepository;
          this.projectMemberRepository = projectMemberRepository;
@@ -63,6 +67,7 @@ class StudentServiceImpl implements StudentService {
          this.repositoryLinkService = repositoryLinkService;
          this.projectJiraIntegrationRepository = projectJiraIntegrationRepository;
          this.jiraHealthService = jiraHealthService;
+            this.jiraIssueQueryService = jiraIssueQueryService;
     }
 
     @Override
@@ -266,6 +271,24 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
         }
 
         return jiraHealthService.getHealthOverview(parsedProjectId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<JiraIssueSummaryDto> getProjectJiraIssues(String authenticatedUserId, String projectId) {
+        User student = resolveStudent(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
+            student.getId(),
+            parsedProjectId,
+            Roles.STUDENT
+        );
+        if (!hasAccess) {
+            throw new EntityNotFoundException();
+        }
+
+        return jiraIssueQueryService.getIssuesForProject(parsedProjectId);
     }
 
     private User resolveStudent(String authenticatedUserId) {
