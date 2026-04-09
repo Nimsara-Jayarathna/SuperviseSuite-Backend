@@ -84,6 +84,27 @@ class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
             jiraIssueMapper.mapToEntity(issue, dto, projectId, now);
             toSave.add(issue);
         }
+
+        // Step 5.1: Backfill parentIssueType — O(n) pass.
+        // For each entity that declares a parentKey, look up the parent entity in the same
+        // batch and write the parent's issueType onto the parent entity as parentIssueType.
+        // This lets the workload service identify "parent issues that have subtasks" with a
+        // simple null-check at runtime, with no DB self-join and no mapper coupling.
+        Map<String, ProjectJiraIssue> toSaveByKey = new HashMap<>();
+        for (ProjectJiraIssue issue : toSave) {
+            toSaveByKey.put(issue.getIssueKey(), issue);
+        }
+        for (ProjectJiraIssue issue : toSave) {
+            String parentKey = issue.getParentKey();
+            if (parentKey == null) {
+                continue;
+            }
+            ProjectJiraIssue parentEntity = toSaveByKey.get(parentKey);
+            if (parentEntity != null && parentEntity.getIssueType() != null) {
+                parentEntity.setParentIssueType(parentEntity.getIssueType());
+            }
+        }
+
         jiraIssueRepository.saveAll(toSave);
 
         // Step 6: Delete stale rows — only reached because the full fetch succeeded above
