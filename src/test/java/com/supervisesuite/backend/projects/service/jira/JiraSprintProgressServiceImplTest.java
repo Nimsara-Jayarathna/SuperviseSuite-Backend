@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIssue;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
@@ -30,7 +31,7 @@ class JiraSprintProgressServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new JiraSprintProgressServiceImpl(jiraIssueRepository, jiraHealthClassifier);
+                service = new JiraSprintProgressServiceImpl(jiraIssueRepository, jiraHealthClassifier, new JiraProperties());
     }
 
     @Test
