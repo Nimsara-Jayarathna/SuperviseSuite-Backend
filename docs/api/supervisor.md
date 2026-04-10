@@ -30,6 +30,14 @@ All endpoints in this document:
 - `POST /api/supervisor/projects/{projectId}/github/link`
 - `POST /api/supervisor/projects/{projectId}/github/access/remove`
 - `POST /api/supervisor/projects/{projectId}/github/refresh`
+- `GET /api/supervisor/projects/{projectId}/jira/auth-url`
+- `POST /api/supervisor/jira/oauth/complete`
+- `POST /api/supervisor/projects/{projectId}/jira/disconnect`
+- `GET /api/supervisor/projects/{projectId}/jira/health`
+- `GET /api/supervisor/projects/{projectId}/jira/sprint-progress`
+- `GET /api/supervisor/projects/{projectId}/jira/workload`
+- `GET /api/supervisor/projects/{projectId}/jira/hierarchy`
+- `POST /api/supervisor/projects/{projectId}/jira/refresh`
 - `POST /api/supervisor/projects/{projectId}/members`
 - `POST /api/supervisor/projects/{projectId}/milestones`
 - `PATCH /api/supervisor/projects/{projectId}/milestones/{milestoneId}`
@@ -58,7 +66,7 @@ Returns dashboard aggregates and lightweight project records for `/supervisor/da
 
 - Includes only supervisor-owned, non-deleted projects.
 - `projects[]` item fields:
-  - `id`, `title`, `summary`, `lifecycleStatus`, `milestoneDate`, `lastActivityAt`, `progressPercent`, `healthNote`
+  - `id`, `title`, `summary`, `lifecycleStatus`, `milestoneDate`, `lastActivityAt`, `progressPercent`, `healthNote`, `jiraHealthIndicator`
 
 ---
 
@@ -103,6 +111,10 @@ Returns one supervisor-owned project detail record.
   - `github.activitySummary` (`totalCommits`, `lastActivityAt`, `status`)
   - `github.contributorsPreview[]` (top 4)
   - `github.recentCommitsPreview[]` (small preview list)
+- Jira integration block:
+  - `jira.connected`
+  - `jira.workspaceName`
+  - `jira.workspaceUrl`
 - `leader` (nullable):
   - `id`, `firstName`, `lastName`, `email`, `registrationNumber`
 - `members[]`:
@@ -448,6 +460,172 @@ Triggers backend GitHub sync and updates DB cache for the linked repository.
 - `401 UNAUTHORIZED` - not authenticated
 - `403 FORBIDDEN` - authenticated but not supervisor role
 - `404 NOT_FOUND` - project missing or not owned by authenticated supervisor
+
+---
+
+## GET /api/supervisor/projects/{projectId}/jira/auth-url
+
+Returns a short-lived Atlassian authorization URL for connecting Jira to a supervisor-owned project.
+
+### Response fields
+
+- `url` (Atlassian OAuth authorize URL)
+
+### Rules
+
+- project must belong to authenticated supervisor
+- endpoint fails with validation error when a non-revoked Jira integration already exists for project
+
+---
+
+## POST /api/supervisor/jira/oauth/complete
+
+Completes Jira OAuth callback processing and stores project-scoped Jira integration details.
+
+### Request fields
+
+- `code` (OAuth authorization code)
+- `state` (backend-issued nonce/state value)
+- `error` (optional OAuth error code)
+- `errorDescription` (optional OAuth error detail)
+
+### Response fields
+
+- `projectId`
+- `workspaceName`
+
+---
+
+## POST /api/supervisor/projects/{projectId}/jira/disconnect
+
+Revokes project-scoped Jira integration and returns refreshed project detail payload.
+
+### Behavior
+
+- validates supervisor ownership
+- deletes active Jira integration for project
+- updates project activity timestamps
+- returns refreshed `SupervisorProjectDetailDto`
+
+---
+
+## GET /api/supervisor/projects/{projectId}/jira/health
+
+Returns Jira health overview derived from cached Jira issues for the project.
+
+### Response fields
+
+- `completionPercent`
+- `openIssues`
+- `overdueIssues`
+- `highPriorityOpen`
+- `statusBreakdown`:
+  - `toDo`, `inProgress`, `done`
+- `typeDistribution[]`:
+  - `type`, `count`
+- `bugRatio`
+- `lastSyncedAt` (nullable)
+
+### Notes
+
+- served from backend Jira cache table (`project_jira_issues`)
+- `lastSyncedAt = null` indicates first sync not completed yet
+- health/sprint heuristics used by Jira tab data are config-backed via `app.jira.analytics.*`
+
+---
+
+## GET /api/supervisor/projects/{projectId}/jira/sprint-progress
+
+Returns sprint progress metrics (active sprint, recent sprint velocity) derived from cached Jira issues for the project.
+
+### Response fields
+
+- `activeSprint`:
+  - `sprintId`, `sprintName`, `sprintState`, `startDate`, `endDate`, `sprintStartIssueCount`, `completionPercent`, `issuesDone`, `issuesTotal`, `sprintPointsDone`, `sprintPointsTotal`, `sprintPointsAvailable`
+- `recentSprints[]`:
+  - same fields as `activeSprint`
+- `velocityWeeks[]`:
+  - `weekStart`, `created`, `resolved`, `averageCycleDays`
+- `backlogGrowing` (boolean)
+- `sprintDataAvailable` (boolean)
+
+---
+
+## GET /api/supervisor/projects/{projectId}/jira/workload
+
+Returns team workload distribution derived from cached Jira issues for the project.
+
+### Response fields
+
+- `members[]`:
+  - `accountId`, `displayName`, `assigned`, `completed`, `inProgress`, `overdue`, `openIssues`, `storyPointsAssigned`, `storyPointsCompleted`, `completionRate`, `lastActiveDate`, `issueTypeCounts`
+- `unassignedCount`
+- `dueDateAvailable` (boolean)
+- `imbalanceDetected` (boolean)
+- `imbalanceMessage` (nullable string)
+
+---
+
+## GET /api/supervisor/projects/{projectId}/jira/hierarchy
+
+Returns all cached Jira issues for the project structured as a hierarchy tree.
+
+### Response fields
+
+- `roots[]` - top-level issue nodes (Epics, or issues with no parent in cache)
+- `orphans[]` - issues whose parentKey references an issue not in this project's cache
+
+Each node in `roots[]`, `orphans[]`, and every nested `children[]` array has:
+
+- `issueKey`
+- `summary`
+- `issueType` (`"Epic"`, `"Story"`, `"Task"`, `"Bug"`, `"Subtask"`, etc.)
+- `status`
+- `priority`
+- `assigneeDisplayName` (nullable)
+- `storyPoints` (nullable)
+- `children[]` - recursively the same node shape
+
+### Notes
+
+- Data is served from DB-backed Jira issue cache; no live Jira API call is made.
+- Hierarchy depth is unbounded but in practice is 3 levels (Epic -> Story/Task/Bug -> Subtask).
+- If Jira is not connected or no issues are cached, `roots` and `orphans` are both empty arrays.
+
+---
+
+## POST /api/supervisor/projects/{projectId}/jira/refresh
+
+Triggers Jira issue resync for a connected project, then returns recomputed Jira health overview.
+
+### Behavior
+
+- validates supervisor ownership
+- requires active Jira integration for project
+- syncs Jira issues via backend integration service
+- updates project activity timestamps
+- returns same payload shape as `GET .../jira/health`
+
+### Status codes
+
+- `200 OK` - Jira data refreshed and health overview returned
+- `400 BAD_REQUEST` - validation failure (for example Jira not connected)
+- `401 UNAUTHORIZED` - not authenticated
+- `403 FORBIDDEN` - authenticated but not supervisor role
+- `404 NOT_FOUND` - project missing or not owned by authenticated supervisor
+
+### Analytics rule configuration (Jira tab data scope)
+
+These settings affect Jira health/sprint values shown in the Jira tab:
+
+- `app.jira.analytics.recent-sprints-limit`
+- `app.jira.analytics.backlog-growing-consecutive-weeks`
+- `app.jira.analytics.high-priority-names`
+- `app.jira.analytics.bug-type-names`
+
+Scope note:
+
+- These settings do not change Jira OAuth authorization flows.
 
 ---
 

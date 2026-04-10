@@ -16,6 +16,10 @@ All endpoints in this document:
 - [GET /api/student/projects/{projectId}/github](#get-apistudentprojectsprojectidgithub)
 - [GET /api/student/projects/{projectId}/github/activity?page=...&size=...](#get-apistudentprojectsprojectidgithubactivitypagesize)
 - [GET /api/student/projects/{projectId}/github/contributors?page=...&size=...](#get-apistudentprojectsprojectidgithubcontributorspagesize)
+- [GET /api/student/projects/{projectId}/jira/health](#get-apistudentprojectsprojectidjirahealth)
+- [GET /api/student/projects/{projectId}/jira/sprint-progress](#get-apistudentprojectsprojectidjirasprint-progress)
+- [GET /api/student/projects/{projectId}/jira/workload](#get-apistudentprojectsprojectidjiraworkload)
+- [GET /api/student/projects/{projectId}/jira/hierarchy](#get-apistudentprojectsprojectidjirahierarchy)
 
 ---
 
@@ -93,6 +97,7 @@ The detail payload currently includes backend-backed fields only:
 - `progressPercent`
 - `healthNote`
 - `github`
+- `jira`
 - `members[]`
 - `milestones[]`
 
@@ -121,6 +126,12 @@ The detail payload currently includes backend-backed fields only:
 - `activitySummary` (`totalCommits`, `lastActivityAt`, `status`)
 - `contributorsPreview[]` (top 4)
 - `recentCommitsPreview[]` (preview list)
+
+`jira` integration fields:
+
+- `connected`
+- `workspaceName`
+- `workspaceUrl`
 
 ### 200 OK
 
@@ -223,3 +234,84 @@ Returns paginated contributors for the contributors modal.
 
 - `items[]` (`name`, `commitCount`)
 - `page`, `size`, `total`, `hasMore`
+
+---
+
+## GET /api/student/projects/{projectId}/jira/health
+
+Returns read-only Jira health overview for the student Jira tab.
+
+### Response fields
+
+- `completionPercent`
+- `openIssues`
+- `overdueIssues`
+- `highPriorityOpen`
+- `statusBreakdown`:
+  - `toDo`, `inProgress`, `done`
+- `typeDistribution[]`:
+  - `type`, `count`
+- `bugRatio`
+- `lastSyncedAt` (nullable)
+
+### Rules
+
+- student must be assigned to project with `member_role = STUDENT`
+- endpoint is read-only for student role
+- response is computed from backend Jira cache data
+
+---
+
+## GET /api/student/projects/{projectId}/jira/sprint-progress
+
+Returns read-only sprint progress metrics for the student Jira tab.
+
+### Response fields
+
+- `activeSprint` (`sprintId`, `sprintName`, `sprintState`, etc.)
+- `recentSprints[]`
+- `velocityWeeks[]` (`weekStart`, `created`, `resolved`, `averageCycleDays`)
+- `backlogGrowing` (boolean)
+- `sprintDataAvailable` (boolean)
+
+---
+
+## GET /api/student/projects/{projectId}/jira/workload
+
+Returns read-only team workload distribution for the student Jira tab.
+
+### Response fields
+
+- `members[]` (`accountId`, `displayName`, `assigned`, `completed`, `inProgress`, `overdue`, `openIssues`, `storyPointsAssigned`, `storyPointsCompleted`, `completionRate`, `lastActiveDate`, `issueTypeCounts`)
+- `unassignedCount`
+- `dueDateAvailable` (boolean)
+- `imbalanceDetected` (boolean)
+- `imbalanceMessage` (nullable string)
+
+---
+
+## GET /api/student/projects/{projectId}/jira/hierarchy
+
+Returns all cached Jira issues for the project structured as a hierarchy tree.
+
+### Response fields
+
+- `roots[]` - top-level issue nodes (Epics, or issues with no parent in cache)
+- `orphans[]` - issues whose parentKey references an issue not in this project's cache
+
+Each node in `roots[]`, `orphans[]`, and every nested `children[]` array has:
+
+- `issueKey`
+- `summary`
+- `issueType` (`"Epic"`, `"Story"`, `"Task"`, `"Bug"`, `"Subtask"`, etc.)
+- `status`
+- `priority`
+- `assigneeDisplayName` (nullable)
+- `storyPoints` (nullable)
+- `children[]` - recursively the same node shape
+
+### Notes
+
+- Endpoint is read-only for students.
+- Data is served from DB-backed Jira issue cache; no live Jira API call is made.
+- If Jira is not connected or no issues are cached, `roots` and `orphans` are both empty arrays.

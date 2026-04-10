@@ -8,6 +8,8 @@ import com.supervisesuite.backend.auth.security.JwtService;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
+import com.supervisesuite.backend.projects.entity.ProjectJiraIssue;
+import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.users.entity.User;
@@ -53,6 +55,9 @@ class SupervisorProjectControllerTest {
     private ProjectRepository projectRepository;
 
     @Autowired
+    private ProjectJiraIssueRepository projectJiraIssueRepository;
+
+    @Autowired
     private ProjectMemberRepository projectMemberRepository;
 
     @Autowired
@@ -62,6 +67,7 @@ class SupervisorProjectControllerTest {
     void cleanUp() {
         projectMilestoneRepository.deleteAll();
         projectMemberRepository.deleteAll();
+        projectJiraIssueRepository.deleteAll();
         projectRepository.deleteAll();
         userRepository.deleteAll();
     }
@@ -177,6 +183,87 @@ class SupervisorProjectControllerTest {
         assertThat(error(response).get("code")).isEqualTo("FORBIDDEN");
     }
 
+    @Test
+    void getProjectJiraHealth_validRequest_returns200AndHealthPayload() {
+        User supervisor = persistUser(Roles.SUPERVISOR, "supervisor-jira@university.ac.lk");
+        Project project = persistProject(supervisor);
+        String token = jwtService.generateAccessToken(supervisor);
+
+        ResponseEntity<Map> response = getProjectJiraHealth(project.getId(), token);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().get("success")).isEqualTo(true);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        assertThat(data).isNotNull();
+        assertThat(data).containsKeys("completionPercent", "openIssues", "statusBreakdown", "bugRatio");
+    }
+
+    @Test
+    void refreshProjectJira_withoutActiveIntegration_returns400() {
+        User supervisor = persistUser(Roles.SUPERVISOR, "supervisor-jira-refresh@university.ac.lk");
+        Project project = persistProject(supervisor);
+        String token = jwtService.generateAccessToken(supervisor);
+
+        ResponseEntity<Map> response = refreshProjectJira(project.getId(), token);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
+    }
+
+    @Test
+    void getProjectJiraHierarchy_whenIssuesExist_returns200AndHierarchyPayload() {
+        User supervisor = persistUser(Roles.SUPERVISOR, "supervisor-jira-hierarchy@university.ac.lk");
+        Project project = persistProject(supervisor);
+        String token = jwtService.generateAccessToken(supervisor);
+
+        projectJiraIssueRepository.save(persistIssue(project.getId(), "PRJ-1", null, "Epic"));
+        projectJiraIssueRepository.save(persistIssue(project.getId(), "PRJ-2", "PRJ-1", "Story"));
+
+        ResponseEntity<Map> response = getProjectJiraHierarchy(project.getId(), token);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().get("success")).isEqualTo(true);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        assertThat(data).containsKeys("roots", "orphans");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> roots = (List<Map<String, Object>>) data.get("roots");
+        assertThat(roots).hasSize(1);
+    }
+
+    @Test
+    void getProjectJiraHierarchy_whenNoIssues_returns200WithEmptyLists() {
+        User supervisor = persistUser(Roles.SUPERVISOR, "supervisor-jira-hierarchy-empty@university.ac.lk");
+        Project project = persistProject(supervisor);
+        String token = jwtService.generateAccessToken(supervisor);
+
+        ResponseEntity<Map> response = getProjectJiraHierarchy(project.getId(), token);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        assertThat(data).containsEntry("roots", List.of());
+        assertThat(data).containsEntry("orphans", List.of());
+    }
+
+    @Test
+    void getProjectJiraHierarchy_whenProjectNotOwned_returns404() {
+        User owner = persistUser(Roles.SUPERVISOR, "supervisor-jira-owner@university.ac.lk");
+        User anotherSupervisor = persistUser(Roles.SUPERVISOR, "supervisor-jira-other@university.ac.lk");
+        Project project = persistProject(owner);
+        String token = jwtService.generateAccessToken(anotherSupervisor);
+
+        ResponseEntity<Map> response = getProjectJiraHierarchy(project.getId(), token);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
     private ResponseEntity<Map> patchRepository(UUID projectId, Map<String, Object> body, String accessToken) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -188,6 +275,48 @@ class SupervisorProjectControllerTest {
             "/api/supervisor/projects/" + projectId + "/repository",
             HttpMethod.PATCH,
             new HttpEntity<>(body, headers),
+            Map.class
+        );
+    }
+
+    private ResponseEntity<Map> getProjectJiraHealth(UUID projectId, String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        if (accessToken != null) {
+            headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + accessToken);
+        }
+
+        return restTemplate.exchange(
+            "/api/supervisor/projects/" + projectId + "/jira/health",
+            HttpMethod.GET,
+            new HttpEntity<>(headers),
+            Map.class
+        );
+    }
+
+    private ResponseEntity<Map> refreshProjectJira(UUID projectId, String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        if (accessToken != null) {
+            headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + accessToken);
+        }
+
+        return restTemplate.exchange(
+            "/api/supervisor/projects/" + projectId + "/jira/refresh",
+            HttpMethod.POST,
+            new HttpEntity<>(headers),
+            Map.class
+        );
+    }
+
+    private ResponseEntity<Map> getProjectJiraHierarchy(UUID projectId, String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        if (accessToken != null) {
+            headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + accessToken);
+        }
+
+        return restTemplate.exchange(
+            "/api/supervisor/projects/" + projectId + "/jira/hierarchy",
+            HttpMethod.GET,
+            new HttpEntity<>(headers),
             Map.class
         );
     }
@@ -212,6 +341,19 @@ class SupervisorProjectControllerTest {
         project.setSemester("Y3S2");
         project.setSupervisor(supervisor);
         return projectRepository.save(project);
+    }
+
+    private ProjectJiraIssue persistIssue(UUID projectId, String issueKey, String parentKey, String issueType) {
+        ProjectJiraIssue issue = new ProjectJiraIssue();
+        issue.setProjectId(projectId);
+        issue.setIssueKey(issueKey);
+        issue.setSummary(issueKey + " summary");
+        issue.setIssueType(issueType);
+        issue.setStatusName("To Do");
+        issue.setStatusCategoryKey("new");
+        issue.setParentKey(parentKey);
+        issue.setSyncedAt(Instant.now());
+        return issue;
     }
 
     @SuppressWarnings("unchecked")

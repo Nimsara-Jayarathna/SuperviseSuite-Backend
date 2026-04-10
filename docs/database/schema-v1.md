@@ -1,6 +1,6 @@
-# Schema Reference (Current Through V15)
+# Schema Reference (Current Through V22)
 
-This document reflects the effective schema after applying migrations `V1` to `V15`.
+This document reflects the effective schema after applying migrations `V1` to `V22`.
 
 ## Core Tables
 
@@ -71,6 +71,30 @@ This document reflects the effective schema after applying migrations `V1` to `V
   - request token hash + expiry/usage
   - result token hash + expiry + acknowledgement timestamp
   - linked installation id (when resolved)
+
+## Jira Integration and Cached Analytics
+
+### `project_jira_integrations`
+
+- Per-project Jira workspace connection details.
+- Stores encrypted OAuth tokens and workspace metadata.
+- Includes refresh token support (`refresh_token_encrypted`, `token_expires_at`).
+- One active integration per project is enforced via partial unique index on `(project_id)` where `revoked_at IS NULL`.
+
+### `project_jira_oauth_states`
+
+- One-time Jira OAuth state records per project/user.
+- Stores hashed nonce (`state_nonce_hash`), expiry, used marker, and audit timestamps.
+
+### `project_jira_issues`
+
+- DB-backed Jira issue cache used by project-level Jira dashboards (health, sprint progress, workload, hierarchy).
+- Key columns include:
+  - identity/linkage: `project_id`, `issue_key`, `parent_key`, `parent_issue_type`
+  - issue metadata: `summary`, `issue_type`, `status_name`, `priority_name`, `assignee_display_name`, `story_points`, `due_date`
+  - sprint metadata: `sprint_id`, `sprint_name`, `sprint_state`, `sprint_start_date`, `sprint_end_date`
+  - sync/audit fields: `jira_created_at`, `jira_updated_at`, `synced_at`
+- Unique per `(project_id, issue_key)`.
 
 ## Legacy GitHub V1 Artifacts (Decommissioned)
 

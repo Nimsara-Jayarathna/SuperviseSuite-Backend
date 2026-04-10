@@ -2,15 +2,16 @@
 
 This log is aligned to migration files under `src/main/resources/db/migration`.
 
-## 2026-03-02 — Initial schema and auth token persistence
+## 2026-03-02 — Initial schema and auth foundation
 
 ### `V1__init_schema.sql`
 
 - Created core tables: `users`, `projects`, `project_members`.
 - Added role/member constraints and baseline indexes.
 
-### `V2__add_refresh_tokens.sql`
+### `V2__auth_schema.sql`
 
+- Extended `users` with auth/profile fields (`password_hash`, `first_name`, `last_name`, `registration_number`).
 - Added `refresh_tokens` table for refresh-token persistence/revocation.
 
 ## 2026-03-04 — Project domain expansion
@@ -101,6 +102,47 @@ This log is aligned to migration files under `src/main/resources/db/migration`.
   - `result_expires_at`
   - `result_acknowledged_at`
   - `installation_id`
+
+## 2026-04 Jira integration and cached analytics
+
+### `V16__project_jira_integrations.sql`
+
+- Added `project_jira_integrations` for per-project Jira workspace linkage and encrypted access token storage.
+- Enforced one active Jira integration per project (`revoked_at IS NULL` partial unique index).
+
+### `V17__project_jira_oauth_states.sql`
+
+- Added `project_jira_oauth_states` for secure one-time OAuth state tracking (hashed nonce, expiry, used markers).
+
+### `V18__project_jira_issue_cache.sql`
+
+- Added `project_jira_issues` cache table for Jira issue snapshots and analytics source data.
+- Includes hierarchy linkage key (`parent_key`) and issue metadata used by health/workload/sprint views.
+
+### `V19__ensure_project_jira_issue_cache_exists.sql`
+
+- Repair migration: idempotent `CREATE TABLE IF NOT EXISTS` for `project_jira_issues` and core indexes.
+- Protects environments where `V18` was marked applied but table creation did not land.
+
+### `V20__add_sprint_fields_to_jira_issues.sql`
+
+- Added sprint metadata columns to `project_jira_issues`:
+  - `sprint_id`
+  - `sprint_name`
+  - `sprint_state`
+  - `sprint_start_date`
+  - `sprint_end_date`
+- Added sprint lookup index on `(project_id, sprint_id)`.
+
+### `V21__add_parent_issue_type_to_jira_issues.sql`
+
+- Added nullable `parent_issue_type` to speed parent/subtask workload calculations without self-joins.
+
+### `V22__add_refresh_token_to_jira_integrations.sql`
+
+- Added Jira OAuth refresh-token support fields on `project_jira_integrations`:
+  - `refresh_token_encrypted`
+  - `token_expires_at`
 
 ## Rules for Next Migrations
 

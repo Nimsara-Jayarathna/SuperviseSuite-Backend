@@ -4,7 +4,7 @@ This directory tracks database structure and migration history for the backend.
 
 ## Structure
 
-- `schema-v1.md`: schema reference updated through GitHub integration v2 migrations (`V15`).
+- `schema-v1.md`: schema reference updated through Jira token-refresh support migration (`V22`).
 - `migrations.md`: chronological migration log and rules for future schema changes.
 
 ## Source of Truth
@@ -18,7 +18,7 @@ This directory tracks database structure and migration history for the backend.
 ## Current Baseline
 
 - Core domain initialized by `V1__init_schema.sql`.
-- Auth refresh-token support added by `V2__add_refresh_tokens.sql`.
+- Auth/user schema updates and refresh-token support added by `V2__auth_schema.sql`.
 - Project domain expanded by `V3__project_domain_expansion.sql` and `V4__project_leader_assignment.sql`.
 - GitHub integration v1 introduced by `V5__project_github_cache.sql` and `V6__github_app_installations.sql`.
 - GitHub integration v2 finalized by:
@@ -28,6 +28,14 @@ This directory tracks database structure and migration history for the backend.
   - `V13__denormalized_repository_link_fields.sql`
   - `V14__add_updated_at_to_access_sources.sql`
   - `V15__align_github_access_request_v2_with_result_tracking.sql`
+- Jira integration and cached analytics migrations:
+  - `V16__project_jira_integrations.sql`
+  - `V17__project_jira_oauth_states.sql`
+  - `V18__project_jira_issue_cache.sql`
+  - `V19__ensure_project_jira_issue_cache_exists.sql`
+  - `V20__add_sprint_fields_to_jira_issues.sql`
+  - `V21__add_parent_issue_type_to_jira_issues.sql`
+  - `V22__add_refresh_token_to_jira_integrations.sql`
 
 ## Change Workflow
 

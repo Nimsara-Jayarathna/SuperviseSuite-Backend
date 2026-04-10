@@ -4,6 +4,7 @@ import com.supervisesuite.backend.auth.dto.LoginRequest;
 import com.supervisesuite.backend.auth.dto.LoginResponse;
 import com.supervisesuite.backend.auth.dto.RegisterRequest;
 import com.supervisesuite.backend.auth.dto.RegisterResponse;
+import com.supervisesuite.backend.auth.dto.SupervisorRegisterRequest;
 import com.supervisesuite.backend.auth.security.TokenService;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.ConflictException;
@@ -92,6 +93,40 @@ class AuthServiceImpl implements AuthService {
             saved.getFirstName(),
             saved.getLastName(),
             saved.getRegistrationNumber(),
+            saved.getRole()
+        );
+    }
+
+    @Override
+    @Transactional
+    public RegisterResponse registerSupervisor(SupervisorRegisterRequest request) {
+        String normalizedEmail = NormalizationUtils.normalizeEmail(request.getEmail());
+
+        if (userRepository.existsByEmail(normalizedEmail)) {
+            throw new ConflictException("An account with this email already exists.");
+        }
+
+        User user = new User();
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
+        user.setEmail(normalizedEmail);
+        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        user.setRole(Roles.SUPERVISOR);
+        user.setCreatedAt(Instant.now());
+
+        User saved;
+        try {
+            saved = userRepository.save(user);
+        } catch (DataIntegrityViolationException ex) {
+            throw new ConflictException("Email already exists.");
+        }
+
+        return new RegisterResponse(
+            saved.getId(),
+            saved.getEmail(),
+            saved.getFirstName(),
+            saved.getLastName(),
+            null,
             saved.getRole()
         );
     }
