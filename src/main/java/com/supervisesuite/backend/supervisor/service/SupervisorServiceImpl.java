@@ -29,6 +29,7 @@ import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
 import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
+import com.supervisesuite.backend.projects.entity.ProjectJiraIssue;
 import com.supervisesuite.backend.projects.entity.ProjectJiraOAuthState;
 import com.supervisesuite.backend.projects.integration.github.GitHubInstallationDisconnectedException;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
@@ -82,6 +83,7 @@ import org.springframework.web.client.RestClientResponseException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
+import com.supervisesuite.backend.projects.dto.JiraHierarchyDto;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
 import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
@@ -1386,6 +1388,54 @@ class SupervisorServiceImpl implements SupervisorService {
                 .orElseThrow(EntityNotFoundException::new);
 
         return jiraWorkloadService.getWorkload(parsedProjectId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public JiraHierarchyDto getJiraHierarchy(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+
+        List<ProjectJiraIssue> issues = projectJiraIssueRepository.findAllByProjectId(parsedProjectId);
+
+        Map<String, JiraHierarchyDto.JiraHierarchyNodeDto> nodeMap = new LinkedHashMap<>();
+        for (ProjectJiraIssue issue : issues) {
+            JiraHierarchyDto.JiraHierarchyNodeDto node = new JiraHierarchyDto.JiraHierarchyNodeDto();
+            node.setIssueKey(issue.getIssueKey());
+            node.setSummary(issue.getSummary());
+            node.setIssueType(issue.getIssueType());
+            node.setStatus(issue.getStatusName());
+            node.setPriority(issue.getPriorityName());
+            node.setAssigneeDisplayName(issue.getAssigneeDisplayName());
+            node.setStoryPoints(issue.getStoryPoints() == null ? null : issue.getStoryPoints().intValue());
+            node.setChildren(new ArrayList<>());
+            nodeMap.put(issue.getIssueKey(), node);
+        }
+
+        List<JiraHierarchyDto.JiraHierarchyNodeDto> roots = new ArrayList<>();
+        List<JiraHierarchyDto.JiraHierarchyNodeDto> orphans = new ArrayList<>();
+
+        for (ProjectJiraIssue issue : issues) {
+            JiraHierarchyDto.JiraHierarchyNodeDto node = nodeMap.get(issue.getIssueKey());
+            String parentKey = issue.getParentKey();
+
+            if (parentKey == null || parentKey.isBlank()) {
+                roots.add(node);
+            } else if (nodeMap.containsKey(parentKey)) {
+                nodeMap.get(parentKey).getChildren().add(node);
+            } else {
+                orphans.add(node);
+            }
+        }
+
+        JiraHierarchyDto dto = new JiraHierarchyDto();
+        dto.setRoots(roots);
+        dto.setOrphans(orphans);
+        return dto;
     }
 
     @Override

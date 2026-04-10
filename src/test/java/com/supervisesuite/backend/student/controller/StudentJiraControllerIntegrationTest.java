@@ -9,11 +9,14 @@ import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
+import com.supervisesuite.backend.projects.entity.ProjectJiraIssue;
+import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +55,9 @@ class StudentJiraControllerIntegrationTest {
     private ProjectRepository projectRepository;
 
     @Autowired
+    private ProjectJiraIssueRepository projectJiraIssueRepository;
+
+    @Autowired
     private ProjectMemberRepository projectMemberRepository;
 
     @Autowired
@@ -61,6 +67,7 @@ class StudentJiraControllerIntegrationTest {
     void cleanUp() {
         projectMilestoneRepository.deleteAll();
         projectMemberRepository.deleteAll();
+        projectJiraIssueRepository.deleteAll();
         projectRepository.deleteAll();
         userRepository.deleteAll();
     }
@@ -101,12 +108,66 @@ class StudentJiraControllerIntegrationTest {
         assertThat(response.getBody().get("success")).isEqualTo(false);
     }
 
+    @Test
+    void getProjectJiraHierarchy_whenStudentIsMemberAndIssuesExist_returns200AndPayload() {
+        User supervisor = persistUser(Roles.SUPERVISOR, "supervisor-jira-hierarchy-student@university.ac.lk");
+        User student = persistUser(Roles.STUDENT, "student-jira-hierarchy@university.ac.lk");
+        Project project = persistProject(supervisor);
+        persistMembership(student.getId(), project.getId(), Roles.STUDENT);
+
+        projectJiraIssueRepository.save(persistIssue(project.getId(), "PRJ-1", null, "Epic"));
+        projectJiraIssueRepository.save(persistIssue(project.getId(), "PRJ-2", "PRJ-1", "Story"));
+
+        String token = jwtService.generateAccessToken(student);
+
+        ResponseEntity<Map> response = getProjectJiraHierarchy(project.getId(), token);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().get("success")).isEqualTo(true);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        assertThat(data).containsKeys("roots", "orphans");
+    }
+
+    @Test
+    void getProjectJiraHierarchy_whenStudentIsMemberAndNoIssues_returns200WithEmptyLists() {
+        User supervisor = persistUser(Roles.SUPERVISOR, "supervisor-jira-hierarchy-student-empty@university.ac.lk");
+        User student = persistUser(Roles.STUDENT, "student-jira-hierarchy-empty@university.ac.lk");
+        Project project = persistProject(supervisor);
+        persistMembership(student.getId(), project.getId(), Roles.STUDENT);
+
+        String token = jwtService.generateAccessToken(student);
+
+        ResponseEntity<Map> response = getProjectJiraHierarchy(project.getId(), token);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        assertThat(data).containsEntry("roots", List.of());
+        assertThat(data).containsEntry("orphans", List.of());
+    }
+
     private ResponseEntity<Map> getProjectJiraHealth(UUID projectId, String accessToken) {
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + accessToken);
 
         return restTemplate.exchange(
             "/api/student/projects/" + projectId + "/jira/health",
+            HttpMethod.GET,
+            new HttpEntity<>(headers),
+            Map.class
+        );
+    }
+
+    private ResponseEntity<Map> getProjectJiraHierarchy(UUID projectId, String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + accessToken);
+
+        return restTemplate.exchange(
+            "/api/student/projects/" + projectId + "/jira/hierarchy",
             HttpMethod.GET,
             new HttpEntity<>(headers),
             Map.class
@@ -142,5 +203,18 @@ class StudentJiraControllerIntegrationTest {
         member.setProjectId(projectId);
         member.setMemberRole(role);
         projectMemberRepository.save(member);
+    }
+
+    private ProjectJiraIssue persistIssue(UUID projectId, String issueKey, String parentKey, String issueType) {
+        ProjectJiraIssue issue = new ProjectJiraIssue();
+        issue.setProjectId(projectId);
+        issue.setIssueKey(issueKey);
+        issue.setSummary(issueKey + " summary");
+        issue.setIssueType(issueType);
+        issue.setStatusName("To Do");
+        issue.setStatusCategoryKey("new");
+        issue.setParentKey(parentKey);
+        issue.setSyncedAt(Instant.now());
+        return issue;
     }
 }

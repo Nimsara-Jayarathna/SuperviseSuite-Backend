@@ -3,6 +3,7 @@ package com.supervisesuite.backend.student.controller;
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
+import com.supervisesuite.backend.projects.dto.JiraHierarchyDto;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
 import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
@@ -135,5 +136,15 @@ public class StudentController {
     ) {
         JiraWorkloadDto data = studentService.getJiraWorkload(authentication.getName(), projectId);
         return apiResponseFactory.ok("Jira team workload loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/jira/hierarchy")
+    public ResponseEntity<ApiResponse<JiraHierarchyDto>> getProjectJiraHierarchy(
+        Authentication authentication,
+        @PathVariable String projectId,
+        HttpServletRequest request
+    ) {
+        JiraHierarchyDto data = studentService.getJiraHierarchy(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Jira hierarchy loaded.", data, request);
     }
 }
