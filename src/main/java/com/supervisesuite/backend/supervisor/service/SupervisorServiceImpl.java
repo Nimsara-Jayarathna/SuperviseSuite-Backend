@@ -3,6 +3,7 @@ package com.supervisesuite.backend.supervisor.service;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.ApiErrorDetail;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
+import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.common.util.NormalizationUtils;
 import com.supervisesuite.backend.memberships.entity.ProjectMember;
@@ -82,6 +83,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
+import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
 import com.supervisesuite.backend.projects.service.ProjectService;
 import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
@@ -94,6 +96,7 @@ import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService
 import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
 import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
 import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressService;
+import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
 
 @Service
 class SupervisorServiceImpl implements SupervisorService {
@@ -137,6 +140,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final JiraIssueSyncService jiraIssueSyncService;
     private final JiraHealthService jiraHealthService;
     private final JiraSprintProgressService jiraSprintProgressService;
+    private final JiraWorkloadService jiraWorkloadService;
     private final RestClient restClient;
     private final SecureRandom secureRandom = new SecureRandom();
     private final Map<String, PendingJiraWorkspaceSelection> pendingJiraWorkspaceSelections = new ConcurrentHashMap<>();
@@ -161,6 +165,7 @@ class SupervisorServiceImpl implements SupervisorService {
             JiraIssueSyncService jiraIssueSyncService,
             JiraHealthService jiraHealthService,
             JiraSprintProgressService jiraSprintProgressService,
+            JiraWorkloadService jiraWorkloadService,
             RestClient.Builder restClientBuilder) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
@@ -180,6 +185,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.jiraIssueSyncService = jiraIssueSyncService;
         this.jiraHealthService = jiraHealthService;
         this.jiraSprintProgressService = jiraSprintProgressService;
+        this.jiraWorkloadService = jiraWorkloadService;
         this.restClient = restClientBuilder.build();
     }
 
@@ -980,7 +986,7 @@ class SupervisorServiceImpl implements SupervisorService {
         String url = authTargetUrl
             + "?audience=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getAudience()), "api.atlassian.com"))
             + "&client_id=" + urlencode(clientId)
-            + "&scope=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getScope()), "read:jira-user read:jira-work"))
+            + "&scope=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getScope()), "read:jira-user read:jira-work offline_access"))
             + "&redirect_uri=" + urlencode(redirectUri)
             + "&state=" + urlencode(state)
             + "&response_type=code&prompt=consent";
@@ -1094,6 +1100,12 @@ class SupervisorServiceImpl implements SupervisorService {
             throw new ValidationException("jiraOAuth", "Atlassian token exchange returned no access token.");
         }
         String scopes = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("scope")));
+        String refreshToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("refresh_token")));
+        Number expiresInSecs = tokenResponse == null || tokenResponse.get("expires_in") == null ? null : (Number) tokenResponse.get("expires_in");
+        Instant tokenExpiresAt = null;
+        if (expiresInSecs != null) {
+             tokenExpiresAt = Instant.now().plusSeconds(expiresInSecs.longValue());
+        }
 
         List<Map<String, Object>> resources;
         try {
@@ -1124,6 +1136,8 @@ class SupervisorServiceImpl implements SupervisorService {
                             project.getId(),
                             supervisor.getId(),
                             accessToken,
+                            refreshToken,
+                            tokenExpiresAt,
                             scopes,
                             workspaceOptions,
                             Instant.now().plusSeconds(JIRA_WORKSPACE_SELECTION_TTL_SECONDS)));
@@ -1137,7 +1151,7 @@ class SupervisorServiceImpl implements SupervisorService {
         }
 
         Map<String, Object> workspace = resources.get(0);
-        return persistWorkspaceIntegration(supervisor, project, accessToken, scopes, workspace);
+        return persistWorkspaceIntegration(supervisor, project, accessToken, refreshToken, tokenExpiresAt, scopes, workspace);
     }
 
     private JiraOAuthCompleteResultDto completeJiraOAuthWithWorkspaceSelection(
@@ -1187,6 +1201,8 @@ class SupervisorServiceImpl implements SupervisorService {
                 supervisor,
                 project,
                 pending.accessToken(),
+                pending.refreshToken(),
+                pending.tokenExpiresAt(),
                 pending.scopes(),
                 workspace);
 
@@ -1198,6 +1214,8 @@ class SupervisorServiceImpl implements SupervisorService {
             User supervisor,
             Project project,
             String accessToken,
+            String refreshToken,
+            Instant tokenExpiresAt,
             String scopes,
             Map<String, Object> workspace) {
         String cloudId = trimToNull(workspace == null ? null : (String) workspace.get("id"));
@@ -1222,6 +1240,8 @@ class SupervisorServiceImpl implements SupervisorService {
         integration.setWorkspaceName(workspaceName);
         integration.setWorkspaceUrl(workspaceUrl);
         integration.setAccessTokenEncrypted(jiraTokenEncryptionService.encrypt(accessToken));
+        integration.setRefreshTokenEncrypted(refreshToken == null || "null".equalsIgnoreCase(refreshToken) ? null : jiraTokenEncryptionService.encrypt(refreshToken));
+        integration.setTokenExpiresAt(tokenExpiresAt);
         integration.setScope(scopes);
         integration.setConnectedBy(supervisor.getId());
         integration.setConnectedAt(now);
@@ -1269,6 +1289,8 @@ class SupervisorServiceImpl implements SupervisorService {
             UUID projectId,
             UUID userId,
             String accessToken,
+            String refreshToken,
+            Instant tokenExpiresAt,
             String scopes,
             List<JiraOAuthCompleteResultDto.WorkspaceOption> workspaceOptions,
             Instant expiresAt) {
@@ -1354,6 +1376,19 @@ class SupervisorServiceImpl implements SupervisorService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public JiraWorkloadDto getJiraWorkload(String authenticatedUserId, String projectId) {
+        User supervisor = resolveSupervisor(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        projectRepository
+                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
+                .orElseThrow(EntityNotFoundException::new);
+
+        return jiraWorkloadService.getWorkload(parsedProjectId);
+    }
+
+    @Override
     @Transactional
     public JiraHealthDto refreshProjectJiraData(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
@@ -1372,9 +1407,80 @@ class SupervisorServiceImpl implements SupervisorService {
                     List.of(new ApiErrorDetail("jira", "Jira is not connected for this project.")));
         }
 
+        Instant now = Instant.now();
+        if (activeIntegration.getTokenExpiresAt() != null && now.isAfter(activeIntegration.getTokenExpiresAt().minusSeconds(60))) {
+            String refreshTokenEncrypted = activeIntegration.getRefreshTokenEncrypted();
+            if (refreshTokenEncrypted != null && !refreshTokenEncrypted.isBlank()) {
+                try {
+                    String refreshToken = jiraTokenEncryptionService.decrypt(refreshTokenEncrypted);
+                    String clientId = trimToNull(jiraProperties.getClientId());
+                    String clientSecret = trimToNull(jiraProperties.getClientSecret());
+                    String tokenTargetUrl = defaultIfBlank(
+                            trimToNull(jiraProperties.getTokenTargetUrl()),
+                            "https://auth.atlassian.com/oauth/token");
+
+                    if (clientId != null && clientSecret != null) {
+                        Map<String, Object> tokenRequest = new LinkedHashMap<>();
+                        tokenRequest.put("grant_type", "refresh_token");
+                        tokenRequest.put("client_id", clientId);
+                        tokenRequest.put("client_secret", clientSecret);
+                        tokenRequest.put("refresh_token", refreshToken);
+
+                        Map<?, ?> tokenResponse = restClient.post()
+                                .uri(tokenTargetUrl)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .accept(MediaType.APPLICATION_JSON)
+                                .body(tokenRequest)
+                                .retrieve()
+                                .body(Map.class);
+
+                        String newAccessToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("access_token")));
+                        String newRefreshToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("refresh_token")));
+                        Number expiresInSecs = tokenResponse == null || tokenResponse.get("expires_in") == null ? null : (Number) tokenResponse.get("expires_in");
+                        
+                        if (newAccessToken != null && !"null".equalsIgnoreCase(newAccessToken)) {
+                            activeIntegration.setAccessTokenEncrypted(jiraTokenEncryptionService.encrypt(newAccessToken));
+                            if (newRefreshToken != null && !"null".equalsIgnoreCase(newRefreshToken)) {
+                                activeIntegration.setRefreshTokenEncrypted(jiraTokenEncryptionService.encrypt(newRefreshToken));
+                            }
+                            if (expiresInSecs != null) {
+                                activeIntegration.setTokenExpiresAt(Instant.now().plusSeconds(expiresInSecs.longValue()));
+                            }
+                            projectJiraIntegrationRepository.saveAndFlush(activeIntegration);
+                        }
+                    }
+                } catch (RestClientResponseException ex) {
+                    // Atlassian explicitly rejected the refresh token (e.g. invalid_grant,
+                    // revoked token, expired refresh token). This is a permanent auth failure —
+                    // the only resolution is reconnecting Jira.
+                    log.warn("Jira token refresh rejected by Atlassian for project {}. "
+                                    + "Status: {}, Body: {}",
+                            project.getId(),
+                            ex.getStatusCode(),
+                            ex.getResponseBodyAsString());
+                    throw new ServiceUnavailableException(
+                            "Jira access token has expired and Atlassian rejected the refresh "
+                            + "request. Please reconnect Jira from the Integrations tab.");
+                } catch (ResourceAccessException ex) {
+                    // Transient network error reaching Atlassian token endpoint.
+                    // Fall through and attempt the sync with the existing token —
+                    // Atlassian may still honour it if it hasn't fully expired on their side.
+                    log.warn("Jira token refresh network error for project {} — "
+                                    + "proceeding with existing token. Error: {}",
+                            project.getId(), ex.getMessage());
+                } catch (Exception ex) {
+                    // Unexpected failure (e.g. decryption error, null pointer).
+                    log.warn("Jira token refresh unexpected error for project {}. Error: {}",
+                            project.getId(), ex.getMessage());
+                    throw new ServiceUnavailableException(
+                            "Jira access token has expired and could not be refreshed. "
+                            + "Please reconnect Jira from the Integrations tab.");
+                }
+            }
+        }
+
         jiraIssueSyncService.syncProjectIssues(project.getId());
 
-        Instant now = Instant.now();
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
         projectRepository.save(project);

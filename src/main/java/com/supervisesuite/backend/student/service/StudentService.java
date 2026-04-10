@@ -5,6 +5,7 @@ import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import java.util.List;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
+import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 
@@ -38,4 +39,6 @@ public interface StudentService {
     JiraHealthDto getJiraHealthOverview(String authenticatedUserId, String projectId);
 
     JiraSprintProgressDto getJiraSprintProgress(String authenticatedUserId, String projectId);
+
+    JiraWorkloadDto getJiraWorkload(String authenticatedUserId, String projectId);
 }

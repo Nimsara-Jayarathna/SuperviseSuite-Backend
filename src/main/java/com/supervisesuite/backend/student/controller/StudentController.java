@@ -4,6 +4,7 @@ import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
+import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
@@ -124,5 +125,15 @@ public class StudentController {
     ) {
         JiraSprintProgressDto data = studentService.getJiraSprintProgress(authentication.getName(), projectId);
         return apiResponseFactory.ok("Jira sprint progress loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/jira/workload")
+    public ResponseEntity<ApiResponse<JiraWorkloadDto>> getProjectJiraWorkload(
+        Authentication authentication,
+        @PathVariable String projectId,
+        HttpServletRequest request
+    ) {
+        JiraWorkloadDto data = studentService.getJiraWorkload(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Jira team workload loaded.", data, request);
     }
 }

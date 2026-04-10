@@ -28,6 +28,7 @@ import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
+import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import java.util.List;
 
 public interface SupervisorService {
@@ -170,6 +171,8 @@ public interface SupervisorService {
     JiraHealthDto getJiraHealthOverview(String authenticatedUserId, String projectId);
 
     JiraSprintProgressDto getJiraSprintProgress(String authenticatedUserId, String projectId);
+
+    JiraWorkloadDto getJiraWorkload(String authenticatedUserId, String projectId);
 
     JiraHealthDto refreshProjectJiraData(String authenticatedUserId, String projectId);
 }

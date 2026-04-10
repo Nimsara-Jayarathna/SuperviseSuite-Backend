@@ -47,7 +47,8 @@ class JiraIssueSyncServiceImplTest {
             jiraIssueRepository,
             jiraClient,
             jiraTokenEncryptionService,
-            jiraIssueMapper
+            jiraIssueMapper,
+            new JiraIssueSyncProcessor()
         );
     }
 

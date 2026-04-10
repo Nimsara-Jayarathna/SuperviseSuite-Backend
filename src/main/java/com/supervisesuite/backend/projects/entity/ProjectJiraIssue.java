@@ -61,6 +61,16 @@ public class ProjectJiraIssue {
     @Column(length = 32)
     private String parentKey;
 
+    /**
+     * The issue type of this issue's parent (e.g. "Story", "Epic").
+     * Populated during sync for issues that have a non-null {@link #parentKey}.
+     * Used by the workload service to identify parent issues that should be
+     * excluded from direct attribution when their subtasks carry their own assignees.
+     * Null for top-level issues and for rows synced before V21 migration.
+     */
+    @Column(length = 64)
+    private String parentIssueType;
+
     private Long sprintId;
 
     @Column(length = 255)

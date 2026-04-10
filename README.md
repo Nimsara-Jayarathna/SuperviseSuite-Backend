@@ -20,6 +20,7 @@ Backend fix documents:
 - `docs/backend/major-fixes-scrum-80-github-app-dashboard.md`
 - `docs/backend/major-fixes-scrum-81-multiple-github-repositories.md`
 - `docs/backend/recent-changes-2026-03-05.md`
+- `docs/backend/recent-changes-2026-04-10.md`
 
 Database documentation:
 
