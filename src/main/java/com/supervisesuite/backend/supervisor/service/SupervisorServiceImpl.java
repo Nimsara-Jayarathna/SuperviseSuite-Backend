@@ -3,6 +3,7 @@ package com.supervisesuite.backend.supervisor.service;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.ApiErrorDetail;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
+import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.common.util.NormalizationUtils;
 import com.supervisesuite.backend.memberships.entity.ProjectMember;
@@ -1448,8 +1449,32 @@ class SupervisorServiceImpl implements SupervisorService {
                             projectJiraIntegrationRepository.saveAndFlush(activeIntegration);
                         }
                     }
+                } catch (RestClientResponseException ex) {
+                    // Atlassian explicitly rejected the refresh token (e.g. invalid_grant,
+                    // revoked token, expired refresh token). This is a permanent auth failure —
+                    // the only resolution is reconnecting Jira.
+                    log.warn("Jira token refresh rejected by Atlassian for project {}. "
+                                    + "Status: {}, Body: {}",
+                            project.getId(),
+                            ex.getStatusCode(),
+                            ex.getResponseBodyAsString());
+                    throw new ServiceUnavailableException(
+                            "Jira access token has expired and Atlassian rejected the refresh "
+                            + "request. Please reconnect Jira from the Integrations tab.");
+                } catch (ResourceAccessException ex) {
+                    // Transient network error reaching Atlassian token endpoint.
+                    // Fall through and attempt the sync with the existing token —
+                    // Atlassian may still honour it if it hasn't fully expired on their side.
+                    log.warn("Jira token refresh network error for project {} — "
+                                    + "proceeding with existing token. Error: {}",
+                            project.getId(), ex.getMessage());
                 } catch (Exception ex) {
-                    log.warn("Background Jira refresh token exchange failed for project {}. Will attempt sync with existing token anyway. Error: {}", project.getId(), ex.getMessage());
+                    // Unexpected failure (e.g. decryption error, null pointer).
+                    log.warn("Jira token refresh unexpected error for project {}. Error: {}",
+                            project.getId(), ex.getMessage());
+                    throw new ServiceUnavailableException(
+                            "Jira access token has expired and could not be refreshed. "
+                            + "Please reconnect Jira from the Integrations tab.");
                 }
             }
         }
