@@ -2,7 +2,7 @@
 
 Core SuperviseSuite backend built with Spring Boot. Provides REST APIs for authentication/authorization, user and project management, and project membership/assignment workflows. Owns the main database model and supports future expansion for analytics, reporting, and external tool connectivity.
 
-Current scope includes GitHub integration v2 (SCRUM-81): project-scoped authorization, explicit repository linking, request-access continuation flow, callback-result acknowledgement, and repository-link based sync/preview APIs.
+Current scope includes GitHub integration v2 (SCRUM-81) and Jira integration: project-scoped authorization, explicit repository linking, request-access continuation flow, callback-result acknowledgement, repository-link based sync/preview APIs, and Jira OAuth + cached project analytics endpoints (health, sprint progress, team workload, hierarchy view, refresh).
 
 ## API Documentation
 
@@ -16,11 +16,14 @@ Current API references:
 
 Backend fix documents:
 
-- `docs/backend/major-fixes-scrum-97-supervisor-workflow.md`
-- `docs/backend/major-fixes-scrum-80-github-app-dashboard.md`
-- `docs/backend/major-fixes-scrum-81-multiple-github-repositories.md`
-- `docs/backend/recent-changes-2026-03-05.md`
-- `docs/backend/recent-changes-2026-04-10.md`
+- `docs/major-fixes-scrum-97-supervisor-workflow.md`
+- `docs/major-fixes-scrum-80-github-app-dashboard.md`
+- `docs/major-fixes-scrum-81-multiple-github-repositories.md`
+- `docs/major-fixes-scrum-83-us-203-view-sprint-progress-dashboard.md`
+- `docs/major-fixes-scrum-84-us-204-sprint-progress-velocity.md`
+- `docs/recent-changes-2026-03-05.md`
+- `docs/recent-changes-2026-04-08.md`
+- `docs/recent-changes-2026-04-09.md`
 
 Database documentation:
 
@@ -91,6 +94,17 @@ The backend reads DB and auth config from environment variables:
 - `GITHUB_REPOSITORY_REFRESH_CRON` — cron expression for scheduled refresh time (default: `0 0 0 * * *`; set `0 0 12 * * *` for daily 12:00)
 - `GITHUB_REPOSITORY_REFRESH_ZONE` — timezone for refresh cron evaluation (default: `UTC`)
 - `GITHUB_REPOSITORY_REFRESH_BATCH_SIZE` — max linked repositories refreshed per cron run (default: `50`)
+- `GITHUB_SYNC_MAX_COMMIT_PAGES` — cap for GitHub commit pagination during sync (default: `5`)
+- `ATLASSIAN_CLIENT_ID` — Atlassian OAuth client id
+- `ATLASSIAN_CLIENT_SECRET` — Atlassian OAuth client secret
+- `ATLASSIAN_REDIRECT_URI` — OAuth redirect URI registered in Atlassian developer console (used by `/api/supervisor/jira/oauth/complete`)
+- `ATLASSIAN_SCOPE` — Jira scopes requested during OAuth (default: `read:jira-user read:jira-work`)
+- `ATLASSIAN_AUDIENCE` — OAuth audience for Atlassian API token exchange (default: `api.atlassian.com`)
+- `ATLASSIAN_AUTH_TARGET_URL` — Atlassian authorize endpoint (default: `https://auth.atlassian.com/authorize`)
+- `ATLASSIAN_TOKEN_TARGET_URL` — Atlassian token endpoint (default: `https://auth.atlassian.com/oauth/token`)
+- `ATLASSIAN_OAUTH_STATE` — state key prefix for Jira OAuth flow (default: `supervisesuite_jira_state`)
+- `ATLASSIAN_OAUTH_STATE_TTL_SECONDS` — OAuth state expiry in seconds (default: `900`)
+- `ATLASSIAN_TOKEN_ENCRYPTION_SECRET` — secret used to encrypt stored Jira tokens (defaults to `JWT_SECRET` when not set)
 - `ATLASSIAN_ANALYTICS_RECENT_SPRINTS_LIMIT` — number of recent sprints used in sprint analytics/trend calculations (default: `3`)
 - `ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS` — consecutive negative-net weeks required to flag backlog growth (default: `2`)
 - `ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES` — comma-separated Jira priority names treated as high priority (default: `High,Highest`)
@@ -124,6 +138,17 @@ GITHUB_REPOSITORY_REFRESH_JOB_ENABLED=true
 GITHUB_REPOSITORY_REFRESH_CRON=0 0 0 * * *
 GITHUB_REPOSITORY_REFRESH_ZONE=UTC
 GITHUB_REPOSITORY_REFRESH_BATCH_SIZE=50
+GITHUB_SYNC_MAX_COMMIT_PAGES=5
+ATLASSIAN_CLIENT_ID=<your-atlassian-client-id>
+ATLASSIAN_CLIENT_SECRET=<your-atlassian-client-secret>
+ATLASSIAN_REDIRECT_URI=http://localhost:5173/jira/callback
+ATLASSIAN_SCOPE=read:jira-user read:jira-work
+ATLASSIAN_AUDIENCE=api.atlassian.com
+ATLASSIAN_AUTH_TARGET_URL=https://auth.atlassian.com/authorize
+ATLASSIAN_TOKEN_TARGET_URL=https://auth.atlassian.com/oauth/token
+ATLASSIAN_OAUTH_STATE=supervisesuite_jira_state
+ATLASSIAN_OAUTH_STATE_TTL_SECONDS=900
+ATLASSIAN_TOKEN_ENCRYPTION_SECRET=<optional; defaults to JWT_SECRET>
 ATLASSIAN_ANALYTICS_RECENT_SPRINTS_LIMIT=3
 ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS=2
 ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES=High,Highest
@@ -146,7 +171,7 @@ ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES=Bug
 - Migration scripts are in `src/main/resources/db/migration`.
 - On each backend start, Flyway checks the schema history table and applies only pending versions.
 - `V1__init_schema.sql` creates the base tables for `users`, `projects`, and `project_members`.
-- `V2__add_refresh_tokens.sql` adds the `refresh_tokens` table for httpOnly cookie session management.
+- `V2__auth_schema.sql` adds auth/profile fields on `users` and the `refresh_tokens` table for httpOnly cookie session management.
 - SCRUM-81 GitHub integration v2 migrations:
   - `V10__github_integration_v2.sql`
     - introduces v2 tables for access sources, repositories, project links, setup states, access requests, and link-level commits/contributors
