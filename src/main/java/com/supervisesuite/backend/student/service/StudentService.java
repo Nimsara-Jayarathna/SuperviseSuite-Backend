@@ -1,5 +1,6 @@
 package com.supervisesuite.backend.student.service;
 
+import com.supervisesuite.backend.projects.dto.JiraIssueSummaryDto;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import java.util.List;

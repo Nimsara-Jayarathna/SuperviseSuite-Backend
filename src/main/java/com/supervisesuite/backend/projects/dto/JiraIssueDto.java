@@ -219,6 +219,18 @@ public class JiraIssueDto {
     @Setter
     @NoArgsConstructor
     @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class SprintField {
+        private Long id;
+        private String name;
+        private String state;
+        private String startDate;
+        private String endDate;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Parent {
         private String key;
     }

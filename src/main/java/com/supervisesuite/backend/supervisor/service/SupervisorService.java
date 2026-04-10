@@ -25,6 +25,7 @@ import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto;
 import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
+import com.supervisesuite.backend.projects.dto.JiraIssueSummaryDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
