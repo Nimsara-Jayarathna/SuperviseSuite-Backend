@@ -31,7 +31,8 @@ class JiraSprintProgressServiceImplTest {
 
     @BeforeEach
     void setUp() {
-                service = new JiraSprintProgressServiceImpl(jiraIssueRepository, jiraHealthClassifier, new JiraProperties());
+        JiraSprintProgressCalculator calculator = new JiraSprintProgressCalculator(jiraHealthClassifier);
+        service = new JiraSprintProgressServiceImpl(jiraIssueRepository, calculator);
     }
 
     @Test

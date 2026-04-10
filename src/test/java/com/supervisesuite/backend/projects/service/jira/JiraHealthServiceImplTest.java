@@ -34,7 +34,8 @@ class JiraHealthServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new JiraHealthServiceImpl(jiraIssueRepository, jiraHealthClassifier);
+        JiraHealthMetricsAggregator aggregator = new JiraHealthMetricsAggregator(jiraHealthClassifier);
+        service = new JiraHealthServiceImpl(jiraIssueRepository, aggregator);
     }
 
     @Test
