@@ -16,6 +16,7 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto;
 import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
+import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.projects.service.ProjectService;
@@ -61,6 +62,8 @@ class StudentServiceImplTest {
     @Mock
     private ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
     @Mock
+    private ProjectJiraIssueRepository projectJiraIssueRepository;
+    @Mock
     private JiraHealthService jiraHealthService;
     @Mock
     private JiraSprintProgressService jiraSprintProgressService;
@@ -82,6 +85,7 @@ class StudentServiceImplTest {
             projectService,
             repositoryLinkService,
             projectJiraIntegrationRepository,
+            projectJiraIssueRepository,
             jiraHealthService,
             jiraSprintProgressService,
             jiraWorkloadService

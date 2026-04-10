@@ -6,9 +6,11 @@ import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
+import com.supervisesuite.backend.projects.entity.ProjectJiraIssue;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
+import com.supervisesuite.backend.projects.dto.JiraHierarchyDto;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
 import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
@@ -16,6 +18,7 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
+import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
@@ -29,6 +32,8 @@ import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressServic
 import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +52,7 @@ class StudentServiceImpl implements StudentService {
     private final ProjectService projectService;
     private final RepositoryLinkService repositoryLinkService;
     private final ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
+    private final ProjectJiraIssueRepository projectJiraIssueRepository;
     private final JiraHealthService jiraHealthService;
     private final JiraSprintProgressService jiraSprintProgressService;
     private final JiraWorkloadService jiraWorkloadService;
@@ -59,6 +65,7 @@ class StudentServiceImpl implements StudentService {
          ProjectService projectService,
          RepositoryLinkService repositoryLinkService,
          ProjectJiraIntegrationRepository projectJiraIntegrationRepository,
+         ProjectJiraIssueRepository projectJiraIssueRepository,
             JiraHealthService jiraHealthService,
             JiraSprintProgressService jiraSprintProgressService,
             JiraWorkloadService jiraWorkloadService
@@ -70,6 +77,7 @@ class StudentServiceImpl implements StudentService {
          this.projectService = projectService;
          this.repositoryLinkService = repositoryLinkService;
          this.projectJiraIntegrationRepository = projectJiraIntegrationRepository;
+         this.projectJiraIssueRepository = projectJiraIssueRepository;
          this.jiraHealthService = jiraHealthService;
          this.jiraSprintProgressService = jiraSprintProgressService;
          this.jiraWorkloadService = jiraWorkloadService;
@@ -312,6 +320,59 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
         }
 
         return jiraWorkloadService.getWorkload(parsedProjectId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public JiraHierarchyDto getJiraHierarchy(String authenticatedUserId, String projectId) {
+        User student = resolveStudent(authenticatedUserId);
+        UUID parsedProjectId = parseProjectId(projectId);
+
+        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
+            student.getId(),
+            parsedProjectId,
+            Roles.STUDENT
+        );
+        if (!hasAccess) {
+            throw new EntityNotFoundException();
+        }
+
+        List<ProjectJiraIssue> issues = projectJiraIssueRepository.findAllByProjectId(parsedProjectId);
+
+        Map<String, JiraHierarchyDto.JiraHierarchyNodeDto> nodeMap = new LinkedHashMap<>();
+        for (ProjectJiraIssue issue : issues) {
+            JiraHierarchyDto.JiraHierarchyNodeDto node = new JiraHierarchyDto.JiraHierarchyNodeDto();
+            node.setIssueKey(issue.getIssueKey());
+            node.setSummary(issue.getSummary());
+            node.setIssueType(issue.getIssueType());
+            node.setStatus(issue.getStatusName());
+            node.setPriority(issue.getPriorityName());
+            node.setAssigneeDisplayName(issue.getAssigneeDisplayName());
+            node.setStoryPoints(issue.getStoryPoints() == null ? null : issue.getStoryPoints().intValue());
+            node.setChildren(new ArrayList<>());
+            nodeMap.put(issue.getIssueKey(), node);
+        }
+
+        List<JiraHierarchyDto.JiraHierarchyNodeDto> roots = new ArrayList<>();
+        List<JiraHierarchyDto.JiraHierarchyNodeDto> orphans = new ArrayList<>();
+
+        for (ProjectJiraIssue issue : issues) {
+            JiraHierarchyDto.JiraHierarchyNodeDto node = nodeMap.get(issue.getIssueKey());
+            String parentKey = issue.getParentKey();
+
+            if (parentKey == null || parentKey.isBlank()) {
+                roots.add(node);
+            } else if (nodeMap.containsKey(parentKey)) {
+                nodeMap.get(parentKey).getChildren().add(node);
+            } else {
+                orphans.add(node);
+            }
+        }
+
+        JiraHierarchyDto dto = new JiraHierarchyDto();
+        dto.setRoots(roots);
+        dto.setOrphans(orphans);
+        return dto;
     }
 
     private User resolveStudent(String authenticatedUserId) {

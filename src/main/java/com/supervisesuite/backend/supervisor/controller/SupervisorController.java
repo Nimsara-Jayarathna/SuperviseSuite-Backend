@@ -13,6 +13,7 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
+import com.supervisesuite.backend.projects.dto.JiraHierarchyDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
@@ -337,6 +338,16 @@ public class SupervisorController {
     ) {
         JiraWorkloadDto data = supervisorService.getJiraWorkload(authentication.getName(), projectId);
         return apiResponseFactory.ok("Jira team workload loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/jira/hierarchy")
+    public ResponseEntity<ApiResponse<JiraHierarchyDto>> getProjectJiraHierarchy(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        JiraHierarchyDto data = supervisorService.getJiraHierarchy(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Jira hierarchy loaded.", data, request);
     }
 
     @PostMapping("/projects/{projectId}/jira/refresh")

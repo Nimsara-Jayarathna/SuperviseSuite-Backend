@@ -36,6 +36,7 @@ All endpoints in this document:
 - `GET /api/supervisor/projects/{projectId}/jira/health`
 - `GET /api/supervisor/projects/{projectId}/jira/sprint-progress`
 - `GET /api/supervisor/projects/{projectId}/jira/workload`
+- `GET /api/supervisor/projects/{projectId}/jira/hierarchy`
 - `POST /api/supervisor/projects/{projectId}/jira/refresh`
 - `POST /api/supervisor/projects/{projectId}/members`
 - `POST /api/supervisor/projects/{projectId}/milestones`
@@ -562,6 +563,34 @@ Returns team workload distribution derived from cached Jira issues for the proje
 - `dueDateAvailable` (boolean)
 - `imbalanceDetected` (boolean)
 - `imbalanceMessage` (nullable string)
+
+---
+
+## GET /api/supervisor/projects/{projectId}/jira/hierarchy
+
+Returns all cached Jira issues for the project structured as a hierarchy tree.
+
+### Response fields
+
+- `roots[]` - top-level issue nodes (Epics, or issues with no parent in cache)
+- `orphans[]` - issues whose parentKey references an issue not in this project's cache
+
+Each node in `roots[]`, `orphans[]`, and every nested `children[]` array has:
+
+- `issueKey`
+- `summary`
+- `issueType` (`"Epic"`, `"Story"`, `"Task"`, `"Bug"`, `"Subtask"`, etc.)
+- `status`
+- `priority`
+- `assigneeDisplayName` (nullable)
+- `storyPoints` (nullable)
+- `children[]` - recursively the same node shape
+
+### Notes
+
+- Data is served from DB-backed Jira issue cache; no live Jira API call is made.
+- Hierarchy depth is unbounded but in practice is 3 levels (Epic -> Story/Task/Bug -> Subtask).
+- If Jira is not connected or no issues are cached, `roots` and `orphans` are both empty arrays.
 
 ---
 
