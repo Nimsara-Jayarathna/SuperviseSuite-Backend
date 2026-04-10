@@ -34,6 +34,8 @@ All endpoints in this document:
 - `POST /api/supervisor/jira/oauth/complete`
 - `POST /api/supervisor/projects/{projectId}/jira/disconnect`
 - `GET /api/supervisor/projects/{projectId}/jira/health`
+- `GET /api/supervisor/projects/{projectId}/jira/sprint-progress`
+- `GET /api/supervisor/projects/{projectId}/jira/workload`
 - `POST /api/supervisor/projects/{projectId}/jira/refresh`
 - `POST /api/supervisor/projects/{projectId}/members`
 - `POST /api/supervisor/projects/{projectId}/milestones`
@@ -528,6 +530,38 @@ Returns Jira health overview derived from cached Jira issues for the project.
 - served from backend Jira cache table (`project_jira_issues`)
 - `lastSyncedAt = null` indicates first sync not completed yet
 - health/sprint heuristics used by Jira tab data are config-backed via `app.jira.analytics.*`
+
+---
+
+## GET /api/supervisor/projects/{projectId}/jira/sprint-progress
+
+Returns sprint progress metrics (active sprint, recent sprint velocity) derived from cached Jira issues for the project.
+
+### Response fields
+
+- `activeSprint`:
+  - `sprintId`, `sprintName`, `sprintState`, `startDate`, `endDate`, `sprintStartIssueCount`, `completionPercent`, `issuesDone`, `issuesTotal`, `sprintPointsDone`, `sprintPointsTotal`, `sprintPointsAvailable`
+- `recentSprints[]`:
+  - same fields as `activeSprint`
+- `velocityWeeks[]`:
+  - `weekStart`, `created`, `resolved`, `averageCycleDays`
+- `backlogGrowing` (boolean)
+- `sprintDataAvailable` (boolean)
+
+---
+
+## GET /api/supervisor/projects/{projectId}/jira/workload
+
+Returns team workload distribution derived from cached Jira issues for the project.
+
+### Response fields
+
+- `members[]`:
+  - `accountId`, `displayName`, `assigned`, `completed`, `inProgress`, `overdue`, `openIssues`, `storyPointsAssigned`, `storyPointsCompleted`, `completionRate`, `lastActiveDate`, `issueTypeCounts`
+- `unassignedCount`
+- `dueDateAvailable` (boolean)
+- `imbalanceDetected` (boolean)
+- `imbalanceMessage` (nullable string)
 
 ---
 

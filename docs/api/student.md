@@ -17,6 +17,8 @@ All endpoints in this document:
 - [GET /api/student/projects/{projectId}/github/activity?page=...&size=...](#get-apistudentprojectsprojectidgithubactivitypagesize)
 - [GET /api/student/projects/{projectId}/github/contributors?page=...&size=...](#get-apistudentprojectsprojectidgithubcontributorspagesize)
 - [GET /api/student/projects/{projectId}/jira/health](#get-apistudentprojectsprojectidjirahealth)
+- [GET /api/student/projects/{projectId}/jira/sprint-progress](#get-apistudentprojectsprojectidjirasprint-progress)
+- [GET /api/student/projects/{projectId}/jira/workload](#get-apistudentprojectsprojectidjiraworkload)
 
 ---
 
@@ -256,3 +258,31 @@ Returns read-only Jira health overview for the student Jira tab.
 - student must be assigned to project with `member_role = STUDENT`
 - endpoint is read-only for student role
 - response is computed from backend Jira cache data
+
+---
+
+## GET /api/student/projects/{projectId}/jira/sprint-progress
+
+Returns read-only sprint progress metrics for the student Jira tab.
+
+### Response fields
+
+- `activeSprint` (`sprintId`, `sprintName`, `sprintState`, etc.)
+- `recentSprints[]`
+- `velocityWeeks[]` (`weekStart`, `created`, `resolved`, `averageCycleDays`)
+- `backlogGrowing` (boolean)
+- `sprintDataAvailable` (boolean)
+
+---
+
+## GET /api/student/projects/{projectId}/jira/workload
+
+Returns read-only team workload distribution for the student Jira tab.
+
+### Response fields
+
+- `members[]` (`accountId`, `displayName`, `assigned`, `completed`, `inProgress`, `overdue`, `openIssues`, `storyPointsAssigned`, `storyPointsCompleted`, `completionRate`, `lastActiveDate`, `issueTypeCounts`)
+- `unassignedCount`
+- `dueDateAvailable` (boolean)
+- `imbalanceDetected` (boolean)
+- `imbalanceMessage` (nullable string)
