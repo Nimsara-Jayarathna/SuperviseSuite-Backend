@@ -4,13 +4,13 @@ import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.projectfiles.dto.ConfirmUploadRequest;
 import com.supervisesuite.backend.projectfiles.dto.ProjectFileDto;
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projectfiles.dto.UploadUrlRequest;
 import com.supervisesuite.backend.projectfiles.dto.UploadUrlResponse;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileAccessRole;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -35,12 +35,12 @@ public class StudentProjectFilesController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ProjectFileDto>>> list(
+    public ResponseEntity<ApiResponse<ProjectFileListDto>> list(
         Authentication authentication,
         @PathVariable String projectId,
         HttpServletRequest request
     ) {
-        List<ProjectFileDto> data = projectFileService.listFiles(
+        ProjectFileListDto data = projectFileService.listFiles(
             authentication.getName(),
             projectId,
             ProjectFileAccessRole.STUDENT

@@ -1,11 +1,13 @@
 package com.supervisesuite.backend.projectfiles.service;
 
+import com.supervisesuite.backend.config.ProjectFileProperties;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projectfiles.dto.ConfirmUploadRequest;
 import com.supervisesuite.backend.projectfiles.dto.ProjectFileDto;
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projectfiles.dto.UploadUrlRequest;
 import com.supervisesuite.backend.projectfiles.dto.UploadUrlResponse;
 import com.supervisesuite.backend.projectfiles.entity.ProjectFile;
@@ -28,13 +30,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class ProjectFileServiceImpl implements ProjectFileService {
 
-    private static final long MAX_FILE_SIZE_BYTES = 10L * 1024L * 1024L;
-    private static final Set<String> ALLOWED_FILE_TYPES = Set.of(
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "application/zip",
-        "application/x-zip-compressed"
+    private static final Map<String, String> MIME_TO_EXTENSION = Map.of(
+        "application/pdf", "pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation", "pptx",
+        "application/zip", "zip",
+        "application/x-zip-compressed", "zip"
     );
 
     private final UserRepository userRepository;
@@ -42,24 +43,27 @@ class ProjectFileServiceImpl implements ProjectFileService {
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectFileRepository projectFileRepository;
     private final StorageService storageService;
+    private final ProjectFileProperties projectFileProperties;
 
     ProjectFileServiceImpl(
         UserRepository userRepository,
         ProjectRepository projectRepository,
         ProjectMemberRepository projectMemberRepository,
         ProjectFileRepository projectFileRepository,
-        StorageService storageService
+        StorageService storageService,
+        ProjectFileProperties projectFileProperties
     ) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.projectFileRepository = projectFileRepository;
         this.storageService = storageService;
+        this.projectFileProperties = projectFileProperties;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProjectFileDto> listFiles(String authenticatedUserId, String projectId, ProjectFileAccessRole accessRole) {
+    public ProjectFileListDto listFiles(String authenticatedUserId, String projectId, ProjectFileAccessRole accessRole) {
         User user = resolveAuthenticatedUser(authenticatedUserId, accessRole);
         UUID parsedProjectId = parseProjectId(projectId);
         requireProjectAccess(user, parsedProjectId, accessRole);
@@ -69,10 +73,15 @@ class ProjectFileServiceImpl implements ProjectFileService {
         userRepository.findAllById(files.stream().map(ProjectFile::getUploadedBy).distinct().toList())
             .forEach(uploadedByUser -> uploadedByRoleByUserId.put(uploadedByUser.getId(), uploadedByUser.getRole()));
 
-        return files
+        List<ProjectFileDto> fileDtos = files
             .stream()
             .map(projectFile -> toDto(projectFile, uploadedByRoleByUserId.get(projectFile.getUploadedBy())))
             .toList();
+
+        return new ProjectFileListDto(fileDtos, new ProjectFileListDto.Config(
+            resolvedMaxFileSizeBytes(),
+            resolvedAllowedTypes()
+        ));
     }
 
     @Override
@@ -89,7 +98,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
 
         String fileName = requireTrimmed(request.getFileName(), "fileName");
         String contentType = requireTrimmed(request.getContentType(), "contentType");
-        validateAllowedFileType(contentType, "contentType");
+        validateAllowedFileType(fileName, contentType, "contentType");
         String s3Key = generateS3Key(parsedProjectId, fileName);
         String presignedUrl = storageService.getUploadUrl(s3Key, contentType);
         return new UploadUrlResponse(presignedUrl, s3Key);
@@ -110,7 +119,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
         String s3Key = requireTrimmed(request.getS3Key(), "s3Key");
         String fileName = requireTrimmed(request.getFileName(), "fileName");
         String fileType = requireTrimmed(request.getFileType(), "fileType");
-        validateAllowedFileType(fileType, "fileType");
+        validateAllowedFileType(fileName, fileType, "fileType");
         Long fileSize = request.getFileSize();
 
         if (!s3Key.startsWith("projects/" + parsedProjectId + "/")) {
@@ -119,8 +128,8 @@ class ProjectFileServiceImpl implements ProjectFileService {
         if (fileSize == null || fileSize <= 0) {
             throw new ValidationException("fileSize", "fileSize must be greater than zero.");
         }
-        if (fileSize > MAX_FILE_SIZE_BYTES) {
-            throw new ValidationException("fileSize", "fileSize must be 10 MB or less.");
+        if (fileSize > resolvedMaxFileSizeBytes()) {
+            throw new ValidationException("fileSize", "fileSize exceeds the maximum allowed size.");
         }
 
         ProjectFile projectFile = new ProjectFile();
@@ -238,11 +247,58 @@ class ProjectFileServiceImpl implements ProjectFileService {
         return trimmed;
     }
 
-    private void validateAllowedFileType(String value, String field) {
-        String normalized = value.trim().toLowerCase();
-        if (!ALLOWED_FILE_TYPES.contains(normalized)) {
-            throw new ValidationException(field, "Only PDF, DOCX, PPTX, and ZIP files are allowed.");
+    private void validateAllowedFileType(String fileName, String value, String field) {
+        String detectedType = detectAllowedType(fileName, value);
+        if (detectedType == null || !resolvedAllowedTypesSet().contains(detectedType)) {
+            throw new ValidationException(field, "File type is not allowed.");
         }
+    }
+
+    private String detectAllowedType(String fileName, String mimeType) {
+        String normalizedMimeType = mimeType == null ? "" : mimeType.trim().toLowerCase();
+        String byMimeType = MIME_TO_EXTENSION.get(normalizedMimeType);
+        String byExtension = extractExtension(fileName);
+        if (byMimeType != null) {
+            return byMimeType;
+        }
+        return byExtension;
+    }
+
+    private String extractExtension(String fileName) {
+        if (fileName == null) {
+            return null;
+        }
+        int dotIndex = fileName.lastIndexOf('.');
+        if (dotIndex < 0 || dotIndex == fileName.length() - 1) {
+            return null;
+        }
+        return fileName.substring(dotIndex + 1).trim().toLowerCase();
+    }
+
+    private long resolvedMaxFileSizeBytes() {
+        return Math.max(1L, projectFileProperties.getMaxFileSizeBytes());
+    }
+
+    private List<String> resolvedAllowedTypes() {
+        if (projectFileProperties.getAllowedTypes() == null) {
+            return List.of();
+        }
+        return projectFileProperties.getAllowedTypes()
+            .stream()
+            .filter(type -> type != null && !type.isBlank())
+            .map(type -> type.trim().toLowerCase())
+            .distinct()
+            .toList();
+    }
+
+    private Set<String> resolvedAllowedTypesSet() {
+        return projectFileProperties.getAllowedTypes() == null
+            ? Set.of()
+            : projectFileProperties.getAllowedTypes()
+                .stream()
+                .filter(type -> type != null && !type.isBlank())
+                .map(type -> type.trim().toLowerCase())
+                .collect(java.util.stream.Collectors.toSet());
     }
 
     private String generateS3Key(UUID projectId, String fileName) {

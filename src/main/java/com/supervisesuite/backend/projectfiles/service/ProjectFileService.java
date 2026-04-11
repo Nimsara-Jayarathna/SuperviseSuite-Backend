@@ -2,12 +2,12 @@ package com.supervisesuite.backend.projectfiles.service;
 
 import com.supervisesuite.backend.projectfiles.dto.ConfirmUploadRequest;
 import com.supervisesuite.backend.projectfiles.dto.ProjectFileDto;
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projectfiles.dto.UploadUrlRequest;
 import com.supervisesuite.backend.projectfiles.dto.UploadUrlResponse;
-import java.util.List;
 
 public interface ProjectFileService {
-    List<ProjectFileDto> listFiles(String authenticatedUserId, String projectId, ProjectFileAccessRole accessRole);
+    ProjectFileListDto listFiles(String authenticatedUserId, String projectId, ProjectFileAccessRole accessRole);
 
     UploadUrlResponse getUploadUrl(
         String authenticatedUserId,
