@@ -10,6 +10,7 @@ public record ProjectFileDto(
     Long fileSize,
     UUID uploadedBy,
     String uploadedByName,
+    String uploadedByRole,
     Instant createdAt,
     Instant updatedAt
 ) {}

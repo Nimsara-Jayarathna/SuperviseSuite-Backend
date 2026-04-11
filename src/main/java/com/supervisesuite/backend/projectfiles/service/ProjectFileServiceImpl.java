@@ -17,7 +17,9 @@ import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,9 +56,14 @@ class ProjectFileServiceImpl implements ProjectFileService {
         UUID parsedProjectId = parseProjectId(projectId);
         requireProjectAccess(user, parsedProjectId, accessRole);
 
-        return projectFileRepository.findByProjectIdAndDeletedAtIsNullOrderByCreatedAtDesc(parsedProjectId)
+        List<ProjectFile> files = projectFileRepository.findByProjectIdAndDeletedAtIsNullOrderByCreatedAtDesc(parsedProjectId);
+        Map<UUID, String> uploadedByRoleByUserId = new HashMap<>();
+        userRepository.findAllById(files.stream().map(ProjectFile::getUploadedBy).distinct().toList())
+            .forEach(uploadedByUser -> uploadedByRoleByUserId.put(uploadedByUser.getId(), uploadedByUser.getRole()));
+
+        return files
             .stream()
-            .map(this::toDto)
+            .map(projectFile -> toDto(projectFile, uploadedByRoleByUserId.get(projectFile.getUploadedBy())))
             .toList();
     }
 
@@ -116,7 +123,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
         projectFile.setUploadedByName(resolveUserDisplayName(user));
 
         ProjectFile saved = projectFileRepository.save(projectFile);
-        return toDto(saved);
+        return toDto(saved, user.getRole());
     }
 
     @Override
@@ -235,7 +242,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
         return fullName.isEmpty() ? user.getEmail() : fullName;
     }
 
-    private ProjectFileDto toDto(ProjectFile projectFile) {
+    private ProjectFileDto toDto(ProjectFile projectFile, String uploadedByRole) {
         return new ProjectFileDto(
             projectFile.getId(),
             projectFile.getFileName(),
@@ -243,6 +250,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
             projectFile.getFileSize(),
             projectFile.getUploadedBy(),
             projectFile.getUploadedByName(),
+            Roles.SUPERVISOR.equals(uploadedByRole) ? Roles.SUPERVISOR : Roles.STUDENT,
             projectFile.getCreatedAt(),
             projectFile.getUpdatedAt()
         );
