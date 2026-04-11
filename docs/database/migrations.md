@@ -144,6 +144,22 @@ This log is aligned to migration files under `src/main/resources/db/migration`.
   - `refresh_token_encrypted`
   - `token_expires_at`
 
+## 2026-04 Project file attachments
+
+### `V23__project_files.sql`
+
+- Added `project_files` table with:
+  - linkage fields (`id`, `project_id`)
+  - storage pointer and metadata (`s3_key`, `file_name`, `file_type`, `file_size`)
+  - uploader and audit fields (`uploaded_by`, `uploaded_by_name`, `created_at`, `updated_at`, `deleted_at`)
+- Added constraints:
+  - FK to `projects` (`ON DELETE CASCADE`)
+  - FK to `users` (`uploaded_by`)
+  - check constraint `file_size > 0`
+- Added indexes:
+  - `(project_id, created_at DESC)` for ordered list queries
+  - `(project_id, deleted_at)` for active-row filtering
+
 ## Rules for Next Migrations
 
 - Use versioned files: `V{number}__{description}.sql`.
