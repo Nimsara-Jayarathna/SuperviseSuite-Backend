@@ -40,6 +40,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectFileServiceImplTest {
@@ -82,36 +83,42 @@ class ProjectFileServiceImplTest {
                 storageService,
                 projectFileProperties);
 
+        projectId = UUID.randomUUID();
+        project = new Project();
+        project.setId(projectId);
+
         supervisor = new User();
-        supervisor.setId(UUID.randomUnique());
+        supervisor.setId(UUID.randomUUID());
         supervisor.setRole(Roles.SUPERVISOR);
         supervisor.setFirstName("Super");
         supervisor.setLastName("Visor");
 
         student = new User();
-        student.setId(UUID.randomUnique());
+        student.setId(UUID.randomUUID());
         student.setRole(Roles.STUDENT);
         student.setFirstName("Stu");
         student.setLastName("Dent");
 
-        projectId = UUID.randomUnique();
-        project = new Project();
-        project.setId(projectId);
-        project.setSupervisorId(supervisor.getId());
+        project.setSupervisor(supervisor);
+        lenient().when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId()))
+                .thenReturn(Optional.of(project));
+        lenient().when(projectRepository.findByIdAndDeletedAtIsNull(projectId)).thenReturn(Optional.of(project));
+        lenient().when(userRepository.findById(any())).thenReturn(Optional.of(supervisor));
 
-        when(projectFileProperties.getMaxFileSizeBytes()).thenReturn((long) (10 * 1024 * 1024)); // 10MB
-        when(projectFileProperties.getMaxFileNameLength()).thenReturn(100);
-        when(projectFileProperties.getAllowedTypes()).thenReturn(Set.of("pdf", "zip"));
-        when(projectFileProperties.getPresignedUrlExpirySeconds()).thenReturn(3600);
+        lenient().when(projectFileProperties.getMaxFileSizeBytes()).thenReturn((long) (10 * 1024 * 1024)); // 10MB
+        lenient().when(projectFileProperties.getMaxFileNameLength()).thenReturn(100);
+        lenient().when(projectFileProperties.getAllowedTypes()).thenReturn(List.of("pdf", "zip"));
+        lenient().when(projectFileProperties.getPresignedUrlExpirySeconds()).thenReturn(3600);
     }
 
     @Test
     void listFiles_whenSupervisor_shouldReturnFiles() {
         when(userRepository.findById(supervisor.getId())).thenReturn(Optional.of(supervisor));
-        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId()))
+                .thenReturn(Optional.of(project));
 
         ProjectFile file = new ProjectFile();
-        file.setId(UUID.randomUnique());
+        file.setId(UUID.randomUUID());
         file.setProjectId(projectId);
         file.setUploadedBy(supervisor.getId());
         file.setFileName("test.pdf");
@@ -134,8 +141,9 @@ class ProjectFileServiceImplTest {
     @Test
     void listFiles_whenStudentInProject_shouldReturnFiles() {
         when(userRepository.findById(student.getId())).thenReturn(Optional.of(student));
-        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
-        when(projectMemberRepository.existsByProjectIdAndUserId(projectId, student.getId())).thenReturn(true);
+        when(projectRepository.findByIdAndDeletedAtIsNull(projectId)).thenReturn(Optional.of(project));
+        when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(student.getId(), projectId, Roles.STUDENT))
+                .thenReturn(true);
 
         when(projectFileRepository.findByProjectIdAndDeletedAtIsNullOrderByCreatedAtDesc(projectId))
                 .thenReturn(List.of());
@@ -151,8 +159,8 @@ class ProjectFileServiceImplTest {
     @Test
     void listFiles_whenStudentNotInProject_shouldThrowNotFound() {
         when(userRepository.findById(student.getId())).thenReturn(Optional.of(student));
-        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
-        when(projectMemberRepository.existsByProjectIdAndUserId(projectId, student.getId())).thenReturn(false);
+        when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(student.getId(), projectId, Roles.STUDENT))
+                .thenReturn(false);
 
         assertThatThrownBy(() -> projectFileService.listFiles(
                 student.getId().toString(),
@@ -163,7 +171,8 @@ class ProjectFileServiceImplTest {
     @Test
     void getUploadUrl_shouldReturnPresignedUrl() {
         when(userRepository.findById(supervisor.getId())).thenReturn(Optional.of(supervisor));
-        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId()))
+                .thenReturn(Optional.of(project));
 
         UploadUrlRequest request = new UploadUrlRequest();
         request.setFileName("document.pdf");
@@ -184,17 +193,18 @@ class ProjectFileServiceImplTest {
     @Test
     void confirmUpload_shouldSaveFile() {
         when(userRepository.findById(supervisor.getId())).thenReturn(Optional.of(supervisor));
-        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId()))
+                .thenReturn(Optional.of(project));
 
         ConfirmUploadRequest request = new ConfirmUploadRequest();
         request.setFileName("submission.pdf");
         request.setFileType("application/pdf");
         request.setFileSize(1024L);
         // A valid UUID string is required for s3Key mapping currently
-        request.setS3Key(UUID.randomUnique().toString());
+        request.setS3Key(UUID.randomUUID().toString());
 
         ProjectFile savedFile = new ProjectFile();
-        savedFile.setId(UUID.randomUnique());
+        savedFile.setId(UUID.randomUUID());
         savedFile.setProjectId(projectId);
         savedFile.setFileName("submission.pdf");
         savedFile.setFileType("pdf");
@@ -219,27 +229,29 @@ class ProjectFileServiceImplTest {
     @Test
     void confirmUpload_whenFileTooLarge_shouldThrowValidationException() {
         when(userRepository.findById(supervisor.getId())).thenReturn(Optional.of(supervisor));
-        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId()))
+                .thenReturn(Optional.of(project));
 
         ConfirmUploadRequest request = new ConfirmUploadRequest();
         request.setFileName("submission.pdf");
         request.setFileType("application/pdf");
         request.setFileSize(20 * 1024 * 1024L); // 20MB, implies > 10MB limit
-        request.setS3Key(UUID.randomUnique().toString());
+        request.setS3Key(UUID.randomUUID().toString());
 
         assertThatThrownBy(() -> projectFileService.confirmUpload(
                 supervisor.getId().toString(),
                 projectId.toString(),
                 ProjectFileAccessRole.SUPERVISOR,
-                request)).isInstanceOf(ValidationException.class).hasMessageContaining("fileSize");
+                request)).isInstanceOf(ValidationException.class).hasMessageContaining("Validation failed");
     }
 
     @Test
     void getDownloadUrl_shouldReturnDownloadUrl() {
         when(userRepository.findById(supervisor.getId())).thenReturn(Optional.of(supervisor));
-        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId()))
+                .thenReturn(Optional.of(project));
 
-        UUID fileId = UUID.randomUnique();
+        UUID fileId = UUID.randomUUID();
         ProjectFile file = new ProjectFile();
         file.setS3Key("some-s3-key");
 
@@ -259,9 +271,10 @@ class ProjectFileServiceImplTest {
     @Test
     void deleteFile_shouldSoftDeleteAndRemoveFromS3() {
         when(userRepository.findById(supervisor.getId())).thenReturn(Optional.of(supervisor));
-        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId()))
+                .thenReturn(Optional.of(project));
 
-        UUID fileId = UUID.randomUnique();
+        UUID fileId = UUID.randomUUID();
         ProjectFile file = new ProjectFile();
         file.setS3Key("some-s3-key");
 

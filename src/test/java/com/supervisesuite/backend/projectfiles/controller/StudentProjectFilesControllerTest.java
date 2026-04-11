@@ -1,5 +1,7 @@
 package com.supervisesuite.backend.projectfiles.controller;
 
+import org.springframework.context.annotation.Import;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.projectfiles.dto.ConfirmUploadRequest;
@@ -20,7 +22,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -32,6 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@Import(com.supervisesuite.backend.TestcontainersConfiguration.class)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 public class StudentProjectFilesControllerTest {
@@ -52,11 +54,11 @@ public class StudentProjectFilesControllerTest {
         String projectId = UUID.randomUUID().toString();
 
         ProjectFileListDto.Config config = new ProjectFileListDto.Config(
-                10485760L, 50, Set.of("pdf", "zip"), 300);
+                10485760L, 50, List.of("pdf", "zip"), 300);
 
         ProjectFileListDto responseDto = new ProjectFileListDto(List.of(
-                new ProjectFileDto(UUID.randomUUID(), "student-file.pdf", "pdf", 1024L, "s3-key", Roles.STUDENT, null,
-                        "Jane Doe", null)),
+                new ProjectFileDto(UUID.randomUUID(), "student-file.pdf", "pdf", 1024L, UUID.randomUUID(), "Jane Doe",
+                        Roles.STUDENT, null, null)),
                 config);
 
         when(projectFileService.listFiles(eq(studentId), eq(projectId), eq(ProjectFileAccessRole.STUDENT)))
@@ -103,8 +105,8 @@ public class StudentProjectFilesControllerTest {
         req.setFileSize(4096L);
         req.setS3Key("s3-key-student");
 
-        ProjectFileDto dto = new ProjectFileDto(UUID.randomUUID(), "submission.zip", "zip", 4096L, "s3-key-student",
-                Roles.STUDENT, null, "Jane Doe", null);
+        ProjectFileDto dto = new ProjectFileDto(UUID.randomUUID(), "submission.zip", "zip", 4096L, UUID.randomUUID(),
+                "Jane Doe", Roles.STUDENT, null, null);
         when(projectFileService.confirmUpload(eq(studentId), eq(projectId), eq(ProjectFileAccessRole.STUDENT),
                 any(ConfirmUploadRequest.class)))
                 .thenReturn(dto);
@@ -128,8 +130,8 @@ public class StudentProjectFilesControllerTest {
                 eq(ProjectFileAccessRole.STUDENT)))
                 .thenReturn("https://student.download.url");
 
-        mockMvc.perform(get("/api/student/projects/{projectId}/files/{fileId}/download", projectId, fileId))
+        mockMvc.perform(get("/api/student/projects/{projectId}/files/{fileId}/download-url", projectId, fileId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.downloadUrl").value("https://student.download.url"));
+                .andExpect(jsonPath("$.data").value("https://student.download.url"));
     }
 }
