@@ -34,7 +34,7 @@ jobs:
           cache: maven
 
       - name: Run tests
-        run: ./mvnw -q test
+        run: ./mvnw test -e
 
       - name: Package application
         run: ./mvnw -q -DskipTests package
