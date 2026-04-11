@@ -13,6 +13,7 @@ concurrency:
 permissions:
   contents: read
   packages: write
+  checks: write
 
 env:
   APP_NAME: supervisesuite-be
