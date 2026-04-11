@@ -17,6 +17,14 @@ public interface EmailService {
     void sendWelcomeEmail(String to, String name);
 
     /**
+     * Sends a one-time password email for registration verification.
+     *
+     * @param to Recipient email address.
+     * @param otp Six-digit verification code.
+     */
+    void sendOtpEmail(String to, String otp);
+
+    /**
      * Sends a security alert for a password change.
      *
      * @param to   Recipient email address.

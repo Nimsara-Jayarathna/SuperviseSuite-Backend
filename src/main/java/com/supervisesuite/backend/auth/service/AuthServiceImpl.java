@@ -2,18 +2,11 @@ package com.supervisesuite.backend.auth.service;
 
 import com.supervisesuite.backend.auth.dto.LoginRequest;
 import com.supervisesuite.backend.auth.dto.LoginResponse;
-import com.supervisesuite.backend.auth.dto.RegisterRequest;
-import com.supervisesuite.backend.auth.dto.RegisterResponse;
-import com.supervisesuite.backend.auth.dto.SupervisorRegisterRequest;
 import com.supervisesuite.backend.auth.security.TokenService;
-import com.supervisesuite.backend.common.constants.Roles;
-import com.supervisesuite.backend.common.error.ConflictException;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.util.NormalizationUtils;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
-import java.time.Instant;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,94 +34,6 @@ class AuthServiceImpl implements AuthService {
         this.passwordEncoder = passwordEncoder;
         this.refreshTokenService = refreshTokenService;
         this.tokenService = tokenService;
-    }
-
-    /**
-     * {@inheritDoc}
-     *
-     * <p>Execution steps:
-     * <ol>
-     *   <li>Check email uniqueness — throws {@link com.supervisesuite.backend.common.error.ConflictException} on duplicate.</li>
-     *   <li>Check registration number uniqueness — throws {@link com.supervisesuite.backend.common.error.ConflictException} on duplicate.</li>
-     *   <li>Hash the plain-text password with BCrypt via {@link PasswordEncoder}.</li>
-     *   <li>Build and persist a {@link com.supervisesuite.backend.users.entity.User} with role {@code STUDENT}.</li>
-     *   <li>Return a {@link RegisterResponse} with the saved user's public fields.</li>
-     * </ol>
-     */
-    @Override
-    @Transactional
-    public RegisterResponse registerStudent(RegisterRequest request) {
-        String normalizedEmail = NormalizationUtils.normalizeEmail(request.getEmail());
-        String normalizedRegistrationNumber = NormalizationUtils.normalizeRegistrationNumber(request.getRegistrationNumber());
-
-        if (userRepository.existsByEmail(normalizedEmail)) {
-            throw new ConflictException("An account with this email already exists.");
-        }
-
-        if (userRepository.existsByRegistrationNumber(normalizedRegistrationNumber)) {
-            throw new ConflictException("An account with this registration number already exists.");
-        }
-
-        User user = new User();
-        user.setFirstName(request.getFirstName());
-        user.setLastName(request.getLastName());
-        user.setEmail(normalizedEmail);
-        user.setRegistrationNumber(normalizedRegistrationNumber);
-        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        user.setRole(Roles.STUDENT);
-        user.setCreatedAt(Instant.now());
-
-        User saved;
-        try {
-            saved = userRepository.save(user);
-        } catch (DataIntegrityViolationException ex) {
-            // Guards against a race condition where two concurrent registrations pass
-            // the pre-checks above but one loses the DB uniqueness constraint race.
-            throw new ConflictException("Email or registration number already exists.");
-        }
-
-        return new RegisterResponse(
-            saved.getId(),
-            saved.getEmail(),
-            saved.getFirstName(),
-            saved.getLastName(),
-            saved.getRegistrationNumber(),
-            saved.getRole()
-        );
-    }
-
-    @Override
-    @Transactional
-    public RegisterResponse registerSupervisor(SupervisorRegisterRequest request) {
-        String normalizedEmail = NormalizationUtils.normalizeEmail(request.getEmail());
-
-        if (userRepository.existsByEmail(normalizedEmail)) {
-            throw new ConflictException("An account with this email already exists.");
-        }
-
-        User user = new User();
-        user.setFirstName(request.getFirstName());
-        user.setLastName(request.getLastName());
-        user.setEmail(normalizedEmail);
-        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        user.setRole(Roles.SUPERVISOR);
-        user.setCreatedAt(Instant.now());
-
-        User saved;
-        try {
-            saved = userRepository.save(user);
-        } catch (DataIntegrityViolationException ex) {
-            throw new ConflictException("Email already exists.");
-        }
-
-        return new RegisterResponse(
-            saved.getId(),
-            saved.getEmail(),
-            saved.getFirstName(),
-            saved.getLastName(),
-            null,
-            saved.getRole()
-        );
     }
 
     /**

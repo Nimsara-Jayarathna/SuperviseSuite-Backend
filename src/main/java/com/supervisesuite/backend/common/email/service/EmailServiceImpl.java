@@ -24,7 +24,7 @@ public class EmailServiceImpl implements EmailService {
     @Override
     public void sendWelcomeEmail(String to, String name) {
         log.info("Preparing welcome email for: {}", to);
-        
+
         Context context = new Context();
         context.setVariables(Map.of(
             "name", name,
@@ -33,6 +33,20 @@ public class EmailServiceImpl implements EmailService {
 
         String htmlContent = templateEngine.process("email/welcome", context);
         emailProvider.send(to, "Welcome to SuperviseSuite!", htmlContent);
+    }
+
+    @Override
+    public void sendOtpEmail(String to, String otp) {
+        log.info("Preparing OTP email for: {}", to);
+
+        Context context = new Context();
+        context.setVariables(Map.of(
+            "otp", otp,
+            "currentYear", Year.now().getValue()
+        ));
+
+        String htmlContent = templateEngine.process("email/otp-verification", context);
+        emailProvider.send(to, "Your SuperviseSuite verification code", htmlContent);
     }
 
     @Override
