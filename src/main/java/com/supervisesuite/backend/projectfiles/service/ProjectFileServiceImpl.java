@@ -80,6 +80,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
 
         return new ProjectFileListDto(fileDtos, new ProjectFileListDto.Config(
             resolvedMaxFileSizeBytes(),
+            resolvedMaxFileNameLength(),
             resolvedAllowedTypes(),
             resolvedPresignedUrlExpirySeconds()
         ));
@@ -98,6 +99,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
         requireProjectAccess(user, parsedProjectId, accessRole);
 
         String fileName = requireTrimmed(request.getFileName(), "fileName");
+        validateFileNameLength(fileName, "fileName");
         String contentType = requireTrimmed(request.getContentType(), "contentType");
         validateAllowedFileType(fileName, contentType, "contentType");
         String s3Key = generateS3Key();
@@ -119,6 +121,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
 
         String s3Key = requireTrimmed(request.getS3Key(), "s3Key");
         String fileName = requireTrimmed(request.getFileName(), "fileName");
+        validateFileNameLength(fileName, "fileName");
         String fileType = requireTrimmed(request.getFileType(), "fileType");
         String normalizedFileType = resolveAndValidateAllowedFileType(fileName, fileType, "fileType");
         Long fileSize = request.getFileSize();
@@ -248,6 +251,13 @@ class ProjectFileServiceImpl implements ProjectFileService {
         return trimmed;
     }
 
+    private void validateFileNameLength(String fileName, String field) {
+        int maxFileNameLength = resolvedMaxFileNameLength();
+        if (fileName.length() > maxFileNameLength) {
+            throw new ValidationException(field, "fileName cannot exceed " + maxFileNameLength + " characters.");
+        }
+    }
+
     private void validateAllowedFileType(String fileName, String value, String field) {
         resolveAndValidateAllowedFileType(fileName, value, field);
     }
@@ -286,6 +296,10 @@ class ProjectFileServiceImpl implements ProjectFileService {
 
     private long resolvedMaxFileSizeBytes() {
         return Math.max(1L, projectFileProperties.getMaxFileSizeBytes());
+    }
+
+    private int resolvedMaxFileNameLength() {
+        return Math.max(1, projectFileProperties.getMaxFileNameLength());
     }
 
     private List<String> resolvedAllowedTypes() {

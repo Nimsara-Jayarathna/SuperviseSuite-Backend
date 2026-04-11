@@ -17,6 +17,7 @@ public class ProjectFileProperties {
     private String awsAccessKeyId;
     private String awsSecretAccessKey;
     private long maxFileSizeBytes = 10L * 1024L * 1024L;
+    private int maxFileNameLength = 50;
     private List<String> allowedTypes = new ArrayList<>(List.of("pdf", "docx", "pptx", "zip"));
     private int presignedUrlExpirySeconds = 300;
 }
