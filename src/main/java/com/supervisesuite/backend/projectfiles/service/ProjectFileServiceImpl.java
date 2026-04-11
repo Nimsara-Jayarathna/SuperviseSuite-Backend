@@ -106,8 +106,6 @@ class ProjectFileServiceImpl implements ProjectFileService {
             throw new ValidationException("fileSize", "fileSize exceeds the maximum allowed size.");
         }
 
-        Instant now = Instant.now();
-
         ProjectFile projectFile = new ProjectFile();
         projectFile.setProjectId(parsedProjectId);
         projectFile.setS3Key(s3Key);
@@ -116,8 +114,6 @@ class ProjectFileServiceImpl implements ProjectFileService {
         projectFile.setFileSize(fileSize);
         projectFile.setUploadedBy(user.getId());
         projectFile.setUploadedByName(resolveUserDisplayName(user));
-        projectFile.setCreatedAt(now);
-        projectFile.setUpdatedAt(now);
 
         ProjectFile saved = projectFileRepository.save(projectFile);
         return toDto(saved);
@@ -155,9 +151,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
             .findByIdAndProjectIdAndDeletedAtIsNull(parsedFileId, parsedProjectId)
             .orElseThrow(EntityNotFoundException::new);
 
-        Instant now = Instant.now();
-        projectFile.setDeletedAt(now);
-        projectFile.setUpdatedAt(now);
+        projectFile.setDeletedAt(Instant.now());
         storageService.delete(projectFile.getS3Key());
         projectFileRepository.save(projectFile);
     }
