@@ -1,6 +1,7 @@
 package com.supervisesuite.backend.storage;
 
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
+import com.supervisesuite.backend.config.ProjectFileProperties;
 import java.time.Duration;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -16,12 +17,16 @@ public class S3StorageService implements StorageService {
 
     private final S3Presigner s3Presigner;
     private final S3Client s3Client;
-    private final S3Properties s3Properties;
+    private final ProjectFileProperties projectFileProperties;
 
-    public S3StorageService(S3Presigner s3Presigner, S3Client s3Client, S3Properties s3Properties) {
+    public S3StorageService(
+        S3Presigner s3Presigner,
+        S3Client s3Client,
+        ProjectFileProperties projectFileProperties
+    ) {
         this.s3Presigner = s3Presigner;
         this.s3Client = s3Client;
-        this.s3Properties = s3Properties;
+        this.projectFileProperties = projectFileProperties;
     }
 
     @Override
@@ -35,7 +40,7 @@ public class S3StorageService implements StorageService {
                 .build();
 
             PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
-                .signatureDuration(Duration.ofSeconds(Math.max(60, s3Properties.getUploadUrlTtlSeconds())))
+                .signatureDuration(Duration.ofSeconds(Math.max(60, projectFileProperties.getPresignedUrlExpirySeconds())))
                 .putObjectRequest(putObjectRequest)
                 .build();
 
@@ -55,7 +60,7 @@ public class S3StorageService implements StorageService {
                 .build();
 
             GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                .signatureDuration(Duration.ofSeconds(Math.max(60, s3Properties.getDownloadUrlTtlSeconds())))
+                .signatureDuration(Duration.ofSeconds(Math.max(60, projectFileProperties.getPresignedUrlExpirySeconds())))
                 .getObjectRequest(getObjectRequest)
                 .build();
 
@@ -76,7 +81,7 @@ public class S3StorageService implements StorageService {
     }
 
     private String requiredBucket() {
-        String bucket = s3Properties.getBucketName();
+        String bucket = projectFileProperties.getBucketName();
         if (bucket == null || bucket.isBlank()) {
             throw new ServiceUnavailableException("Storage bucket is not configured.");
         }

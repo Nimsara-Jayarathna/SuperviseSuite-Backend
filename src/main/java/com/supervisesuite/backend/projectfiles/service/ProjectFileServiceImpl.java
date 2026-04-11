@@ -80,7 +80,8 @@ class ProjectFileServiceImpl implements ProjectFileService {
 
         return new ProjectFileListDto(fileDtos, new ProjectFileListDto.Config(
             resolvedMaxFileSizeBytes(),
-            resolvedAllowedTypes()
+            resolvedAllowedTypes(),
+            resolvedPresignedUrlExpirySeconds()
         ));
     }
 
@@ -99,7 +100,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
         String fileName = requireTrimmed(request.getFileName(), "fileName");
         String contentType = requireTrimmed(request.getContentType(), "contentType");
         validateAllowedFileType(fileName, contentType, "contentType");
-        String s3Key = generateS3Key(parsedProjectId, fileName);
+        String s3Key = generateS3Key();
         String presignedUrl = storageService.getUploadUrl(s3Key, contentType);
         return new UploadUrlResponse(presignedUrl, s3Key);
     }
@@ -119,10 +120,10 @@ class ProjectFileServiceImpl implements ProjectFileService {
         String s3Key = requireTrimmed(request.getS3Key(), "s3Key");
         String fileName = requireTrimmed(request.getFileName(), "fileName");
         String fileType = requireTrimmed(request.getFileType(), "fileType");
-        validateAllowedFileType(fileName, fileType, "fileType");
+        String normalizedFileType = resolveAndValidateAllowedFileType(fileName, fileType, "fileType");
         Long fileSize = request.getFileSize();
 
-        if (!s3Key.startsWith("projects/" + parsedProjectId + "/")) {
+        if (!isValidUuidS3Key(s3Key)) {
             throw new ValidationException("s3Key", "s3Key is invalid for this project.");
         }
         if (fileSize == null || fileSize <= 0) {
@@ -136,12 +137,12 @@ class ProjectFileServiceImpl implements ProjectFileService {
         projectFile.setProjectId(parsedProjectId);
         projectFile.setS3Key(s3Key);
         projectFile.setFileName(fileName);
-        projectFile.setFileType(fileType);
+        projectFile.setFileType(normalizedFileType);
         projectFile.setFileSize(fileSize);
         projectFile.setUploadedBy(user.getId());
         projectFile.setUploadedByName(resolveUserDisplayName(user));
 
-        ProjectFile saved = projectFileRepository.save(projectFile);
+        ProjectFile saved = projectFileRepository.saveAndFlush(projectFile);
         return toDto(saved, user.getRole());
     }
 
@@ -248,20 +249,28 @@ class ProjectFileServiceImpl implements ProjectFileService {
     }
 
     private void validateAllowedFileType(String fileName, String value, String field) {
-        String detectedType = detectAllowedType(fileName, value);
-        if (detectedType == null || !resolvedAllowedTypesSet().contains(detectedType)) {
-            throw new ValidationException(field, "File type is not allowed.");
-        }
+        resolveAndValidateAllowedFileType(fileName, value, field);
     }
 
-    private String detectAllowedType(String fileName, String mimeType) {
-        String normalizedMimeType = mimeType == null ? "" : mimeType.trim().toLowerCase();
-        String byMimeType = MIME_TO_EXTENSION.get(normalizedMimeType);
-        String byExtension = extractExtension(fileName);
-        if (byMimeType != null) {
-            return byMimeType;
+    private String resolveAndValidateAllowedFileType(String fileName, String value, String field) {
+        Set<String> allowedTypes = resolvedAllowedTypesSet();
+        String extension = extractExtension(fileName);
+        if (extension == null || !allowedTypes.contains(extension)) {
+            throw new ValidationException(field, "File type is not allowed.");
         }
-        return byExtension;
+
+        String normalizedMimeType = value == null ? "" : value.trim().toLowerCase();
+        if (normalizedMimeType.isEmpty()) {
+            return extension;
+        }
+        String mimeMappedExtension = MIME_TO_EXTENSION.get(normalizedMimeType);
+        if (mimeMappedExtension == null || !allowedTypes.contains(mimeMappedExtension)) {
+            throw new ValidationException(field, "File type is not allowed.");
+        }
+        if (!mimeMappedExtension.equals(extension)) {
+            throw new ValidationException(field, "fileType does not match fileName extension.");
+        }
+        return extension;
     }
 
     private String extractExtension(String fileName) {
@@ -301,12 +310,21 @@ class ProjectFileServiceImpl implements ProjectFileService {
                 .collect(java.util.stream.Collectors.toSet());
     }
 
-    private String generateS3Key(UUID projectId, String fileName) {
-        String sanitized = fileName
-            .replaceAll("[^A-Za-z0-9._-]", "_")
-            .replaceAll("_+", "_");
-        String safeName = sanitized.isBlank() ? "file" : sanitized;
-        return "projects/" + projectId + "/" + Instant.now().toEpochMilli() + "-" + UUID.randomUUID() + "-" + safeName;
+    private int resolvedPresignedUrlExpirySeconds() {
+        return Math.max(60, projectFileProperties.getPresignedUrlExpirySeconds());
+    }
+
+    private String generateS3Key() {
+        return UUID.randomUUID().toString();
+    }
+
+    private boolean isValidUuidS3Key(String s3Key) {
+        try {
+            UUID.fromString(s3Key);
+            return true;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 
     private String resolveUserDisplayName(User user) {

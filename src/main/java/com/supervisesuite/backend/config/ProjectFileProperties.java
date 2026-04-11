@@ -10,8 +10,13 @@ import org.springframework.stereotype.Component;
 @Getter
 @Setter
 @Component
-@ConfigurationProperties(prefix = "project-files")
+@ConfigurationProperties(prefix = "app.project-files")
 public class ProjectFileProperties {
+    private String awsRegion = "ap-south-1";
+    private String bucketName = "supervisesuite-files-local";
+    private String awsAccessKeyId;
+    private String awsSecretAccessKey;
     private long maxFileSizeBytes = 10L * 1024L * 1024L;
     private List<String> allowedTypes = new ArrayList<>(List.of("pdf", "docx", "pptx", "zip"));
+    private int presignedUrlExpirySeconds = 300;
 }
