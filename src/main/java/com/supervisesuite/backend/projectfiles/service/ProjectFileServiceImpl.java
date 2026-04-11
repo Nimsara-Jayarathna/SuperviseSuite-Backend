@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +28,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class ProjectFileServiceImpl implements ProjectFileService {
 
-    private static final long MAX_FILE_SIZE_BYTES = 100L * 1024L * 1024L;
+    private static final long MAX_FILE_SIZE_BYTES = 10L * 1024L * 1024L;
+    private static final Set<String> ALLOWED_FILE_TYPES = Set.of(
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/zip",
+        "application/x-zip-compressed"
+    );
 
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;
@@ -81,6 +89,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
 
         String fileName = requireTrimmed(request.getFileName(), "fileName");
         String contentType = requireTrimmed(request.getContentType(), "contentType");
+        validateAllowedFileType(contentType, "contentType");
         String s3Key = generateS3Key(parsedProjectId, fileName);
         String presignedUrl = storageService.getUploadUrl(s3Key, contentType);
         return new UploadUrlResponse(presignedUrl, s3Key);
@@ -101,6 +110,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
         String s3Key = requireTrimmed(request.getS3Key(), "s3Key");
         String fileName = requireTrimmed(request.getFileName(), "fileName");
         String fileType = requireTrimmed(request.getFileType(), "fileType");
+        validateAllowedFileType(fileType, "fileType");
         Long fileSize = request.getFileSize();
 
         if (!s3Key.startsWith("projects/" + parsedProjectId + "/")) {
@@ -110,7 +120,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
             throw new ValidationException("fileSize", "fileSize must be greater than zero.");
         }
         if (fileSize > MAX_FILE_SIZE_BYTES) {
-            throw new ValidationException("fileSize", "fileSize exceeds the maximum allowed size.");
+            throw new ValidationException("fileSize", "fileSize must be 10 MB or less.");
         }
 
         ProjectFile projectFile = new ProjectFile();
@@ -226,6 +236,13 @@ class ProjectFileServiceImpl implements ProjectFileService {
             throw new ValidationException(field, field + " is required.");
         }
         return trimmed;
+    }
+
+    private void validateAllowedFileType(String value, String field) {
+        String normalized = value.trim().toLowerCase();
+        if (!ALLOWED_FILE_TYPES.contains(normalized)) {
+            throw new ValidationException(field, "Only PDF, DOCX, PPTX, and ZIP files are allowed.");
+        }
     }
 
     private String generateS3Key(UUID projectId, String fileName) {
