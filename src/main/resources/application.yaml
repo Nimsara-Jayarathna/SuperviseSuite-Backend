@@ -98,3 +98,11 @@ app:
       backlog-growing-consecutive-weeks: ${ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS:2}
       high-priority-names: ${ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES:High,Highest}
       bug-type-names: ${ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES:Bug}
+  storage:
+    s3:
+      access-key-id: ${AWS_ACCESS_KEY_ID:}
+      secret-access-key: ${AWS_SECRET_ACCESS_KEY:}
+      region: ${AWS_REGION:}
+      bucket-name: ${S3_BUCKET_NAME:}
+      upload-url-ttl-seconds: ${STORAGE_S3_UPLOAD_URL_TTL_SECONDS:900}
+      download-url-ttl-seconds: ${STORAGE_S3_DOWNLOAD_URL_TTL_SECONDS:900}
