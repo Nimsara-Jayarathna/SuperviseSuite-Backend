@@ -46,6 +46,7 @@ app:
   frontend:
     base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
   registration:
+    domain-restriction-enabled: ${REGISTRATION_DOMAIN_RESTRICTION_ENABLED:true}
     student-email-domain: ${REGISTRATION_STUDENT_EMAIL_DOMAIN:@my.sliit.lk}
     supervisor-email-domain: ${REGISTRATION_SUPERVISOR_EMAIL_DOMAIN:@sliit.lk}
     otp-expiry-seconds: ${REGISTRATION_OTP_EXPIRY_SECONDS:600}

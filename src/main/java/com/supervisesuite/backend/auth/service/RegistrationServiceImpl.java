@@ -120,7 +120,12 @@ class RegistrationServiceImpl implements RegistrationService {
         session.setCreatedAt(now);
         registrationSessionRepository.save(session);
 
-        return new RegisterVerifyResponse(TOKEN_PREFIX + rawRegistrationToken);
+        String resolvedRole = session.getRole();
+        return new RegisterVerifyResponse(
+            TOKEN_PREFIX + rawRegistrationToken,
+            resolvedRole == null,
+            resolvedRole
+        );
     }
 
     @Override

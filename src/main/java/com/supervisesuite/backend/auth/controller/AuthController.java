@@ -3,6 +3,7 @@ package com.supervisesuite.backend.auth.controller;
 import com.supervisesuite.backend.auth.dto.LoginRequest;
 import com.supervisesuite.backend.auth.dto.LoginResponse;
 import com.supervisesuite.backend.auth.dto.LoginUserResponse;
+import com.supervisesuite.backend.auth.dto.RegisterConfigResponse;
 import com.supervisesuite.backend.auth.dto.RegisterCompleteRequest;
 import com.supervisesuite.backend.auth.dto.RegisterInitRequest;
 import com.supervisesuite.backend.auth.dto.RegisterVerifyRequest;
@@ -16,6 +17,7 @@ import com.supervisesuite.backend.auth.service.RegistrationService;
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
+import com.supervisesuite.backend.config.RegistrationProperties;
 import com.supervisesuite.backend.users.entity.User;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -48,6 +51,7 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
     private final RefreshTokenValidator refreshTokenValidator;
     private final RegistrationService registrationService;
+    private final RegistrationProperties registrationProperties;
     private final ApiResponseFactory apiResponseFactory;
 
     public AuthController(
@@ -57,6 +61,7 @@ public class AuthController {
         RefreshTokenService refreshTokenService,
         RefreshTokenValidator refreshTokenValidator,
         RegistrationService registrationService,
+        RegistrationProperties registrationProperties,
         ApiResponseFactory apiResponseFactory
     ) {
         this.authService = authService;
@@ -65,7 +70,22 @@ public class AuthController {
         this.refreshTokenService = refreshTokenService;
         this.refreshTokenValidator = refreshTokenValidator;
         this.registrationService = registrationService;
+        this.registrationProperties = registrationProperties;
         this.apiResponseFactory = apiResponseFactory;
+    }
+
+    @GetMapping("/register/config")
+    public ResponseEntity<ApiResponse<RegisterConfigResponse>> registerConfig(
+        HttpServletRequest httpRequest
+    ) {
+        RegisterConfigResponse data = new RegisterConfigResponse(
+            registrationProperties.isDomainRestrictionEnabled(),
+            registrationProperties.hasStudentDomain()
+                ? registrationProperties.getStudentEmailDomain() : null,
+            registrationProperties.hasSupervisorDomain()
+                ? registrationProperties.getSupervisorEmailDomain() : null
+        );
+        return apiResponseFactory.ok("Registration configuration", data, httpRequest);
     }
 
     @PostMapping("/register/init")

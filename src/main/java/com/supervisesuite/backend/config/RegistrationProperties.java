@@ -11,6 +11,7 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "app.registration")
 public class RegistrationProperties {
 
+    private boolean domainRestrictionEnabled = true;
     private String studentEmailDomain;
     private String supervisorEmailDomain;
     private long otpExpirySeconds = 600;
@@ -40,7 +41,7 @@ public class RegistrationProperties {
     }
 
     public boolean isEmailAllowed(String normalizedEmail) {
-        if (!hasAnyDomainRestriction()) {
+        if (!domainRestrictionEnabled) {
             return true;
         }
         return inferRole(normalizedEmail) != null;
