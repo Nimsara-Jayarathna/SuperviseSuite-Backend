@@ -98,3 +98,7 @@ app:
       backlog-growing-consecutive-weeks: ${ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS:2}
       high-priority-names: ${ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES:High,Highest}
       bug-type-names: ${ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES:Bug}
+  brevo:
+    api-key: ${BREVO_API_KEY:}
+    sender-email: ${BREVO_SENDER_EMAIL:no-reply@supervisesuite.xyz}
+    sender-name: ${BREVO_SENDER_NAME:SuperviseSuite}

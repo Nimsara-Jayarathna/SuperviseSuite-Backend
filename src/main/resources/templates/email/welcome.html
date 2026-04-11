@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" 
+      th:replace="~{email/base-layout :: layout(~{::body})}">
+<body>
+    <h2>Welcome to the team, <span th:text="${name}">User</span>!</h2>
+    <p>We're thrilled to have you join **SuperviseSuite**. Our platform is designed to make project supervision and management seamless, transparent, and efficient.</p>
+    <p>You now have access to all the tools needed to track progress, coordinate with your team, and ensure your projects are a success.</p>
+    
+    <div style="text-align: center; margin: 32px 0;">
+        <a th:href="${frontendBaseUrl ?: '#'}" class="action-button">Go to Dashboard</a>
+    </div>
+
+    <p>Best regards,<br/>The SuperviseSuite Team</p>
+</body>
+</html>
