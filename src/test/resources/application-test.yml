@@ -1,0 +1,6 @@
+app:
+  project-files:
+    aws-region: ap-south-1
+    bucket-name: supervisesuite-files-test
+    aws-access-key-id: test-access-key
+    aws-secret-access-key: test-secret-key
