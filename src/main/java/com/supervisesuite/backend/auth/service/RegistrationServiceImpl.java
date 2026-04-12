@@ -71,6 +71,12 @@ class RegistrationServiceImpl implements RegistrationService {
         if (!registrationProperties.isEmailAllowed(normalizedEmail)) {
             throw new ValidationException("Email domain not permitted for registration.", List.of());
         }
+        if (!registrationProperties.isStudentEmailPrefixAllowed(normalizedEmail)) {
+            throw new ValidationException(
+                "email",
+                "Invalid IT number format. Use ITXXXXXXXX."
+            );
+        }
 
         if (userRepository.existsByEmail(normalizedEmail)) {
             throw new ConflictException("An account with this email already exists.");
@@ -86,7 +92,6 @@ class RegistrationServiceImpl implements RegistrationService {
         emailOtp.setCreatedAt(now);
         emailOtpRepository.save(emailOtp);
 
-        log.info("Sending registration OTP email to {}", normalizedEmail);
         emailService.sendOtpEmail(normalizedEmail, rawOtp);
     }
 
@@ -161,8 +166,28 @@ class RegistrationServiceImpl implements RegistrationService {
         user.setRole(effectiveRole);
         user.setCreatedAt(now);
 
-        if (Roles.STUDENT.equals(effectiveRole) && request.getName() != null && !request.getName().isBlank()) {
+        if (Roles.STUDENT.equals(effectiveRole)) {
+            if (request.getName() == null || request.getName().isBlank()) {
+                throw new ValidationException("registrationNumber", "Registration number is required.");
+            }
+
             String normalizedRegistrationNumber = NormalizationUtils.normalizeRegistrationNumber(request.getName());
+
+            if (registrationProperties.isEffectiveStudentEmailPrefixRestrictionEnabled()) {
+                if (!registrationProperties.isStudentIdentifierAllowed(normalizedRegistrationNumber)) {
+                    throw new ValidationException("registrationNumber", "Invalid IT number format. Use ITXXXXXXXX.");
+                }
+
+                String expectedRegistrationNumber = extractEmailLocalPart(session.getEmail());
+                if (expectedRegistrationNumber == null
+                    || !expectedRegistrationNumber.equalsIgnoreCase(normalizedRegistrationNumber)) {
+                    throw new ValidationException(
+                        "registrationNumber",
+                        "Registration number must match student email ID."
+                    );
+                }
+            }
+
             if (userRepository.existsByRegistrationNumber(normalizedRegistrationNumber)) {
                 throw new ConflictException("An account with this registration number already exists.");
             }
@@ -183,9 +208,9 @@ class RegistrationServiceImpl implements RegistrationService {
         String refreshToken = refreshTokenService.issue(savedUser);
 
         try {
-            emailService.sendWelcomeEmail(savedUser.getEmail(), savedUser.getFirstName());
+            emailService.sendRegistrationSuccessEmail(savedUser.getEmail(), savedUser.getFirstName());
         } catch (Exception ex) {
-            log.error("Failed to send welcome email to {}", savedUser.getEmail(), ex);
+            log.error("Failed to send registration success email to {}", savedUser.getEmail(), ex);
         }
 
         LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(
@@ -217,6 +242,17 @@ class RegistrationServiceImpl implements RegistrationService {
         byte[] randomBytes = new byte[32];
         SECURE_RANDOM.nextBytes(randomBytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+    }
+
+    private static String extractEmailLocalPart(String email) {
+        if (email == null) {
+            return null;
+        }
+        int atIndex = email.indexOf('@');
+        if (atIndex <= 0) {
+            return null;
+        }
+        return NormalizationUtils.normalizeRegistrationNumber(email.substring(0, atIndex));
     }
 
     private static String sha256Base64(String raw) {

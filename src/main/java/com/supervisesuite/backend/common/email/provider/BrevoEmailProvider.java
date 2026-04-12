@@ -4,6 +4,7 @@ import brevoApi.TransactionalEmailsApi;
 import brevoModel.SendSmtpEmail;
 import brevoModel.SendSmtpEmailSender;
 import brevoModel.SendSmtpEmailTo;
+import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import java.util.Collections;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,8 +35,6 @@ public class BrevoEmailProvider implements EmailProvider {
 
     @Override
     public void send(String to, String subject, String htmlContent) {
-        log.info("Attempting to send email to: {} with subject: {}", to, subject);
-
         SendSmtpEmail sendSmtpEmail = new SendSmtpEmail();
         sendSmtpEmail.setSubject(subject);
         sendSmtpEmail.setHtmlContent(htmlContent);
@@ -51,14 +50,19 @@ public class BrevoEmailProvider implements EmailProvider {
 
         try {
             apiInstance.sendTransacEmail(sendSmtpEmail);
-            log.info("Email sent successfully to: {}", to);
         } catch (brevo.ApiException e) {
             log.error("Brevo API Error for {}: Status Code: {}, Response Body: {}", 
                 to, e.getCode(), e.getResponseBody());
-            throw new RuntimeException("Email delivery failed: Brevo API Error", e);
+            throw new ServiceUnavailableException(
+                "Email service is currently unavailable. Please try again later.",
+                e
+            );
         } catch (Exception e) {
             log.error("Unexpected error sending email to: {}. Error: {}", to, e.getMessage(), e);
-            throw new RuntimeException("Email delivery failed: Unexpected Error", e);
+            throw new ServiceUnavailableException(
+                "Email service is currently unavailable. Please try again later.",
+                e
+            );
         }
     }
 }

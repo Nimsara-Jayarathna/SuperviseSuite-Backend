@@ -49,6 +49,8 @@ app:
     domain-restriction-enabled: ${REGISTRATION_DOMAIN_RESTRICTION_ENABLED:true}
     student-email-domain: ${REGISTRATION_STUDENT_EMAIL_DOMAIN:@my.sliit.lk}
     supervisor-email-domain: ${REGISTRATION_SUPERVISOR_EMAIL_DOMAIN:@sliit.lk}
+    student-email-prefix-restriction-enabled: ${REGISTRATION_STUDENT_EMAIL_PREFIX_RESTRICTION_ENABLED:true}
+    student-email-prefix-regex: ${REGISTRATION_STUDENT_EMAIL_PREFIX_REGEX:^IT(1[5-9]|[2-4][0-9]|50)[0-9]{6}$}
     otp-expiry-seconds: ${REGISTRATION_OTP_EXPIRY_SECONDS:600}
     session-expiry-seconds: ${REGISTRATION_SESSION_EXPIRY_SECONDS:600}
     cleanup:

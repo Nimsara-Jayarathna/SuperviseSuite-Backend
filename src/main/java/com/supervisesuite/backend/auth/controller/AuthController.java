@@ -83,7 +83,10 @@ public class AuthController {
             registrationProperties.hasStudentDomain()
                 ? registrationProperties.getStudentEmailDomain() : null,
             registrationProperties.hasSupervisorDomain()
-                ? registrationProperties.getSupervisorEmailDomain() : null
+                ? registrationProperties.getSupervisorEmailDomain() : null,
+            registrationProperties.isEffectiveStudentEmailPrefixRestrictionEnabled(),
+            registrationProperties.isEffectiveStudentEmailPrefixRestrictionEnabled()
+                ? registrationProperties.getStudentEmailPrefixRegex() : null
         );
         return apiResponseFactory.ok("Registration configuration", data, httpRequest);
     }
