@@ -105,6 +105,12 @@ public class ApiErrorController implements ErrorController {
         if (status == HttpStatus.CONFLICT) {
             return ErrorCode.CONFLICT;
         }
+        if (status == HttpStatus.TOO_MANY_REQUESTS) {
+            return ErrorCode.TOO_MANY_REQUESTS;
+        }
+        if (status == HttpStatus.SERVICE_UNAVAILABLE) {
+            return ErrorCode.SERVICE_UNAVAILABLE;
+        }
         if (status == HttpStatus.BAD_REQUEST
             || status == HttpStatus.METHOD_NOT_ALLOWED
             || status == HttpStatus.UNSUPPORTED_MEDIA_TYPE

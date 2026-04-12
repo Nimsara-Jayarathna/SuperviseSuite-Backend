@@ -144,6 +144,19 @@ This log is aligned to migration files under `src/main/resources/db/migration`.
   - `refresh_token_encrypted`
   - `token_expires_at`
 
+## 2026-04-12 — Registration verification flow (SCRUM-106)
+
+### `V24__registration_sessions.sql`
+
+- Added `registration_sessions` table for short-lived registration continuation tokens.
+- Stores hashed token material and expiry metadata used after OTP verification.
+
+### `V25__email_otps.sql`
+
+- Added `email_otps` table for one-time password verification state.
+- Stores hashed OTP values with expiry and attempt lifecycle columns.
+- Supports cleanup and replay prevention for registration init/verify/complete flow.
+
 ## Rules for Next Migrations
 
 - Use versioned files: `V{number}__{description}.sql`.

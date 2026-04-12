@@ -59,66 +59,50 @@ Always use Maven Wrapper for local commands:
 
 ## Environment Variables
 
-The backend reads DB and auth config from environment variables:
+Use `.env.example` as the authoritative list of supported keys:
 
-- `DB_URL`
-- `DB_USERNAME`
-- `DB_PASSWORD`
-- `APP_PORT`
-- `CORS_ALLOWED_ORIGINS`
-- `FRONTEND_BASE_URL` — frontend base URL used by backend redirects (for example GitHub setup callback)
-- `COOKIE_SECURE` — set to `false` for local HTTP development (default: `true`)
-- `JWT_SECRET` — base64-encoded secret used to sign and verify access token JWTs
-- `GITHUB_TOKEN` — optional GitHub token (recommended for higher rate limits)
-- `GITHUB_APP_ID` — GitHub App id used for app JWT generation
-- `GITHUB_APP_CLIENT_ID` — GitHub App client id for setup/install flow
-- `GITHUB_APP_CLIENT_SECRET` — GitHub App client secret (if used by your callback flow)
-- `GITHUB_APP_INSTALL_URL` — GitHub App installation URL used by backend for setup-start redirects (`GET /api/supervisor/projects/{projectId}/github/setup/start`) and access-request continuation flows
-- `GITHUB_APP_PRIVATE_KEY` — GitHub App PEM private key (escaped newlines supported in `.env`)
-- `GITHUB_APP_WEBHOOK_SECRET` — webhook signature secret for `/api/github/webhooks`
-- `GITHUB_DEFAULT_BRANCH` — fallback default branch when metadata is missing (default: `main`)
-- `GITHUB_ACTIVITY_ACTIVE_WINDOW_HOURS` — active/idle threshold window in hours (default: `48`)
-- `GITHUB_PREVIEW_COMMITS_LIMIT` — preview commits count in project detail GitHub block (default: `6`)
-- `GITHUB_PREVIEW_CONTRIBUTORS_LIMIT` — preview contributors count in project detail GitHub block (default: `4`)
-- `GITHUB_DASHBOARD_CONTRIBUTORS_LIMIT` — contributors count for non-paginated `/github` dashboard endpoint (default: `5`)
-- `GITHUB_COMMITS_PAGE_SIZE` — per-page size used while syncing commits from GitHub API (default: `100`)
-- `GITHUB_DEFAULT_PAGE_SIZE` — default page size for GitHub paginated APIs (default: `10`)
-- `GITHUB_MAX_PAGE_SIZE` — max allowed page size for GitHub paginated APIs (default: `100`)
-- `GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE` — default page size for installation repositories listing (`GET /api/supervisor/projects/{projectId}/github/installations/{installationId}/repositories`) when client does not provide `size` (default: `100`)
-- `GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE` — max allowed `size` for installation repositories listing; request values above this are capped (default: `100`)
-- `GITHUB_ACCESS_REQUEST_EXPIRES_IN_MINUTES` — expiry for project-scoped GitHub access-request tokens used by `/api/supervisor/projects/{projectId}/github/access-requests*` flow (default: `15`)
-- `GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED` — enables repeating cleanup job for expired access-request tokens (default: `true`)
-- `GITHUB_ACCESS_REQUEST_CLEANUP_INITIAL_DELAY_MS` — delay before first cleanup run in milliseconds (default: `120000`)
-- `GITHUB_ACCESS_REQUEST_CLEANUP_FIXED_DELAY_MS` — fixed delay between cleanup runs in milliseconds (default: `900000`)
-- `GITHUB_REPOSITORY_REFRESH_JOB_ENABLED` — enables cron-based scheduled refresh for linked GitHub repositories (default: `true`)
-- `GITHUB_REPOSITORY_REFRESH_CRON` — cron expression for scheduled refresh time (default: `0 0 0 * * *`; set `0 0 12 * * *` for daily 12:00)
-- `GITHUB_REPOSITORY_REFRESH_ZONE` — timezone for refresh cron evaluation (default: `UTC`)
-- `GITHUB_REPOSITORY_REFRESH_BATCH_SIZE` — max linked repositories refreshed per cron run (default: `50`)
-- `GITHUB_SYNC_MAX_COMMIT_PAGES` — cap for GitHub commit pagination during sync (default: `5`)
-- `ATLASSIAN_CLIENT_ID` — Atlassian OAuth client id
-- `ATLASSIAN_CLIENT_SECRET` — Atlassian OAuth client secret
-- `ATLASSIAN_REDIRECT_URI` — OAuth redirect URI registered in Atlassian developer console (used by `/api/supervisor/jira/oauth/complete`)
-- `ATLASSIAN_SCOPE` — Jira scopes requested during OAuth (default: `read:jira-user read:jira-work`)
-- `ATLASSIAN_AUDIENCE` — OAuth audience for Atlassian API token exchange (default: `api.atlassian.com`)
-- `ATLASSIAN_AUTH_TARGET_URL` — Atlassian authorize endpoint (default: `https://auth.atlassian.com/authorize`)
-- `ATLASSIAN_TOKEN_TARGET_URL` — Atlassian token endpoint (default: `https://auth.atlassian.com/oauth/token`)
-- `ATLASSIAN_OAUTH_STATE` — state key prefix for Jira OAuth flow (default: `supervisesuite_jira_state`)
-- `ATLASSIAN_OAUTH_STATE_TTL_SECONDS` — OAuth state expiry in seconds (default: `900`)
-- `ATLASSIAN_TOKEN_ENCRYPTION_SECRET` — secret used to encrypt stored Jira tokens (defaults to `JWT_SECRET` when not set)
-- `ATLASSIAN_ANALYTICS_RECENT_SPRINTS_LIMIT` — number of recent sprints used in sprint analytics/trend calculations (default: `3`)
-- `ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS` — consecutive negative-net weeks required to flag backlog growth (default: `2`)
-- `ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES` — comma-separated Jira priority names treated as high priority (default: `High,Highest`)
-- `ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES` — comma-separated Jira issue type names treated as bugs/defects (default: `Bug`)
+1. `cp .env.example .env`
+2. Fill secrets/IDs for your environment.
+
+Current variable groups are:
+
+- Database: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
+- App/CORS: `APP_PORT`, `COOKIE_SECURE`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_BASE_URL`
+- Registration policy: `REGISTRATION_DOMAIN_RESTRICTION_ENABLED`, `REGISTRATION_STUDENT_EMAIL_DOMAIN`, `REGISTRATION_SUPERVISOR_EMAIL_DOMAIN`, `REGISTRATION_STUDENT_EMAIL_PREFIX_RESTRICTION_ENABLED`, `REGISTRATION_STUDENT_EMAIL_PREFIX_REGEX`
+- Registration verification lifecycle: `REGISTRATION_OTP_EXPIRY_SECONDS`, `REGISTRATION_SESSION_EXPIRY_SECONDS`, `REGISTRATION_CLEANUP_ENABLED`, `REGISTRATION_CLEANUP_INITIAL_DELAY_MS`, `REGISTRATION_CLEANUP_FIXED_DELAY_MS`
+- Rate limiting: `RATE_LIMITING_ENABLED`, `RATE_LIMITING_TRUST_FORWARDED_FOR`, `RATE_LIMITING_AUTH_ENABLED`, `RATE_LIMITING_AUTH_WINDOW_SECONDS`, `RATE_LIMITING_AUTH_MAX_REQUESTS`, `RATE_LIMITING_AUTHENTICATED_ENABLED`, `RATE_LIMITING_AUTHENTICATED_WINDOW_SECONDS`, `RATE_LIMITING_AUTHENTICATED_MAX_REQUESTS`
+- JWT/auth cookies: `JWT_SECRET`, `JWT_ACCESS_EXPIRY_SECONDS`, `JWT_REFRESH_EXPIRY_SECONDS`
+- GitHub integration: `GITHUB_API_BASE_URL`, `GITHUB_TOKEN`, `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_NAME`, `GITHUB_APP_INSTALL_URL`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, `GITHUB_DEFAULT_BRANCH`, `GITHUB_ACTIVITY_ACTIVE_WINDOW_HOURS`, `GITHUB_PREVIEW_COMMITS_LIMIT`, `GITHUB_PREVIEW_CONTRIBUTORS_LIMIT`, `GITHUB_DASHBOARD_CONTRIBUTORS_LIMIT`, `GITHUB_COMMITS_PAGE_SIZE`, `GITHUB_DEFAULT_PAGE_SIZE`, `GITHUB_MAX_PAGE_SIZE`, `GITHUB_MAX_LINKED_REPOS_PER_PROJECT`, `GITHUB_MAX_ENABLED_REPOS_PER_PROJECT`, `GITHUB_SETUP_STATE_TTL_SECONDS`, `GITHUB_SETUP_STATE_SECRET`, `GITHUB_SYNC_MAX_COMMIT_PAGES`, `GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE`, `GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE`, `GITHUB_ACCESS_REQUEST_EXPIRES_IN_MINUTES`, `GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED`, `GITHUB_ACCESS_REQUEST_CLEANUP_INITIAL_DELAY_MS`, `GITHUB_ACCESS_REQUEST_CLEANUP_FIXED_DELAY_MS`, `GITHUB_REPOSITORY_REFRESH_JOB_ENABLED`, `GITHUB_REPOSITORY_REFRESH_CRON`, `GITHUB_REPOSITORY_REFRESH_ZONE`, `GITHUB_REPOSITORY_REFRESH_BATCH_SIZE`
+- Jira integration/analytics: `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET`, `ATLASSIAN_SCOPE`, `ATLASSIAN_AUDIENCE`, `ATLASSIAN_AUTH_TARGET_URL`, `ATLASSIAN_REDIRECT_URI`, `ATLASSIAN_TOKEN_TARGET_URL`, `ATLASSIAN_TOKEN_ENCRYPTION_SECRET`, `ATLASSIAN_OAUTH_STATE`, `ATLASSIAN_OAUTH_STATE_TTL_SECONDS`, `ATLASSIAN_ANALYTICS_RECENT_SPRINTS_LIMIT`, `ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS`, `ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES`, `ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES`
+- Email service (Brevo): `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`
 
 Setup for local development:
 
 1. Create your local env file: `cp .env.example .env`
 2. Use these local defaults (or confirm your `.env` matches them):
 
-```
+```bash
 APP_PORT=8081
 CORS_ALLOWED_ORIGINS=http://localhost:5173
 COOKIE_SECURE=false
+REGISTRATION_DOMAIN_RESTRICTION_ENABLED=true
+REGISTRATION_STUDENT_EMAIL_DOMAIN=@my.sliit.lk
+REGISTRATION_SUPERVISOR_EMAIL_DOMAIN=@sliit.lk
+REGISTRATION_STUDENT_EMAIL_PREFIX_RESTRICTION_ENABLED=true
+REGISTRATION_STUDENT_EMAIL_PREFIX_REGEX=^IT(1[5-9]|[2-4][0-9]|50)[0-9]{6}$
+REGISTRATION_OTP_EXPIRY_SECONDS=600
+REGISTRATION_SESSION_EXPIRY_SECONDS=600
+REGISTRATION_CLEANUP_ENABLED=true
+REGISTRATION_CLEANUP_INITIAL_DELAY_MS=120000
+REGISTRATION_CLEANUP_FIXED_DELAY_MS=900000
+RATE_LIMITING_ENABLED=true
+RATE_LIMITING_TRUST_FORWARDED_FOR=true
+RATE_LIMITING_AUTH_ENABLED=true
+RATE_LIMITING_AUTH_WINDOW_SECONDS=60
+RATE_LIMITING_AUTH_MAX_REQUESTS=10
+RATE_LIMITING_AUTHENTICATED_ENABLED=true
+RATE_LIMITING_AUTHENTICATED_WINDOW_SECONDS=60
+RATE_LIMITING_AUTHENTICATED_MAX_REQUESTS=240
 GITHUB_DEFAULT_BRANCH=main
 GITHUB_ACTIVITY_ACTIVE_WINDOW_HOURS=48
 GITHUB_PREVIEW_COMMITS_LIMIT=6
@@ -127,6 +111,10 @@ GITHUB_DASHBOARD_CONTRIBUTORS_LIMIT=5
 GITHUB_COMMITS_PAGE_SIZE=100
 GITHUB_DEFAULT_PAGE_SIZE=10
 GITHUB_MAX_PAGE_SIZE=100
+GITHUB_MAX_LINKED_REPOS_PER_PROJECT=5
+GITHUB_MAX_ENABLED_REPOS_PER_PROJECT=5
+GITHUB_SETUP_STATE_TTL_SECONDS=900
+GITHUB_SETUP_STATE_SECRET=
 GITHUB_APP_INSTALL_URL=https://github.com/apps/<your-app-slug>/installations/new
 GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE=100
 GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE=100
@@ -153,14 +141,18 @@ ATLASSIAN_ANALYTICS_RECENT_SPRINTS_LIMIT=3
 ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS=2
 ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES=High,Highest
 ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES=Bug
+BREVO_API_KEY=<your-brevo-api-key>
+BREVO_SENDER_EMAIL=no-reply@supervisesuite.xyz
+BREVO_SENDER_NAME=SuperviseSuite
 ```
 
-3. Keep hostnames consistent across FE/BE in local dev:
+1. Keep hostnames consistent across FE/BE in local dev:
+
 - Frontend: `http://localhost:5173`
 - Backend API: `http://localhost:8081`
 - Avoid mixing `localhost` and `127.0.0.1` across these values.
 
-4. Run backend:
+1. Run backend:
    `./mvnw spring-boot:run`
 
 `.env` is auto-loaded by Spring via `spring.config.import`.
