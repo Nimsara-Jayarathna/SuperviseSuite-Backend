@@ -2,6 +2,7 @@ package com.supervisesuite.backend.config;
 
 import com.supervisesuite.backend.auth.security.JwtAuthFilter;
 import com.supervisesuite.backend.common.error.ErrorCode;
+import com.supervisesuite.backend.config.ratelimit.RateLimitingFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,6 +21,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final RateLimitingFilter rateLimitingFilter;
     private final SecurityErrorResponseWriter securityErrorResponseWriter;
 
     @Bean
@@ -70,6 +72,7 @@ public class SecurityConfig {
                 )
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(rateLimitingFilter, JwtAuthFilter.class)
             .build();
     }
 }

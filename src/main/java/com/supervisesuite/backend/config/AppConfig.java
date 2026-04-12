@@ -7,7 +7,10 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
-@EnableConfigurationProperties(RegistrationProperties.class)
+@EnableConfigurationProperties({
+    RegistrationProperties.class,
+    RateLimitingProperties.class
+})
 public class AppConfig {
 
     /**
