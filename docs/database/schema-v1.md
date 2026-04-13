@@ -1,6 +1,6 @@
-# Schema Reference (Current Through V22)
+# Schema Reference (Current Through V23)
 
-This document reflects the effective schema after applying migrations `V1` to `V22`.
+This document reflects the effective schema after applying migrations `V1` to `V23`.
 
 ## Core Tables
 
@@ -27,6 +27,22 @@ This document reflects the effective schema after applying migrations `V1` to `V
 ### `refresh_tokens`
 
 - Hashed refresh-token persistence for cookie-based auth sessions.
+
+### `project_files`
+
+- Project-scoped file metadata table for supervisor/student attachments.
+- Key columns:
+  - identity/linkage: `id`, `project_id`
+  - object pointer + metadata: `s3_key`, `file_name`, `file_type`, `file_size`
+  - uploader: `uploaded_by`, `uploaded_by_name`
+  - audit/soft-delete: `created_at`, `updated_at`, `deleted_at`
+- Soft-delete model:
+  - active rows use `deleted_at IS NULL`
+  - file listing and access operations exclude soft-deleted rows
+- Notable constraints:
+  - FK `project_id -> projects.id` with `ON DELETE CASCADE`
+  - FK `uploaded_by -> users.id`
+  - check: `file_size > 0`
 
 ## GitHub Integration (Current V2 Model)
 

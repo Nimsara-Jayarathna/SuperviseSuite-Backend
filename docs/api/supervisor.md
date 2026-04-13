@@ -38,6 +38,11 @@ All endpoints in this document:
 - `GET /api/supervisor/projects/{projectId}/jira/workload`
 - `GET /api/supervisor/projects/{projectId}/jira/hierarchy`
 - `POST /api/supervisor/projects/{projectId}/jira/refresh`
+- `GET /api/supervisor/projects/{projectId}/files`
+- `POST /api/supervisor/projects/{projectId}/files/upload-url`
+- `POST /api/supervisor/projects/{projectId}/files/confirm`
+- `GET /api/supervisor/projects/{projectId}/files/{fileId}/download-url`
+- `DELETE /api/supervisor/projects/{projectId}/files/{fileId}`
 - `POST /api/supervisor/projects/{projectId}/members`
 - `POST /api/supervisor/projects/{projectId}/milestones`
 - `PATCH /api/supervisor/projects/{projectId}/milestones/{milestoneId}`
@@ -121,6 +126,9 @@ Returns one supervisor-owned project detail record.
   - `id`, `firstName`, `lastName`, `email`, `registrationNumber`, `memberRole`
 - `milestones[]`:
   - `id`, `title`, `description`, `dueDate`, `status`, `sequenceNo`
+- `files`:
+  - `items[]` (`id`, `fileName`, `fileType`, `fileSize`, `uploadedBy`, `uploadedByName`, `uploadedByRole`, `createdAt`, `updatedAt`)
+  - `config` (`maxFileSizeBytes`, `maxFileNameLength`, `allowedTypes[]`, `presignedUrlExpirySeconds`)
 
 ### 404 cases
 
@@ -689,6 +697,98 @@ Updates one milestone.
 - Recalculates and persists project `progressPercent` using milestone statuses.
 - Updates project `updatedAt` and `lastActivityAt`.
 - Returns refreshed project detail payload.
+
+---
+
+## GET /api/supervisor/projects/{projectId}/files
+
+Returns non-deleted project files + upload constraints for supervisor role.
+
+### Response fields
+
+- `files[]`:
+  - `id`, `fileName`, `fileType`, `fileSize`
+  - `uploadedBy`, `uploadedByName`, `uploadedByRole`
+  - `createdAt`, `updatedAt`
+- `config`:
+  - `maxFileSizeBytes`
+  - `maxFileNameLength`
+  - `allowedTypes[]`
+  - `presignedUrlExpirySeconds`
+
+### Notes
+
+- Excludes soft-deleted rows (`deleted_at IS NULL` only).
+- Only project owner supervisor can access.
+
+---
+
+## POST /api/supervisor/projects/{projectId}/files/upload-url
+
+Generates a pre-signed S3 upload URL.
+
+### Request fields
+
+- `fileName` (required)
+- `contentType` (required MIME)
+
+### Behavior
+
+- Validates file extension and MIME against configured `allowedTypes`.
+- Validates `fileName` length against configured `maxFileNameLength`.
+- Returns:
+  - `presignedUrl`
+  - `s3Key` (UUID-only opaque key)
+
+---
+
+## POST /api/supervisor/projects/{projectId}/files/confirm
+
+Persists uploaded file metadata after successful S3 PUT.
+
+### Request fields
+
+- `s3Key` (required, UUID format)
+- `fileName` (required)
+- `fileType` (required, MIME or extension)
+- `fileSize` (required, positive)
+
+### Validation rules
+
+- `fileName` length must be `<= maxFileNameLength`.
+- `fileType` must resolve to a configured allowed extension.
+- `fileName` extension and `fileType` must match.
+- `fileSize` must be `> 0` and `<= maxFileSizeBytes`.
+
+### Response
+
+- Returns normalized `ProjectFileDto` where `fileType` is stored as extension.
+
+---
+
+## GET /api/supervisor/projects/{projectId}/files/{fileId}/download-url
+
+Returns a pre-signed S3 download URL for one file.
+
+### Notes
+
+- Soft-deleted files return `404 NOT_FOUND`.
+
+---
+
+## DELETE /api/supervisor/projects/{projectId}/files/{fileId}
+
+Soft-deletes a file and deletes the object in storage.
+
+### Behavior
+
+- Sets `deletedAt` in `project_files`.
+- Calls storage delete (`StorageService.delete`) for the same `s3Key`.
+- Returns success envelope with `data: null`.
+
+### Notes
+
+- Students do not have a delete endpoint.
 
 ---
 

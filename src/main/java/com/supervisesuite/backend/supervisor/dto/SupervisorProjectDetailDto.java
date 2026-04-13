@@ -1,5 +1,7 @@
 package com.supervisesuite.backend.supervisor.dto;
 
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileDto;
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import java.time.Instant;
@@ -24,6 +26,7 @@ public class SupervisorProjectDetailDto {
     private Leader leader;
     private List<Member> members;
     private List<Milestone> milestones;
+    private Files files;
 
     public SupervisorProjectDetailDto() {
     }
@@ -189,6 +192,43 @@ public class SupervisorProjectDetailDto {
 
     public void setMilestones(List<Milestone> milestones) {
         this.milestones = milestones;
+    }
+
+    public Files getFiles() {
+        return files;
+    }
+
+    public void setFiles(Files files) {
+        this.files = files;
+    }
+
+    public static class Files {
+        private List<ProjectFileDto> items;
+        private ProjectFileListDto.Config config;
+
+        public Files() {
+        }
+
+        public Files(List<ProjectFileDto> items, ProjectFileListDto.Config config) {
+            this.items = items;
+            this.config = config;
+        }
+
+        public List<ProjectFileDto> getItems() {
+            return items;
+        }
+
+        public void setItems(List<ProjectFileDto> items) {
+            this.items = items;
+        }
+
+        public ProjectFileListDto.Config getConfig() {
+            return config;
+        }
+
+        public void setConfig(ProjectFileListDto.Config config) {
+            this.config = config;
+        }
     }
 
     public static class Member {

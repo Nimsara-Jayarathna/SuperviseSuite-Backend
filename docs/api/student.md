@@ -20,6 +20,10 @@ All endpoints in this document:
 - [GET /api/student/projects/{projectId}/jira/sprint-progress](#get-apistudentprojectsprojectidjirasprint-progress)
 - [GET /api/student/projects/{projectId}/jira/workload](#get-apistudentprojectsprojectidjiraworkload)
 - [GET /api/student/projects/{projectId}/jira/hierarchy](#get-apistudentprojectsprojectidjirahierarchy)
+- [GET /api/student/projects/{projectId}/files](#get-apistudentprojectsprojectidfiles)
+- [POST /api/student/projects/{projectId}/files/upload-url](#post-apistudentprojectsprojectidfilesupload-url)
+- [POST /api/student/projects/{projectId}/files/confirm](#post-apistudentprojectsprojectidfilesconfirm)
+- [GET /api/student/projects/{projectId}/files/{fileId}/download-url](#get-apistudentprojectsprojectidfilesfileiddownload-url)
 
 ---
 
@@ -100,6 +104,7 @@ The detail payload currently includes backend-backed fields only:
 - `jira`
 - `members[]`
 - `milestones[]`
+- `files` (embedded file list/config seed for Files tab)
 
 `members[]` item fields:
 
@@ -132,6 +137,24 @@ The detail payload currently includes backend-backed fields only:
 - `connected`
 - `workspaceName`
 - `workspaceUrl`
+
+`files` fields:
+
+- `items[]`
+  - `id`
+  - `fileName`
+  - `fileType` (normalized extension, e.g. `pdf`, `docx`, `pptx`, `zip`)
+  - `fileSize`
+  - `uploadedBy`
+  - `uploadedByName`
+  - `uploadedByRole` (`SUPERVISOR` or `STUDENT`)
+  - `createdAt`
+  - `updatedAt`
+- `config`
+  - `maxFileSizeBytes`
+  - `maxFileNameLength`
+  - `allowedTypes[]`
+  - `presignedUrlExpirySeconds`
 
 ### 200 OK
 
@@ -315,3 +338,80 @@ Each node in `roots[]`, `orphans[]`, and every nested `children[]` array has:
 - Endpoint is read-only for students.
 - Data is served from DB-backed Jira issue cache; no live Jira API call is made.
 - If Jira is not connected or no issues are cached, `roots` and `orphans` are both empty arrays.
+
+---
+
+## GET /api/student/projects/{projectId}/files
+
+Returns non-deleted project files + upload constraints for student role.
+
+### Response fields
+
+- `files[]`:
+  - `id`, `fileName`, `fileType`, `fileSize`
+  - `uploadedBy`, `uploadedByName`, `uploadedByRole`
+  - `createdAt`, `updatedAt`
+- `config`:
+  - `maxFileSizeBytes`
+  - `maxFileNameLength`
+  - `allowedTypes[]`
+  - `presignedUrlExpirySeconds`
+
+### Notes
+
+- Excludes soft-deleted rows (`deleted_at IS NULL` only).
+- Students can list only projects where they are members (`member_role = STUDENT`).
+
+---
+
+## POST /api/student/projects/{projectId}/files/upload-url
+
+Generates a pre-signed S3 upload URL.
+
+### Request fields
+
+- `fileName` (required)
+- `contentType` (required MIME)
+
+### Behavior
+
+- Validates file extension and MIME against configured `allowedTypes`.
+- Validates `fileName` length against configured `maxFileNameLength`.
+- Returns:
+  - `presignedUrl`
+  - `s3Key` (UUID-only opaque key)
+
+---
+
+## POST /api/student/projects/{projectId}/files/confirm
+
+Persists uploaded file metadata after successful S3 PUT.
+
+### Request fields
+
+- `s3Key` (required, UUID format)
+- `fileName` (required)
+- `fileType` (required, MIME or extension)
+- `fileSize` (required, positive)
+
+### Validation rules
+
+- `fileName` length must be `<= maxFileNameLength`.
+- `fileType` must resolve to a configured allowed extension.
+- `fileName` extension and `fileType` must match.
+- `fileSize` must be `> 0` and `<= maxFileSizeBytes`.
+
+### Response
+
+- Returns normalized `ProjectFileDto` where `fileType` is stored as extension.
+
+---
+
+## GET /api/student/projects/{projectId}/files/{fileId}/download-url
+
+Returns a pre-signed S3 download URL for one file.
+
+### Notes
+
+- Student access is restricted to assigned projects.
+- Soft-deleted files return `404 NOT_FOUND`.

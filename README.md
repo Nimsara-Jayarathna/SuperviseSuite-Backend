@@ -109,6 +109,14 @@ The backend reads DB and auth config from environment variables:
 - `ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS` — consecutive negative-net weeks required to flag backlog growth (default: `2`)
 - `ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES` — comma-separated Jira priority names treated as high priority (default: `High,Highest`)
 - `ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES` — comma-separated Jira issue type names treated as bugs/defects (default: `Bug`)
+- `PROJECT_FILES_AWS_REGION` — AWS region for the S3 bucket used for project files (default: `ap-south-1`)
+- `PROJECT_FILES_BUCKET_NAME` — AWS S3 bucket name for project file storage (default: `supervisesuite-files-local`)
+- `PROJECT_FILES_AWS_ACCESS_KEY_ID` — AWS IAM Access Key ID with S3 permissions
+- `PROJECT_FILES_AWS_SECRET_ACCESS_KEY` — AWS IAM Secret Access Key with S3 permissions
+- `PROJECT_FILES_MAX_FILE_SIZE_BYTES` — maximum allowed project file size in bytes (default: `10485760`)
+- `PROJECT_FILES_MAX_FILE_NAME_LENGTH` — maximum allowed length for project file names (default: `50`)
+- `PROJECT_FILES_ALLOWED_TYPES` — comma-separated allowed file extensions/types for project files (default: `pdf,docx,pptx,zip`)
+- `PROJECT_FILES_PRESIGNED_URL_EXPIRY_SECONDS` — expiry duration in seconds for generated S3 presigned URLs (default: `300`)
 
 Setup for local development:
 
@@ -153,6 +161,14 @@ ATLASSIAN_ANALYTICS_RECENT_SPRINTS_LIMIT=3
 ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS=2
 ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES=High,Highest
 ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES=Bug
+PROJECT_FILES_AWS_REGION=ap-south-1
+PROJECT_FILES_BUCKET_NAME=supervisesuite-files-local
+PROJECT_FILES_AWS_ACCESS_KEY_ID=<your-aws-access-key-id>
+PROJECT_FILES_AWS_SECRET_ACCESS_KEY=<your-aws-secret-access-key>
+PROJECT_FILES_MAX_FILE_SIZE_BYTES=10485760
+PROJECT_FILES_MAX_FILE_NAME_LENGTH=50
+PROJECT_FILES_ALLOWED_TYPES=pdf,docx,pptx,zip
+PROJECT_FILES_PRESIGNED_URL_EXPIRY_SECONDS=300
 ```
 
 3. Keep hostnames consistent across FE/BE in local dev:

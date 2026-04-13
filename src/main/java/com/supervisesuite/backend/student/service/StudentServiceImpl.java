@@ -30,6 +30,9 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
 import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
 import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressService;
 import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
+import com.supervisesuite.backend.projectfiles.service.ProjectFileAccessRole;
+import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashMap;
 import java.util.ArrayList;
@@ -56,6 +59,7 @@ class StudentServiceImpl implements StudentService {
     private final JiraHealthService jiraHealthService;
     private final JiraSprintProgressService jiraSprintProgressService;
     private final JiraWorkloadService jiraWorkloadService;
+    private final ProjectFileService projectFileService;
 
     StudentServiceImpl(
          UserRepository userRepository,
@@ -68,7 +72,8 @@ class StudentServiceImpl implements StudentService {
          ProjectJiraIssueRepository projectJiraIssueRepository,
             JiraHealthService jiraHealthService,
             JiraSprintProgressService jiraSprintProgressService,
-            JiraWorkloadService jiraWorkloadService
+            JiraWorkloadService jiraWorkloadService,
+            ProjectFileService projectFileService
     ) {
          this.userRepository = userRepository;
          this.projectMemberRepository = projectMemberRepository;
@@ -81,6 +86,7 @@ class StudentServiceImpl implements StudentService {
          this.jiraHealthService = jiraHealthService;
          this.jiraSprintProgressService = jiraSprintProgressService;
          this.jiraWorkloadService = jiraWorkloadService;
+         this.projectFileService = projectFileService;
     }
 
     @Override
@@ -161,7 +167,7 @@ class StudentServiceImpl implements StudentService {
             .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
             .orElse(null);
 
-        return new StudentProjectDetailDto(
+        StudentProjectDetailDto detail = new StudentProjectDetailDto(
             project.getId(),
             project.getName(),
             project.getDescription(),
@@ -184,6 +190,13 @@ class StudentServiceImpl implements StudentService {
             members,
             milestones
         );
+        ProjectFileListDto files = projectFileService.listFiles(
+            student.getId().toString(),
+            project.getId().toString(),
+            ProjectFileAccessRole.STUDENT
+        );
+        detail.setFiles(new StudentProjectDetailDto.Files(files.files(), files.config()));
+        return detail;
     }
 
     @Override
