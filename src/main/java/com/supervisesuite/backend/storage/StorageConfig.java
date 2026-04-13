@@ -2,6 +2,7 @@ package com.supervisesuite.backend.storage;
 
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.config.ProjectFileProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.util.StringUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +22,7 @@ public class StorageConfig {
     }
 
     @Bean
+    @ConditionalOnMissingBean
     public S3Client s3Client(ProjectFileProperties projectFileProperties) {
         S3ClientBuilder builder = S3Client.builder()
             .region(resolveRegion(projectFileProperties))
@@ -30,6 +32,7 @@ public class StorageConfig {
     }
 
     @Bean
+    @ConditionalOnMissingBean
     public S3Presigner s3Presigner(ProjectFileProperties projectFileProperties) {
         S3Presigner.Builder builder = S3Presigner.builder()
             .region(resolveRegion(projectFileProperties))

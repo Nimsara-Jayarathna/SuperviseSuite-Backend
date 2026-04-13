@@ -45,6 +45,29 @@ app:
     secure: ${COOKIE_SECURE:true}
   frontend:
     base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+  registration:
+    domain-restriction-enabled: ${REGISTRATION_DOMAIN_RESTRICTION_ENABLED:true}
+    student-email-domain: ${REGISTRATION_STUDENT_EMAIL_DOMAIN:@my.sliit.lk}
+    supervisor-email-domain: ${REGISTRATION_SUPERVISOR_EMAIL_DOMAIN:@sliit.lk}
+    student-email-prefix-restriction-enabled: ${REGISTRATION_STUDENT_EMAIL_PREFIX_RESTRICTION_ENABLED:true}
+    student-email-prefix-regex: ${REGISTRATION_STUDENT_EMAIL_PREFIX_REGEX:^IT(1[5-9]|[2-4][0-9]|50)[0-9]{6}$}
+    otp-expiry-seconds: ${REGISTRATION_OTP_EXPIRY_SECONDS:600}
+    session-expiry-seconds: ${REGISTRATION_SESSION_EXPIRY_SECONDS:600}
+    cleanup:
+      enabled: ${REGISTRATION_CLEANUP_ENABLED:true}
+      initial-delay-ms: ${REGISTRATION_CLEANUP_INITIAL_DELAY_MS:120000}
+      fixed-delay-ms: ${REGISTRATION_CLEANUP_FIXED_DELAY_MS:900000}
+  rate-limiting:
+    enabled: ${RATE_LIMITING_ENABLED:true}
+    trust-forwarded-for: ${RATE_LIMITING_TRUST_FORWARDED_FOR:true}
+    auth:
+      enabled: ${RATE_LIMITING_AUTH_ENABLED:true}
+      window-seconds: ${RATE_LIMITING_AUTH_WINDOW_SECONDS:60}
+      max-requests: ${RATE_LIMITING_AUTH_MAX_REQUESTS:10}
+    authenticated:
+      enabled: ${RATE_LIMITING_AUTHENTICATED_ENABLED:true}
+      window-seconds: ${RATE_LIMITING_AUTHENTICATED_WINDOW_SECONDS:60}
+      max-requests: ${RATE_LIMITING_AUTHENTICATED_MAX_REQUESTS:240}
   github:
     api-base-url: ${GITHUB_API_BASE_URL:https://api.github.com}
     token: ${GITHUB_TOKEN:}
@@ -98,6 +121,10 @@ app:
       backlog-growing-consecutive-weeks: ${ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS:2}
       high-priority-names: ${ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES:High,Highest}
       bug-type-names: ${ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES:Bug}
+  brevo:
+    api-key: ${BREVO_API_KEY:}
+    sender-email: ${BREVO_SENDER_EMAIL:no-reply@supervisesuite.xyz}
+    sender-name: ${BREVO_SENDER_NAME:SuperviseSuite}
   project-files:
     aws-region: ${PROJECT_FILES_AWS_REGION:ap-south-1}
     bucket-name: ${PROJECT_FILES_BUCKET_NAME:supervisesuite-files-local}

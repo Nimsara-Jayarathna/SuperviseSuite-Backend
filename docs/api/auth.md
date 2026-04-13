@@ -2,7 +2,10 @@
 
 ## Endpoints
 
-- [POST /api/auth/register](#post-apiauthregister)
+- [GET /api/auth/register/config](#get-apiauthregisterconfig)
+- [POST /api/auth/register/init](#post-apiauthregisterinit)
+- [POST /api/auth/register/verify](#post-apiauthregisterverify)
+- [POST /api/auth/register/complete](#post-apiauthregistercomplete)
 - [POST /api/auth/login](#post-apiauthlogin)
 - [POST /api/auth/refresh](#post-apiauthrefresh)
 - [POST /api/auth/logout](#post-apiauthlogout)
@@ -42,9 +45,139 @@ A request to a protected endpoint without a valid access token returns `401 UNAU
 
 ---
 
-## POST /api/auth/register
+## Registration Flow (Current)
 
-Registers a new student account. No authentication required.
+Registration is a three-step email-verified flow:
+
+1. `POST /api/auth/register/init` sends a one-time verification code.
+2. `POST /api/auth/register/verify` validates the OTP and returns a short-lived registration token.
+3. `POST /api/auth/register/complete` creates the account and issues auth cookies.
+
+The former single-step `POST /api/auth/register` path is no longer part of the active API contract.
+
+## GET /api/auth/register/config
+
+Returns registration restrictions consumed by the frontend before opening registration.
+
+### 200 OK
+
+```json
+{
+  "success": true,
+  "message": "Registration configuration",
+  "data": {
+    "domainRestrictionEnabled": true,
+    "studentDomain": "@my.sliit.lk",
+    "supervisorDomain": "@sliit.lk",
+    "studentEmailPrefixRestrictionEnabled": true,
+    "studentEmailPrefixRegex": "^IT(1[5-9]|[2-4][0-9]|50)\\d{6}$"
+  },
+  "error": null,
+  "meta": {
+    "timestamp": "2026-04-12T16:30:00Z",
+    "path": "/api/auth/register/config",
+    "traceId": null
+  }
+}
+```
+
+## POST /api/auth/register/init
+
+Sends an OTP to the requested email when policy checks pass.
+
+### Request
+
+```json
+{
+  "email": "it24100487@my.sliit.lk"
+}
+```
+
+### 200 OK
+
+```json
+{
+  "success": true,
+  "message": "Registration initiated",
+  "data": {
+    "message": "OTP sent successfully"
+  },
+  "error": null,
+  "meta": {
+    "timestamp": "2026-04-12T16:30:00Z",
+    "path": "/api/auth/register/init",
+    "traceId": null
+  }
+}
+```
+
+### Common errors
+
+- `400 VALIDATION_ERROR` for invalid email format/domain/prefix rules.
+- `409 CONFLICT` when account already exists for the email.
+
+## POST /api/auth/register/verify
+
+Verifies OTP and returns the registration token used by the complete step.
+
+### Request
+
+```json
+{
+  "email": "it24100487@my.sliit.lk",
+  "otp": "123456"
+}
+```
+
+### 200 OK
+
+```json
+{
+  "success": true,
+  "message": "OTP verified",
+  "data": {
+    "registrationToken": "token_xxx",
+    "requiresRoleSelection": false,
+    "role": "STUDENT"
+  },
+  "error": null,
+  "meta": {
+    "timestamp": "2026-04-12T16:30:00Z",
+    "path": "/api/auth/register/verify",
+    "traceId": null
+  }
+}
+```
+
+### Common errors
+
+- `400 VALIDATION_ERROR` for invalid/expired OTP.
+
+## POST /api/auth/register/complete
+
+Finalizes account creation with registration token + profile data.
+
+### Request
+
+```json
+{
+  "registrationToken": "token_xxx",
+  "fname": "Nimal",
+  "lname": "Perera",
+  "password": "Secure@123",
+  "name": "IT24100487",
+  "role": "STUDENT"
+}
+```
+
+### 201 Created
+
+Returns unified envelope and sets `ss_access_token` and `ss_refresh_token` cookies.
+
+### Common errors
+
+- `400 VALIDATION_ERROR` for expired/used token or payload rule failures.
+- `409 CONFLICT` for duplicate email/registration number.
 
 ### Request
 
@@ -177,7 +310,7 @@ Returned when a required field is missing, blank, fails format checks, or the pa
 
 - Assigned role is always `STUDENT`. Supervisor accounts are not self-registered.
 - Password is never returned in any response. BCrypt hash is stored server-side.
-- Email verification is out of scope — accounts are considered verified upon registration.
+- Email verification is mandatory and performed by `register/init` + `register/verify` before account completion.
 
 ---
 

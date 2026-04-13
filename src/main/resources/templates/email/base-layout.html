@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <style th:inline="css">
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f9fafb; color: #111827; margin: 0; padding: 0; }
+        .email-wrapper { width: 100%; background-color: #f9fafb; padding: 40px 20px; }
+        .email-content { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); }
+        .email-header { background-color: #0f172a; padding: 32px 20px; text-align: center; }
+        .email-header h1 { color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em; text-transform: uppercase; }
+        .email-body { padding: 40px; }
+        .email-body h2 { color: #111827; font-size: 22px; font-weight: 700; margin-top: 0; margin-bottom: 20px; }
+        .email-body p { line-height: 1.6; color: #4b5563; font-size: 16px; margin-bottom: 24px; }
+        .action-button { display: inline-block; background-color: #2563eb; color: #ffffff !important; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 16px; transition: background-color 0.2s; }
+        .email-footer { padding: 32px 20px; text-align: center; font-size: 14px; color: #6b7280; }
+        .email-footer a { color: #2563eb; text-decoration: none; font-weight: 500; }
+        .divider { height: 1px; background-color: #e5e7eb; margin: 32px 0; }
+    </style>
+</head>
+<body th:fragment="layout(content)">
+    <div class="email-wrapper">
+        <div class="email-content">
+            <div class="email-header">
+                <h1>SuperviseSuite</h1>
+            </div>
+            <div class="email-body">
+                <div th:replace="${content}"></div>
+                <div class="divider"></div>
+                <p>If you have any questions, feel free to reply to this email or visit our <a th:href="${frontendBaseUrl ?: '#'}" target="_blank">Help Center</a>.</p>
+            </div>
+            <div class="email-footer">
+                <p>&copy; <span th:text="${currentYear}">2026</span> SuperviseSuite. All rights reserved.</p>
+                <p>123 University Way, SLIIT, Sri Lanka</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

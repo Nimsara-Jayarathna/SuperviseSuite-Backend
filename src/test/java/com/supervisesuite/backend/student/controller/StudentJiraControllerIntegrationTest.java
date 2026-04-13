@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.supervisesuite.backend.TestcontainersConfiguration;
 import com.supervisesuite.backend.auth.security.CookieService;
 import com.supervisesuite.backend.auth.security.JwtService;
+import com.supervisesuite.backend.auth.repository.RefreshTokenRepository;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
@@ -63,12 +64,16 @@ class StudentJiraControllerIntegrationTest {
     @Autowired
     private ProjectMilestoneRepository projectMilestoneRepository;
 
+    @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
+
     @BeforeEach
     void cleanUp() {
         projectMilestoneRepository.deleteAll();
         projectMemberRepository.deleteAll();
         projectJiraIssueRepository.deleteAll();
         projectRepository.deleteAll();
+        refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
     }
 
