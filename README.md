@@ -16,14 +16,16 @@ Current API references:
 
 Backend fix documents:
 
-- `docs/major-fixes-scrum-97-supervisor-workflow.md`
-- `docs/major-fixes-scrum-80-github-app-dashboard.md`
-- `docs/major-fixes-scrum-81-multiple-github-repositories.md`
-- `docs/major-fixes-scrum-83-us-203-view-sprint-progress-dashboard.md`
-- `docs/major-fixes-scrum-84-us-204-sprint-progress-velocity.md`
-- `docs/recent-changes-2026-03-05.md`
-- `docs/recent-changes-2026-04-08.md`
-- `docs/recent-changes-2026-04-09.md`
+- `docs/backend/major-fixes-scrum-97-supervisor-workflow.md`
+- `docs/backend/major-fixes-scrum-80-github-app-dashboard.md`
+- `docs/backend/major-fixes-scrum-81-multiple-github-repositories.md`
+- `docs/backend/major-fixes-scrum-83-us-203-view-sprint-progress-dashboard.md`
+- `docs/backend/major-fixes-scrum-84-us-204-sprint-progress-velocity.md`
+- `docs/backend/recent-changes-2026-03-05.md`
+- `docs/backend/recent-changes-2026-04-08.md`
+- `docs/backend/recent-changes-2026-04-09.md`
+- `docs/backend/recent-changes-2026-04-12-auth-rate-limiting-registration.md`
+- `docs/backend/recent-changes-2026-04-13-password-change-pool-tuning.md`
 
 Database documentation:
 
@@ -66,7 +68,7 @@ Use `.env.example` as the authoritative list of supported keys:
 
 Current variable groups are:
 
-- Database: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
+- Database: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `DB_MAX_POOL_SIZE`, `DB_MIN_IDLE`, `DB_CONNECTION_TIMEOUT_MS`, `DB_IDLE_TIMEOUT_MS`, `DB_MAX_LIFETIME_MS`, `DB_KEEPALIVE_TIME_MS`, `DB_VALIDATION_TIMEOUT_MS`
 - App/CORS: `APP_PORT`, `COOKIE_SECURE`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_BASE_URL`
 - Registration policy: `REGISTRATION_DOMAIN_RESTRICTION_ENABLED`, `REGISTRATION_STUDENT_EMAIL_DOMAIN`, `REGISTRATION_SUPERVISOR_EMAIL_DOMAIN`, `REGISTRATION_STUDENT_EMAIL_PREFIX_RESTRICTION_ENABLED`, `REGISTRATION_STUDENT_EMAIL_PREFIX_REGEX`
 - Registration verification lifecycle: `REGISTRATION_OTP_EXPIRY_SECONDS`, `REGISTRATION_SESSION_EXPIRY_SECONDS`, `REGISTRATION_CLEANUP_ENABLED`, `REGISTRATION_CLEANUP_INITIAL_DELAY_MS`, `REGISTRATION_CLEANUP_FIXED_DELAY_MS`
@@ -80,6 +82,13 @@ The backend reads DB and auth config from environment variables:
 - `DB_URL`
 - `DB_USERNAME`
 - `DB_PASSWORD`
+- `DB_MAX_POOL_SIZE` — maximum number of DB connections in Hikari pool (default: `10`)
+- `DB_MIN_IDLE` — minimum idle connections Hikari keeps ready (default: `5`)
+- `DB_CONNECTION_TIMEOUT_MS` — max wait to borrow a connection from pool in milliseconds (default: `30000`)
+- `DB_IDLE_TIMEOUT_MS` — max idle time before eligible connection eviction in milliseconds (default: `600000`)
+- `DB_MAX_LIFETIME_MS` — max total lifetime of a pooled connection in milliseconds before recycle (default: `1800000`)
+- `DB_KEEPALIVE_TIME_MS` — keepalive interval for idle pooled connections in milliseconds (default: `300000`)
+- `DB_VALIDATION_TIMEOUT_MS` — max time to validate connection health in milliseconds (default: `5000`)
 - `APP_PORT`
 - `CORS_ALLOWED_ORIGINS`
 - `FRONTEND_BASE_URL` — frontend base URL used by backend redirects (for example GitHub setup callback)
@@ -143,6 +152,13 @@ Setup for local development:
 APP_PORT=8081
 CORS_ALLOWED_ORIGINS=http://localhost:5173
 COOKIE_SECURE=false
+DB_MAX_POOL_SIZE=10
+DB_MIN_IDLE=5
+DB_CONNECTION_TIMEOUT_MS=30000
+DB_IDLE_TIMEOUT_MS=600000
+DB_MAX_LIFETIME_MS=1800000
+DB_KEEPALIVE_TIME_MS=300000
+DB_VALIDATION_TIMEOUT_MS=5000
 REGISTRATION_DOMAIN_RESTRICTION_ENABLED=true
 REGISTRATION_STUDENT_EMAIL_DOMAIN=@my.sliit.lk
 REGISTRATION_SUPERVISOR_EMAIL_DOMAIN=@sliit.lk

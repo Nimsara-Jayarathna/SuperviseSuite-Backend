@@ -6,6 +6,8 @@ import static org.mockito.Mockito.when;
 
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
+import com.supervisesuite.backend.auth.dto.ChangePasswordRequest;
+import com.supervisesuite.backend.auth.service.AuthService;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
@@ -42,6 +44,8 @@ class SupervisorControllerTest {
 
     @Mock
     private ApiResponseFactory apiResponseFactory;
+    @Mock
+    private AuthService authService;
 
     @Mock
     private Authentication authentication;
@@ -53,8 +57,23 @@ class SupervisorControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new SupervisorController(supervisorService, apiResponseFactory);
+        controller = new SupervisorController(supervisorService, authService, apiResponseFactory);
         when(authentication.getName()).thenReturn("supervisor-id");
+    }
+
+    @Test
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    void changePassword_delegatesToAuthServiceAndFactory() {
+        ChangePasswordRequest body = new ChangePasswordRequest();
+        body.setCurrentPassword("Old1234!");
+        body.setNewPassword("New1234!");
+        ResponseEntity<ApiResponse<Void>> expected = ResponseEntity.ok(new ApiResponse<>());
+        when(apiResponseFactory.ok("Password updated successfully.", null, request)).thenReturn((ResponseEntity) expected);
+
+        ResponseEntity<ApiResponse<Void>> response = controller.changePassword(authentication, request, body);
+
+        assertThat(response).isSameAs(expected);
+        verify(authService).changePassword("supervisor-id", body);
     }
 
     @Test

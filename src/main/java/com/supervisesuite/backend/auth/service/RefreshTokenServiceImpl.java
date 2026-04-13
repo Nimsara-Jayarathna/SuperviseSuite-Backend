@@ -90,6 +90,12 @@ class RefreshTokenServiceImpl implements RefreshTokenService {
         });
     }
 
+    @Override
+    @Transactional
+    public void revokeAllForUser(User user) {
+        refreshTokenRepository.deleteAllByUser(user);
+    }
+
     /**
      * Computes the SHA-256 hash of the raw token and returns it as standard
      * Base64 — identical to the algorithm used when the token is stored.

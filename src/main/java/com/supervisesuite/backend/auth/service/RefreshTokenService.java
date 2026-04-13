@@ -44,4 +44,6 @@ public interface RefreshTokenService {
      * @param rawToken the raw (unhashed) refresh token received from the client
      */
     void revoke(String rawToken);
+
+    void revokeAllForUser(User user);
 }
