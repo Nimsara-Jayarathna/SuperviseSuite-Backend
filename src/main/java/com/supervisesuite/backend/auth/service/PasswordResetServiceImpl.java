@@ -95,6 +95,10 @@ class PasswordResetServiceImpl implements PasswordResetService {
             .orElseThrow(() -> new ValidationException("token", "Reset token is invalid or expired."));
 
         User user = token.getUser();
+        if (user.getPasswordHash() != null && passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            throw new ValidationException("newPassword", "New password must be different from current password.");
+        }
+
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
