@@ -99,6 +99,9 @@ import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
 import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
 import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressService;
 import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
+import com.supervisesuite.backend.projectfiles.service.ProjectFileAccessRole;
+import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
 
 @Service
 class SupervisorServiceImpl implements SupervisorService {
@@ -143,6 +146,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final JiraHealthService jiraHealthService;
     private final JiraSprintProgressService jiraSprintProgressService;
     private final JiraWorkloadService jiraWorkloadService;
+    private final ProjectFileService projectFileService;
     private final RestClient restClient;
     private final SecureRandom secureRandom = new SecureRandom();
     private final Map<String, PendingJiraWorkspaceSelection> pendingJiraWorkspaceSelections = new ConcurrentHashMap<>();
@@ -168,6 +172,7 @@ class SupervisorServiceImpl implements SupervisorService {
             JiraHealthService jiraHealthService,
             JiraSprintProgressService jiraSprintProgressService,
             JiraWorkloadService jiraWorkloadService,
+            ProjectFileService projectFileService,
             RestClient.Builder restClientBuilder) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
@@ -188,6 +193,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.jiraHealthService = jiraHealthService;
         this.jiraSprintProgressService = jiraSprintProgressService;
         this.jiraWorkloadService = jiraWorkloadService;
+        this.projectFileService = projectFileService;
         this.restClient = restClientBuilder.build();
     }
 
@@ -319,7 +325,13 @@ class SupervisorServiceImpl implements SupervisorService {
                 .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
                 .orElseThrow(EntityNotFoundException::new);
 
-        return toProjectDetail(project);
+        SupervisorProjectDetailDto detail = toProjectDetail(project);
+        ProjectFileListDto files = projectFileService.listFiles(
+                supervisor.getId().toString(),
+                project.getId().toString(),
+                ProjectFileAccessRole.SUPERVISOR);
+        detail.setFiles(new SupervisorProjectDetailDto.Files(files.files(), files.config()));
+        return detail;
     }
 
     @Override
