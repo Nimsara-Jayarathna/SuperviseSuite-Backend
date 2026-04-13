@@ -1,5 +1,6 @@
 package com.supervisesuite.backend.auth.controller;
 
+import com.supervisesuite.backend.auth.dto.ForgotPasswordRequest;
 import com.supervisesuite.backend.auth.dto.LoginRequest;
 import com.supervisesuite.backend.auth.dto.LoginResponse;
 import com.supervisesuite.backend.auth.dto.LoginUserResponse;
@@ -8,9 +9,12 @@ import com.supervisesuite.backend.auth.dto.RegisterCompleteRequest;
 import com.supervisesuite.backend.auth.dto.RegisterInitRequest;
 import com.supervisesuite.backend.auth.dto.RegisterVerifyRequest;
 import com.supervisesuite.backend.auth.dto.RegisterVerifyResponse;
+import com.supervisesuite.backend.auth.dto.ResetPasswordRequest;
+import com.supervisesuite.backend.auth.dto.ValidateResetTokenResponse;
 import com.supervisesuite.backend.auth.security.CookieService;
 import com.supervisesuite.backend.auth.security.TokenService;
 import com.supervisesuite.backend.auth.service.AuthService;
+import com.supervisesuite.backend.auth.service.PasswordResetService;
 import com.supervisesuite.backend.auth.service.RefreshTokenService;
 import com.supervisesuite.backend.auth.service.RefreshTokenValidator;
 import com.supervisesuite.backend.auth.service.RegistrationService;
@@ -32,6 +36,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -53,6 +58,7 @@ public class AuthController {
     private final RegistrationService registrationService;
     private final RegistrationProperties registrationProperties;
     private final ApiResponseFactory apiResponseFactory;
+    private final PasswordResetService passwordResetService;
 
     public AuthController(
         AuthService authService,
@@ -62,7 +68,8 @@ public class AuthController {
         RefreshTokenValidator refreshTokenValidator,
         RegistrationService registrationService,
         RegistrationProperties registrationProperties,
-        ApiResponseFactory apiResponseFactory
+        ApiResponseFactory apiResponseFactory,
+        PasswordResetService passwordResetService
     ) {
         this.authService = authService;
         this.cookieService = cookieService;
@@ -72,6 +79,7 @@ public class AuthController {
         this.registrationService = registrationService;
         this.registrationProperties = registrationProperties;
         this.apiResponseFactory = apiResponseFactory;
+        this.passwordResetService = passwordResetService;
     }
 
     @GetMapping("/register/config")
@@ -254,6 +262,45 @@ public class AuthController {
             cookieService.buildClearRefreshTokenCookie().toString());
 
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<Map<String, String>>> forgotPassword(
+        @Valid @RequestBody ForgotPasswordRequest request,
+        HttpServletRequest httpRequest
+    ) {
+        passwordResetService.requestPasswordReset(request.getEmail());
+        return apiResponseFactory.ok(
+            "If the email is registered, a reset link has been sent.",
+            Map.of("message", "If the email is registered, a reset link has been sent."),
+            httpRequest
+        );
+    }
+
+    @GetMapping("/reset-password/validate")
+    public ResponseEntity<ApiResponse<ValidateResetTokenResponse>> validateResetToken(
+        @RequestParam("token") String token,
+        HttpServletRequest httpRequest
+    ) {
+        boolean isValid = passwordResetService.isResetTokenValid(token);
+        return apiResponseFactory.ok(
+            "Reset token validation completed.",
+            new ValidateResetTokenResponse(isValid),
+            httpRequest
+        );
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<Map<String, String>>> resetPassword(
+        @Valid @RequestBody ResetPasswordRequest request,
+        HttpServletRequest httpRequest
+    ) {
+        passwordResetService.resetPassword(request.getToken(), request.getNewPassword());
+        return apiResponseFactory.ok(
+            "Password reset successful.",
+            Map.of("message", "Password reset successful."),
+            httpRequest
+        );
     }
 
     /**

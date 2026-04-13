@@ -11,6 +11,7 @@ import com.supervisesuite.backend.auth.dto.RegisterVerifyResponse;
 import com.supervisesuite.backend.auth.security.CookieService;
 import com.supervisesuite.backend.auth.security.TokenService;
 import com.supervisesuite.backend.auth.service.AuthService;
+import com.supervisesuite.backend.auth.service.PasswordResetService;
 import com.supervisesuite.backend.auth.service.RefreshTokenService;
 import com.supervisesuite.backend.auth.service.RefreshTokenValidator;
 import com.supervisesuite.backend.auth.service.RegistrationService;
@@ -53,7 +54,8 @@ class AuthControllerRegistrationFlowUnitTest {
             mock(RefreshTokenValidator.class),
             registrationService,
             new RegistrationProperties(),
-            new ApiResponseFactory()
+            new ApiResponseFactory(),
+            mock(PasswordResetService.class)
         );
     }
 

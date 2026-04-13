@@ -31,4 +31,21 @@ public interface EmailService {
      * @param name Recipient's display name.
      */
     void sendPasswordChangeAlert(String to, String name);
+
+    /**
+     * Sends a password reset email containing a single-use reset link.
+     *
+     * @param to Recipient email address.
+     * @param name Recipient display name.
+     * @param resetUrl Password reset URL containing the raw token.
+     */
+    void sendPasswordResetEmail(String to, String name, String resetUrl);
+
+    /**
+     * Sends a post-reset notification after a password reset completes.
+     *
+     * @param to Recipient email address.
+     * @param name Recipient display name.
+     */
+    void sendPasswordResetSuccessEmail(String to, String name);
 }

@@ -54,4 +54,29 @@ public class EmailServiceImpl implements EmailService {
         String htmlContent = templateEngine.process("email/password-change", context);
         emailProvider.send(to, "Security Alert: Password Changed", htmlContent);
     }
+
+    @Override
+    public void sendPasswordResetEmail(String to, String name, String resetUrl) {
+        Context context = new Context();
+        context.setVariables(Map.of(
+            "name", name,
+            "resetUrl", resetUrl,
+            "currentYear", Year.now().getValue()
+        ));
+
+        String htmlContent = templateEngine.process("email/password-reset", context);
+        emailProvider.send(to, "Reset your SuperviseSuite password", htmlContent);
+    }
+
+    @Override
+    public void sendPasswordResetSuccessEmail(String to, String name) {
+        Context context = new Context();
+        context.setVariables(Map.of(
+            "name", name,
+            "currentYear", Year.now().getValue()
+        ));
+
+        String htmlContent = templateEngine.process("email/password-reset-success", context);
+        emailProvider.send(to, "Your SuperviseSuite password was reset", htmlContent);
+    }
 }

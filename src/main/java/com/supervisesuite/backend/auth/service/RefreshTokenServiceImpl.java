@@ -9,6 +9,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -94,6 +95,12 @@ class RefreshTokenServiceImpl implements RefreshTokenService {
     @Transactional
     public void revokeAllForUser(User user) {
         refreshTokenRepository.deleteAllByUser(user);
+    }
+
+    @Override
+    @Transactional
+    public void revokeAll(UUID userId) {
+        refreshTokenRepository.deleteAllByUserId(userId);
     }
 
     /**
