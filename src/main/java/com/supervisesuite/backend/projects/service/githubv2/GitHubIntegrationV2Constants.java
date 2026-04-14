@@ -16,6 +16,7 @@ public final class GitHubIntegrationV2Constants {
     public static final String SYNC_STATUS_SUCCESS = "SUCCESS";
     public static final String SYNC_STATUS_FAILED = "FAILED";
     public static final String SYNC_STATUS_PENDING = "PENDING";
+    public static final String SYNC_STATUS_IN_PROGRESS = "IN_PROGRESS";
     public static final String SYNC_STATUS_DISABLED = "DISABLED";
 
     public static final String DEFAULT_BRANCH = "main";

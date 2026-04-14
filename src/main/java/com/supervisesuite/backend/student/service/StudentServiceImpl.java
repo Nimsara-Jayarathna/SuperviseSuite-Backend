@@ -184,7 +184,12 @@ class StudentServiceImpl implements StudentService {
                 jiraIntegration != null,
                 jiraIntegration != null ? jiraIntegration.getWorkspaceName() : null,
                 jiraIntegration != null ? jiraIntegration.getWorkspaceUrl() : null,
-                jiraIntegration != null ? jiraIntegration.getConnectedAt() : null
+                jiraIntegration != null
+                    ? (jiraIntegration.getLastSyncedAt() != null
+                        ? jiraIntegration.getLastSyncedAt()
+                        : jiraIntegration.getConnectedAt())
+                    : null,
+                jiraIntegration != null ? jiraIntegration.getSyncStatus() : null
             ),
             leader,
             members,

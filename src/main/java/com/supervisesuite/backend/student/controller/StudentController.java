@@ -1,5 +1,7 @@
 package com.supervisesuite.backend.student.controller;
 
+import com.supervisesuite.backend.auth.dto.ChangePasswordRequest;
+import com.supervisesuite.backend.auth.service.AuthService;
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
@@ -12,12 +14,15 @@ import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.student.service.StudentService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,11 +33,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class StudentController {
 
     private final StudentService studentService;
+    private final AuthService authService;
     private final ApiResponseFactory apiResponseFactory;
 
-    public StudentController(StudentService studentService, ApiResponseFactory apiResponseFactory) {
+    public StudentController(StudentService studentService, AuthService authService, ApiResponseFactory apiResponseFactory) {
         this.studentService = studentService;
+        this.authService = authService;
         this.apiResponseFactory = apiResponseFactory;
+    }
+
+    @PatchMapping("/me/password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+        Authentication authentication,
+        @Valid @RequestBody ChangePasswordRequest body,
+        HttpServletRequest request
+    ) {
+        authService.changePassword(authentication.getName(), body);
+        return apiResponseFactory.ok("Password updated successfully.", null, request);
     }
 
     @GetMapping("/projects")

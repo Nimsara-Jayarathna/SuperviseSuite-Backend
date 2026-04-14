@@ -6,6 +6,8 @@ import static org.mockito.Mockito.when;
 
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
+import com.supervisesuite.backend.auth.dto.ChangePasswordRequest;
+import com.supervisesuite.backend.auth.service.AuthService;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
@@ -30,6 +32,8 @@ class StudentControllerTest {
 
     @Mock
     private ApiResponseFactory apiResponseFactory;
+    @Mock
+    private AuthService authService;
 
     @Mock
     private Authentication authentication;
@@ -41,8 +45,23 @@ class StudentControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new StudentController(studentService, apiResponseFactory);
+        controller = new StudentController(studentService, authService, apiResponseFactory);
         when(authentication.getName()).thenReturn("student-id");
+    }
+
+    @Test
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    void changePassword_delegatesToAuthServiceAndFactory() {
+        ChangePasswordRequest body = new ChangePasswordRequest();
+        body.setCurrentPassword("Old1234!");
+        body.setNewPassword("New1234!");
+        ResponseEntity<ApiResponse<Void>> expected = ResponseEntity.ok(new ApiResponse<>());
+        when(apiResponseFactory.ok("Password updated successfully.", null, request)).thenReturn((ResponseEntity) expected);
+
+        ResponseEntity<ApiResponse<Void>> response = controller.changePassword(authentication, body, request);
+
+        assertThat(response).isSameAs(expected);
+        verify(authService).changePassword("student-id", body);
     }
 
     @Test

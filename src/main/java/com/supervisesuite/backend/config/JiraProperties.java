@@ -33,4 +33,21 @@ public class JiraProperties {
         private List<String> highPriorityNames = new ArrayList<>(List.of("High", "Highest"));
         private List<String> bugTypeNames = new ArrayList<>(List.of("Bug"));
     }
+
+    private Jobs jobs = new Jobs();
+
+    @Getter
+    @Setter
+    public static class Jobs {
+        private IssueSync issueSync = new IssueSync();
+
+        @Getter
+        @Setter
+        public static class IssueSync {
+            private boolean enabled = true;
+            private int batchSize = 50;
+            private int inProgressTimeoutSeconds = 900;
+        }
+    }
 }
+

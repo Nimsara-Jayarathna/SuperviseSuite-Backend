@@ -223,6 +223,14 @@ class RegistrationServiceImpl implements RegistrationService {
         return new LoginResponse(accessToken, refreshToken, userInfo);
     }
 
+    @Override
+    @Transactional
+    public void cleanupExpiredSessionsAndOtps() {
+        Instant now = Instant.now();
+        emailOtpRepository.deleteAllByExpiresAtBeforeOrUsedAtIsNotNull(now);
+        registrationSessionRepository.deleteAllByExpiresAtBeforeOrUsedAtIsNotNull(now);
+    }
+
     private static String resolveEffectiveRole(RegistrationSession session, RegisterCompleteRequest request) {
         if (session.getRole() != null && !session.getRole().isBlank()) {
             return session.getRole();

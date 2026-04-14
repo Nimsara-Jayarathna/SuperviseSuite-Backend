@@ -7,6 +7,7 @@ import com.supervisesuite.backend.auth.dto.RegisterConfigResponse;
 import com.supervisesuite.backend.auth.security.CookieService;
 import com.supervisesuite.backend.auth.security.TokenService;
 import com.supervisesuite.backend.auth.service.AuthService;
+import com.supervisesuite.backend.auth.service.PasswordResetService;
 import com.supervisesuite.backend.auth.service.RefreshTokenService;
 import com.supervisesuite.backend.auth.service.RefreshTokenValidator;
 import com.supervisesuite.backend.auth.service.RegistrationService;
@@ -36,7 +37,8 @@ class AuthControllerRegisterConfigUnitTest {
             mock(RefreshTokenValidator.class),
             mock(RegistrationService.class),
             registrationProperties,
-            new ApiResponseFactory()
+            new ApiResponseFactory(),
+            mock(PasswordResetService.class)
         );
 
         MockHttpServletRequest request = new MockHttpServletRequest();
@@ -70,7 +72,8 @@ class AuthControllerRegisterConfigUnitTest {
             mock(RefreshTokenValidator.class),
             mock(RegistrationService.class),
             registrationProperties,
-            new ApiResponseFactory()
+            new ApiResponseFactory(),
+            mock(PasswordResetService.class)
         );
 
         HttpServletRequest request = new MockHttpServletRequest("GET", "/api/auth/register/config");

@@ -9,6 +9,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -90,6 +91,18 @@ class RefreshTokenServiceImpl implements RefreshTokenService {
         });
     }
 
+    @Override
+    @Transactional
+    public void revokeAllForUser(User user) {
+        refreshTokenRepository.deleteAllByUser(user);
+    }
+
+    @Override
+    @Transactional
+    public void revokeAll(UUID userId) {
+        refreshTokenRepository.deleteAllByUserId(userId);
+    }
+
     /**
      * Computes the SHA-256 hash of the raw token and returns it as standard
      * Base64 — identical to the algorithm used when the token is stored.
@@ -102,5 +115,11 @@ class RefreshTokenServiceImpl implements RefreshTokenService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 algorithm not available", e);
         }
+    }
+
+    @Override
+    @Transactional
+    public void cleanupExpiredAndRevokedTokens() {
+        refreshTokenRepository.deleteAllByExpiresAtBeforeOrRevokedAtIsNotNull(Instant.now());
     }
 }

@@ -9,7 +9,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @Configuration
 @EnableConfigurationProperties({
     RegistrationProperties.class,
-    RateLimitingProperties.class
+    RateLimitingProperties.class,
+    PasswordResetProperties.class
 })
 public class AppConfig {
 

@@ -2,6 +2,7 @@ package com.supervisesuite.backend.supervisor.service;
 
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.ApiErrorDetail;
+import com.supervisesuite.backend.common.error.ConflictException;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
@@ -864,7 +865,13 @@ class SupervisorServiceImpl implements SupervisorService {
                         jiraIntegration != null,
                         jiraIntegration != null ? jiraIntegration.getWorkspaceName() : null,
                     jiraIntegration != null ? jiraIntegration.getWorkspaceUrl() : null,
-                    jiraIntegration != null ? jiraIntegration.getConnectedAt() : null),
+                    jiraIntegration != null
+                        ? (jiraIntegration.getLastSyncedAt() != null
+                            ? jiraIntegration.getLastSyncedAt()
+                            : jiraIntegration.getConnectedAt())
+                        : null,
+                    jiraIntegration != null ? jiraIntegration.getTokenExpiresAt() : null,
+                    jiraIntegration != null ? jiraIntegration.getSyncStatus() : null),
                 project.getLastActivityAt(),
                 toDetailLeader(project.getLeaderUserId()),
                 getProjectMembers(project.getId()),
@@ -1352,6 +1359,9 @@ class SupervisorServiceImpl implements SupervisorService {
                     "Jira is not connected for this project.",
                     List.of(new ApiErrorDetail("jira", "Jira is not connected for this project.")));
         }
+        if ("IN_PROGRESS".equals(activeIntegration.getSyncStatus())) {
+            throw new ConflictException("Cannot disconnect Jira while sync is in progress.");
+        }
 
         Instant now = Instant.now();
         projectJiraIntegrationRepository.delete(activeIntegration);
@@ -1451,7 +1461,6 @@ class SupervisorServiceImpl implements SupervisorService {
     }
 
     @Override
-    @Transactional
     public JiraHealthDto refreshProjectJiraData(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
@@ -1470,76 +1479,6 @@ class SupervisorServiceImpl implements SupervisorService {
         }
 
         Instant now = Instant.now();
-        if (activeIntegration.getTokenExpiresAt() != null && now.isAfter(activeIntegration.getTokenExpiresAt().minusSeconds(60))) {
-            String refreshTokenEncrypted = activeIntegration.getRefreshTokenEncrypted();
-            if (refreshTokenEncrypted != null && !refreshTokenEncrypted.isBlank()) {
-                try {
-                    String refreshToken = jiraTokenEncryptionService.decrypt(refreshTokenEncrypted);
-                    String clientId = trimToNull(jiraProperties.getClientId());
-                    String clientSecret = trimToNull(jiraProperties.getClientSecret());
-                    String tokenTargetUrl = defaultIfBlank(
-                            trimToNull(jiraProperties.getTokenTargetUrl()),
-                            "https://auth.atlassian.com/oauth/token");
-
-                    if (clientId != null && clientSecret != null) {
-                        Map<String, Object> tokenRequest = new LinkedHashMap<>();
-                        tokenRequest.put("grant_type", "refresh_token");
-                        tokenRequest.put("client_id", clientId);
-                        tokenRequest.put("client_secret", clientSecret);
-                        tokenRequest.put("refresh_token", refreshToken);
-
-                        Map<?, ?> tokenResponse = restClient.post()
-                                .uri(tokenTargetUrl)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .accept(MediaType.APPLICATION_JSON)
-                                .body(tokenRequest)
-                                .retrieve()
-                                .body(Map.class);
-
-                        String newAccessToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("access_token")));
-                        String newRefreshToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("refresh_token")));
-                        Number expiresInSecs = tokenResponse == null || tokenResponse.get("expires_in") == null ? null : (Number) tokenResponse.get("expires_in");
-                        
-                        if (newAccessToken != null && !"null".equalsIgnoreCase(newAccessToken)) {
-                            activeIntegration.setAccessTokenEncrypted(jiraTokenEncryptionService.encrypt(newAccessToken));
-                            if (newRefreshToken != null && !"null".equalsIgnoreCase(newRefreshToken)) {
-                                activeIntegration.setRefreshTokenEncrypted(jiraTokenEncryptionService.encrypt(newRefreshToken));
-                            }
-                            if (expiresInSecs != null) {
-                                activeIntegration.setTokenExpiresAt(Instant.now().plusSeconds(expiresInSecs.longValue()));
-                            }
-                            projectJiraIntegrationRepository.saveAndFlush(activeIntegration);
-                        }
-                    }
-                } catch (RestClientResponseException ex) {
-                    // Atlassian explicitly rejected the refresh token (e.g. invalid_grant,
-                    // revoked token, expired refresh token). This is a permanent auth failure —
-                    // the only resolution is reconnecting Jira.
-                    log.warn("Jira token refresh rejected by Atlassian for project {}. "
-                                    + "Status: {}, Body: {}",
-                            project.getId(),
-                            ex.getStatusCode(),
-                            ex.getResponseBodyAsString());
-                    throw new ServiceUnavailableException(
-                            "Jira access token has expired and Atlassian rejected the refresh "
-                            + "request. Please reconnect Jira from the Integrations tab.");
-                } catch (ResourceAccessException ex) {
-                    // Transient network error reaching Atlassian token endpoint.
-                    // Fall through and attempt the sync with the existing token —
-                    // Atlassian may still honour it if it hasn't fully expired on their side.
-                    log.warn("Jira token refresh network error for project {} — "
-                                    + "proceeding with existing token. Error: {}",
-                            project.getId(), ex.getMessage());
-                } catch (Exception ex) {
-                    // Unexpected failure (e.g. decryption error, null pointer).
-                    log.warn("Jira token refresh unexpected error for project {}. Error: {}",
-                            project.getId(), ex.getMessage());
-                    throw new ServiceUnavailableException(
-                            "Jira access token has expired and could not be refreshed. "
-                            + "Please reconnect Jira from the Integrations tab.");
-                }
-            }
-        }
 
         jiraIssueSyncService.syncProjectIssues(project.getId());
 

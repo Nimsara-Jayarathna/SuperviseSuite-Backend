@@ -165,16 +165,6 @@ public class GitHubProperties {
          * Enable/disable expired token cleanup scheduler.
          */
         private boolean enabled = true;
-
-        /**
-         * Initial delay before first cleanup run (milliseconds).
-         */
-        private long initialDelayMs = 120_000L;
-
-        /**
-         * Fixed delay between cleanup runs (milliseconds).
-         */
-        private long fixedDelayMs = 900_000L;
     }
 
     @Getter
@@ -186,19 +176,14 @@ public class GitHubProperties {
         private boolean enabled = true;
 
         /**
-         * Cron expression for refresh time.
-         */
-        private String cron = "0 0 0 * * *";
-
-        /**
-         * Time zone for cron evaluation.
-         */
-        private String zone = "UTC";
-
-        /**
          * Maximum number of linked repositories refreshed per run.
          */
         private int batchSize = 50;
+
+        /**
+         * Seconds after which an IN_PROGRESS sync claim is treated as stale and reclaimable.
+         */
+        private int inProgressTimeoutSeconds = 900;
     }
 
 }

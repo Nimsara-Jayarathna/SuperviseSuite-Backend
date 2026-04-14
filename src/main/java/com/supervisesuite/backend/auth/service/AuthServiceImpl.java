@@ -1,12 +1,18 @@
 package com.supervisesuite.backend.auth.service;
 
+import com.supervisesuite.backend.auth.dto.ChangePasswordRequest;
 import com.supervisesuite.backend.auth.dto.LoginRequest;
 import com.supervisesuite.backend.auth.dto.LoginResponse;
-import com.supervisesuite.backend.auth.security.TokenService;
+import com.supervisesuite.backend.common.error.DomainException;
+import com.supervisesuite.backend.common.error.ErrorCode;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
+import com.supervisesuite.backend.common.error.ValidationException;
+import com.supervisesuite.backend.auth.security.TokenService;
 import com.supervisesuite.backend.common.util.NormalizationUtils;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
+import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -87,5 +93,43 @@ class AuthServiceImpl implements AuthService {
         );
 
         return new LoginResponse(accessToken, rawRefreshToken, userInfo);
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(String authenticatedUserId, ChangePasswordRequest request) {
+        UUID userId;
+        try {
+            userId = UUID.fromString(authenticatedUserId);
+        } catch (IllegalArgumentException ex) {
+            throw new UnauthorizedException("Unauthorized.");
+        }
+
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new UnauthorizedException("Unauthorized."));
+
+        if (user.getPasswordHash() == null) {
+            throw new DomainException(
+                ErrorCode.CURRENT_PASSWORD_INCORRECT,
+                HttpStatus.BAD_REQUEST,
+                "Current password is incorrect."
+            );
+        }
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+            throw new DomainException(
+                ErrorCode.CURRENT_PASSWORD_INCORRECT,
+                HttpStatus.BAD_REQUEST,
+                "Current password is incorrect."
+            );
+        }
+
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash())) {
+            throw new ValidationException("newPassword", "New password must be different from current password.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+        refreshTokenService.revokeAllForUser(user);
     }
 }

@@ -16,14 +16,16 @@ Current API references:
 
 Backend fix documents:
 
-- `docs/major-fixes-scrum-97-supervisor-workflow.md`
-- `docs/major-fixes-scrum-80-github-app-dashboard.md`
-- `docs/major-fixes-scrum-81-multiple-github-repositories.md`
-- `docs/major-fixes-scrum-83-us-203-view-sprint-progress-dashboard.md`
-- `docs/major-fixes-scrum-84-us-204-sprint-progress-velocity.md`
-- `docs/recent-changes-2026-03-05.md`
-- `docs/recent-changes-2026-04-08.md`
-- `docs/recent-changes-2026-04-09.md`
+- `docs/backend/major-fixes-scrum-97-supervisor-workflow.md`
+- `docs/backend/major-fixes-scrum-80-github-app-dashboard.md`
+- `docs/backend/major-fixes-scrum-81-multiple-github-repositories.md`
+- `docs/backend/major-fixes-scrum-83-us-203-view-sprint-progress-dashboard.md`
+- `docs/backend/major-fixes-scrum-84-us-204-sprint-progress-velocity.md`
+- `docs/backend/recent-changes-2026-03-05.md`
+- `docs/backend/recent-changes-2026-04-08.md`
+- `docs/backend/recent-changes-2026-04-09.md`
+- `docs/backend/recent-changes-2026-04-12-auth-rate-limiting-registration.md`
+- `docs/backend/recent-changes-2026-04-13-password-change-pool-tuning.md`
 
 Database documentation:
 
@@ -66,20 +68,28 @@ Use `.env.example` as the authoritative list of supported keys:
 
 Current variable groups are:
 
-- Database: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
+- Database: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `DB_MAX_POOL_SIZE`, `DB_MIN_IDLE`, `DB_CONNECTION_TIMEOUT_MS`, `DB_IDLE_TIMEOUT_MS`, `DB_MAX_LIFETIME_MS`, `DB_KEEPALIVE_TIME_MS`, `DB_VALIDATION_TIMEOUT_MS`
 - App/CORS: `APP_PORT`, `COOKIE_SECURE`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_BASE_URL`
 - Registration policy: `REGISTRATION_DOMAIN_RESTRICTION_ENABLED`, `REGISTRATION_STUDENT_EMAIL_DOMAIN`, `REGISTRATION_SUPERVISOR_EMAIL_DOMAIN`, `REGISTRATION_STUDENT_EMAIL_PREFIX_RESTRICTION_ENABLED`, `REGISTRATION_STUDENT_EMAIL_PREFIX_REGEX`
-- Registration verification lifecycle: `REGISTRATION_OTP_EXPIRY_SECONDS`, `REGISTRATION_SESSION_EXPIRY_SECONDS`, `REGISTRATION_CLEANUP_ENABLED`, `REGISTRATION_CLEANUP_INITIAL_DELAY_MS`, `REGISTRATION_CLEANUP_FIXED_DELAY_MS`
+- Registration verification lifecycle: `REGISTRATION_OTP_EXPIRY_SECONDS`, `REGISTRATION_SESSION_EXPIRY_SECONDS`
+- Background Data Management: `SYSTEM_CLEANUP_FIXED_DELAY_MS`, `SYSTEM_SYNC_CRON`, `SYSTEM_SYNC_ZONE`
 - Rate limiting: `RATE_LIMITING_ENABLED`, `RATE_LIMITING_TRUST_FORWARDED_FOR`, `RATE_LIMITING_AUTH_ENABLED`, `RATE_LIMITING_AUTH_WINDOW_SECONDS`, `RATE_LIMITING_AUTH_MAX_REQUESTS`, `RATE_LIMITING_AUTHENTICATED_ENABLED`, `RATE_LIMITING_AUTHENTICATED_WINDOW_SECONDS`, `RATE_LIMITING_AUTHENTICATED_MAX_REQUESTS`
 - JWT/auth cookies: `JWT_SECRET`, `JWT_ACCESS_EXPIRY_SECONDS`, `JWT_REFRESH_EXPIRY_SECONDS`
-- GitHub integration: `GITHUB_API_BASE_URL`, `GITHUB_TOKEN`, `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_NAME`, `GITHUB_APP_INSTALL_URL`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, `GITHUB_DEFAULT_BRANCH`, `GITHUB_ACTIVITY_ACTIVE_WINDOW_HOURS`, `GITHUB_PREVIEW_COMMITS_LIMIT`, `GITHUB_PREVIEW_CONTRIBUTORS_LIMIT`, `GITHUB_DASHBOARD_CONTRIBUTORS_LIMIT`, `GITHUB_COMMITS_PAGE_SIZE`, `GITHUB_DEFAULT_PAGE_SIZE`, `GITHUB_MAX_PAGE_SIZE`, `GITHUB_MAX_LINKED_REPOS_PER_PROJECT`, `GITHUB_MAX_ENABLED_REPOS_PER_PROJECT`, `GITHUB_SETUP_STATE_TTL_SECONDS`, `GITHUB_SETUP_STATE_SECRET`, `GITHUB_SYNC_MAX_COMMIT_PAGES`, `GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE`, `GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE`, `GITHUB_ACCESS_REQUEST_EXPIRES_IN_MINUTES`, `GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED`, `GITHUB_ACCESS_REQUEST_CLEANUP_INITIAL_DELAY_MS`, `GITHUB_ACCESS_REQUEST_CLEANUP_FIXED_DELAY_MS`, `GITHUB_REPOSITORY_REFRESH_JOB_ENABLED`, `GITHUB_REPOSITORY_REFRESH_CRON`, `GITHUB_REPOSITORY_REFRESH_ZONE`, `GITHUB_REPOSITORY_REFRESH_BATCH_SIZE`
-- Jira integration/analytics: `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET`, `ATLASSIAN_SCOPE`, `ATLASSIAN_AUDIENCE`, `ATLASSIAN_AUTH_TARGET_URL`, `ATLASSIAN_REDIRECT_URI`, `ATLASSIAN_TOKEN_TARGET_URL`, `ATLASSIAN_TOKEN_ENCRYPTION_SECRET`, `ATLASSIAN_OAUTH_STATE`, `ATLASSIAN_OAUTH_STATE_TTL_SECONDS`, `ATLASSIAN_ANALYTICS_RECENT_SPRINTS_LIMIT`, `ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS`, `ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES`, `ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES`
+- GitHub integration: `GITHUB_API_BASE_URL`, `GITHUB_TOKEN`, `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_NAME`, `GITHUB_APP_INSTALL_URL`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, `GITHUB_DEFAULT_BRANCH`, `GITHUB_ACTIVITY_ACTIVE_WINDOW_HOURS`, `GITHUB_PREVIEW_COMMITS_LIMIT`, `GITHUB_PREVIEW_CONTRIBUTORS_LIMIT`, `GITHUB_DASHBOARD_CONTRIBUTORS_LIMIT`, `GITHUB_COMMITS_PAGE_SIZE`, `GITHUB_DEFAULT_PAGE_SIZE`, `GITHUB_MAX_PAGE_SIZE`, `GITHUB_MAX_LINKED_REPOS_PER_PROJECT`, `GITHUB_MAX_ENABLED_REPOS_PER_PROJECT`, `GITHUB_SETUP_STATE_TTL_SECONDS`, `GITHUB_SETUP_STATE_SECRET`, `GITHUB_SYNC_MAX_COMMIT_PAGES`, `GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE`, `GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE`, `GITHUB_ACCESS_REQUEST_EXPIRES_IN_MINUTES`, `GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED`, `GITHUB_REPOSITORY_REFRESH_JOB_ENABLED`, `GITHUB_REPOSITORY_REFRESH_BATCH_SIZE`
+- Jira integration/analytics: `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET`, `ATLASSIAN_SCOPE`, `ATLASSIAN_AUDIENCE`, `ATLASSIAN_AUTH_TARGET_URL`, `ATLASSIAN_REDIRECT_URI`, `ATLASSIAN_TOKEN_TARGET_URL`, `ATLASSIAN_TOKEN_ENCRYPTION_SECRET`, `ATLASSIAN_OAUTH_STATE`, `ATLASSIAN_OAUTH_STATE_TTL_SECONDS`, `ATLASSIAN_ANALYTICS_RECENT_SPRINTS_LIMIT`, `ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS`, `ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES`, `ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES`, `JIRA_ISSUE_SYNC_JOB_ENABLED`, `JIRA_ISSUE_SYNC_BATCH_SIZE`
 - Email service (Brevo): `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`
 The backend reads DB and auth config from environment variables:
 
 - `DB_URL`
 - `DB_USERNAME`
 - `DB_PASSWORD`
+- `DB_MAX_POOL_SIZE` — maximum number of DB connections in Hikari pool (default: `10`)
+- `DB_MIN_IDLE` — minimum idle connections Hikari keeps ready (default: `5`)
+- `DB_CONNECTION_TIMEOUT_MS` — max wait to borrow a connection from pool in milliseconds (default: `30000`)
+- `DB_IDLE_TIMEOUT_MS` — max idle time before eligible connection eviction in milliseconds (default: `600000`)
+- `DB_MAX_LIFETIME_MS` — max total lifetime of a pooled connection in milliseconds before recycle (default: `1800000`)
+- `DB_KEEPALIVE_TIME_MS` — keepalive interval for idle pooled connections in milliseconds (default: `300000`)
+- `DB_VALIDATION_TIMEOUT_MS` — max time to validate connection health in milliseconds (default: `5000`)
 - `APP_PORT`
 - `CORS_ALLOWED_ORIGINS`
 - `FRONTEND_BASE_URL` — frontend base URL used by backend redirects (for example GitHub setup callback)
@@ -103,12 +113,11 @@ The backend reads DB and auth config from environment variables:
 - `GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE` — default page size for installation repositories listing (`GET /api/supervisor/projects/{projectId}/github/installations/{installationId}/repositories`) when client does not provide `size` (default: `100`)
 - `GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE` — max allowed `size` for installation repositories listing; request values above this are capped (default: `100`)
 - `GITHUB_ACCESS_REQUEST_EXPIRES_IN_MINUTES` — expiry for project-scoped GitHub access-request tokens used by `/api/supervisor/projects/{projectId}/github/access-requests*` flow (default: `15`)
-- `GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED` — enables repeating cleanup job for expired access-request tokens (default: `true`)
-- `GITHUB_ACCESS_REQUEST_CLEANUP_INITIAL_DELAY_MS` — delay before first cleanup run in milliseconds (default: `120000`)
-- `GITHUB_ACCESS_REQUEST_CLEANUP_FIXED_DELAY_MS` — fixed delay between cleanup runs in milliseconds (default: `900000`)
-- `GITHUB_REPOSITORY_REFRESH_JOB_ENABLED` — enables cron-based scheduled refresh for linked GitHub repositories (default: `true`)
-- `GITHUB_REPOSITORY_REFRESH_CRON` — cron expression for scheduled refresh time (default: `0 0 0 * * *`; set `0 0 12 * * *` for daily 12:00)
-- `GITHUB_REPOSITORY_REFRESH_ZONE` — timezone for refresh cron evaluation (default: `UTC`)
+- `SYSTEM_CLEANUP_FIXED_DELAY_MS` — unified delay between background cleanup runs in tracking temporary states like OTPs, Tokens, and GitHub/Jira OAuth states in milliseconds (default: `900000`)
+- `GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED` — enables repeating cleanup validation for expired GitHub access-request tokens specifically under the unified loop (default: `true`)
+- `SYSTEM_SYNC_CRON` — unified cron-based scheduled heavy API sync timer for GitHub/Jira (default: `0 0 0 * * *`; set `0 0 12 * * *` for daily 12:00)
+- `SYSTEM_SYNC_ZONE` — timezone for unified sync cron evaluation (default: `UTC`)
+- `GITHUB_REPOSITORY_REFRESH_JOB_ENABLED` — enables scheduled refresh for linked GitHub repositories (default: `true`)
 - `GITHUB_REPOSITORY_REFRESH_BATCH_SIZE` — max linked repositories refreshed per cron run (default: `50`)
 - `GITHUB_SYNC_MAX_COMMIT_PAGES` — cap for GitHub commit pagination during sync (default: `5`)
 - `ATLASSIAN_CLIENT_ID` — Atlassian OAuth client id
@@ -125,6 +134,8 @@ The backend reads DB and auth config from environment variables:
 - `ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS` — consecutive negative-net weeks required to flag backlog growth (default: `2`)
 - `ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES` — comma-separated Jira priority names treated as high priority (default: `High,Highest`)
 - `ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES` — comma-separated Jira issue type names treated as bugs/defects (default: `Bug`)
+- `JIRA_ISSUE_SYNC_JOB_ENABLED` — enables scheduled refresh for linked Jira board issues (default: `true`)
+- `JIRA_ISSUE_SYNC_BATCH_SIZE` — max linked integrations refreshed per cron run (default: `50`)
 - `PROJECT_FILES_AWS_REGION` — AWS region for the S3 bucket used for project files (default: `ap-south-1`)
 - `PROJECT_FILES_BUCKET_NAME` — AWS S3 bucket name for project file storage (default: `supervisesuite-files-local`)
 - `PROJECT_FILES_AWS_ACCESS_KEY_ID` — AWS IAM Access Key ID with S3 permissions
@@ -143,6 +154,13 @@ Setup for local development:
 APP_PORT=8081
 CORS_ALLOWED_ORIGINS=http://localhost:5173
 COOKIE_SECURE=false
+DB_MAX_POOL_SIZE=10
+DB_MIN_IDLE=5
+DB_CONNECTION_TIMEOUT_MS=30000
+DB_IDLE_TIMEOUT_MS=600000
+DB_MAX_LIFETIME_MS=1800000
+DB_KEEPALIVE_TIME_MS=300000
+DB_VALIDATION_TIMEOUT_MS=5000
 REGISTRATION_DOMAIN_RESTRICTION_ENABLED=true
 REGISTRATION_STUDENT_EMAIL_DOMAIN=@my.sliit.lk
 REGISTRATION_SUPERVISOR_EMAIL_DOMAIN=@sliit.lk
@@ -150,9 +168,14 @@ REGISTRATION_STUDENT_EMAIL_PREFIX_RESTRICTION_ENABLED=true
 REGISTRATION_STUDENT_EMAIL_PREFIX_REGEX=^IT(1[5-9]|[2-4][0-9]|50)[0-9]{6}$
 REGISTRATION_OTP_EXPIRY_SECONDS=600
 REGISTRATION_SESSION_EXPIRY_SECONDS=600
-REGISTRATION_CLEANUP_ENABLED=true
-REGISTRATION_CLEANUP_INITIAL_DELAY_MS=120000
-REGISTRATION_CLEANUP_FIXED_DELAY_MS=900000
+SYSTEM_CLEANUP_FIXED_DELAY_MS=900000
+GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED=true
+SYSTEM_SYNC_CRON=0 0 0 * * *
+SYSTEM_SYNC_ZONE=UTC
+GITHUB_REPOSITORY_REFRESH_JOB_ENABLED=true
+GITHUB_REPOSITORY_REFRESH_BATCH_SIZE=50
+JIRA_ISSUE_SYNC_JOB_ENABLED=true
+JIRA_ISSUE_SYNC_BATCH_SIZE=50
 RATE_LIMITING_ENABLED=true
 RATE_LIMITING_TRUST_FORWARDED_FOR=true
 RATE_LIMITING_AUTH_ENABLED=true
@@ -177,13 +200,6 @@ GITHUB_APP_INSTALL_URL=https://github.com/apps/<your-app-slug>/installations/new
 GITHUB_INSTALLATION_REPOSITORIES_DEFAULT_PAGE_SIZE=100
 GITHUB_INSTALLATION_REPOSITORIES_MAX_PAGE_SIZE=100
 GITHUB_ACCESS_REQUEST_EXPIRES_IN_MINUTES=15
-GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED=true
-GITHUB_ACCESS_REQUEST_CLEANUP_INITIAL_DELAY_MS=120000
-GITHUB_ACCESS_REQUEST_CLEANUP_FIXED_DELAY_MS=900000
-GITHUB_REPOSITORY_REFRESH_JOB_ENABLED=true
-GITHUB_REPOSITORY_REFRESH_CRON=0 0 0 * * *
-GITHUB_REPOSITORY_REFRESH_ZONE=UTC
-GITHUB_REPOSITORY_REFRESH_BATCH_SIZE=50
 GITHUB_SYNC_MAX_COMMIT_PAGES=5
 ATLASSIAN_CLIENT_ID=<your-atlassian-client-id>
 ATLASSIAN_CLIENT_SECRET=<your-atlassian-client-secret>

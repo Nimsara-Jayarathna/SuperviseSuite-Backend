@@ -1,5 +1,7 @@
 package com.supervisesuite.backend.supervisor.controller;
 
+import com.supervisesuite.backend.auth.dto.ChangePasswordRequest;
+import com.supervisesuite.backend.auth.service.AuthService;
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
@@ -56,11 +58,27 @@ import org.springframework.web.bind.annotation.RestController;
 public class SupervisorController {
 
     private final SupervisorService supervisorService;
+    private final AuthService authService;
     private final ApiResponseFactory apiResponseFactory;
 
-    public SupervisorController(SupervisorService supervisorService, ApiResponseFactory apiResponseFactory) {
+    public SupervisorController(
+        SupervisorService supervisorService,
+        AuthService authService,
+        ApiResponseFactory apiResponseFactory
+    ) {
         this.supervisorService = supervisorService;
+        this.authService = authService;
         this.apiResponseFactory = apiResponseFactory;
+    }
+
+    @PatchMapping("/me/password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+        Authentication authentication,
+        HttpServletRequest request,
+        @Valid @RequestBody ChangePasswordRequest body
+    ) {
+        authService.changePassword(authentication.getName(), body);
+        return apiResponseFactory.ok("Password updated successfully.", null, request);
     }
 
     @GetMapping("/dashboard")

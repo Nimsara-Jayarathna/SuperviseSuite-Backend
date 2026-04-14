@@ -11,4 +11,6 @@ public interface RegistrationService {
     RegisterVerifyResponse verifyOtp(String email, String otp);
 
     LoginResponse completeRegistration(RegisterCompleteRequest request);
+
+    void cleanupExpiredSessionsAndOtps();
 }

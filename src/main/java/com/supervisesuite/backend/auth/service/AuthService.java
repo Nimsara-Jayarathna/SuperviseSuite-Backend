@@ -2,6 +2,7 @@ package com.supervisesuite.backend.auth.service;
 
 import com.supervisesuite.backend.auth.dto.LoginRequest;
 import com.supervisesuite.backend.auth.dto.LoginResponse;
+import com.supervisesuite.backend.auth.dto.ChangePasswordRequest;
 
 /**
  * Contract for authentication operations.
@@ -24,4 +25,6 @@ public interface AuthService {
      *         if the credentials are invalid or the account has no password set
      */
     LoginResponse login(LoginRequest request);
+
+    void changePassword(String authenticatedUserId, ChangePasswordRequest request);
 }
