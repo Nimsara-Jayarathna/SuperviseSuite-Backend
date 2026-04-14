@@ -45,6 +45,7 @@ class JiraIssueSyncProviderTest {
     @Test
     void executeSync_ShouldSyncIssues() {
         when(jiraProperties.getJobs()).thenReturn(jobs);
+        issueSyncConfig.setEnabled(true);
         
         ProjectJiraIntegration integration = new ProjectJiraIntegration();
         integration.setProjectId(UUID.randomUUID());
@@ -54,12 +55,13 @@ class JiraIssueSyncProviderTest {
             
         provider.executeSync();
         
-        verify(jiraIssueSyncService, times(1)).syncProjectIssues(integration.getProjectId());
+        verify(jiraIssueSyncService, times(1)).syncProjectIssues(integration.getProjectId(), com.supervisesuite.backend.projects.service.SyncAttemptSource.CRON);
     }
 
     @Test
     void executeSync_ShouldNotInterruptOnFailure() {
         when(jiraProperties.getJobs()).thenReturn(jobs);
+        issueSyncConfig.setEnabled(true);
         
         ProjectJiraIntegration integration1 = new ProjectJiraIntegration();
         integration1.setProjectId(UUID.randomUUID());
@@ -70,11 +72,11 @@ class JiraIssueSyncProviderTest {
         when(jiraIntegrationRepository.findByRevokedAtIsNullOrderByConnectedAtAsc(any(PageRequest.class)))
             .thenReturn(new PageImpl<>(List.of(integration1, integration2)));
             
-        doThrow(new RuntimeException("API Limit Exceeded")).when(jiraIssueSyncService).syncProjectIssues(integration1.getProjectId());
+        doThrow(new RuntimeException("API Limit Exceeded")).when(jiraIssueSyncService).syncProjectIssues(integration1.getProjectId(), com.supervisesuite.backend.projects.service.SyncAttemptSource.CRON);
         
         provider.executeSync();
         
-        verify(jiraIssueSyncService, times(1)).syncProjectIssues(integration1.getProjectId());
-        verify(jiraIssueSyncService, times(1)).syncProjectIssues(integration2.getProjectId());
+        verify(jiraIssueSyncService, times(1)).syncProjectIssues(integration1.getProjectId(), com.supervisesuite.backend.projects.service.SyncAttemptSource.CRON);
+        verify(jiraIssueSyncService, times(1)).syncProjectIssues(integration2.getProjectId(), com.supervisesuite.backend.projects.service.SyncAttemptSource.CRON);
     }
 }

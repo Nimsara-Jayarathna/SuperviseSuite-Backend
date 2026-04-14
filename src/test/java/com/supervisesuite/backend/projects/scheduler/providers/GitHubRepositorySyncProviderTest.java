@@ -44,6 +44,7 @@ class GitHubRepositorySyncProviderTest {
     @Test
     void executeSync_ShouldSyncRepositories() {
         when(gitHubProperties.getJobs()).thenReturn(jobs);
+        refreshConfig.setEnabled(true);
         
         ProjectRepositoryLink link1 = new ProjectRepositoryLink();
         link1.setId(UUID.randomUUID());
@@ -53,12 +54,13 @@ class GitHubRepositorySyncProviderTest {
             
         provider.executeSync();
         
-        verify(gitHubSyncService, times(1)).syncRepository(link1.getId());
+        verify(gitHubSyncService, times(1)).syncRepository(link1.getId(), com.supervisesuite.backend.projects.service.SyncAttemptSource.CRON);
     }
 
     @Test
     void executeSync_ShouldNotInterruptOnFailure() {
         when(gitHubProperties.getJobs()).thenReturn(jobs);
+        refreshConfig.setEnabled(true);
         
         ProjectRepositoryLink link1 = new ProjectRepositoryLink();
         link1.setId(UUID.randomUUID());
@@ -69,11 +71,11 @@ class GitHubRepositorySyncProviderTest {
         when(projectRepositoryLinkRepository.findByIsEnabledTrueOrderByLastSyncedAtAsc(any(PageRequest.class)))
             .thenReturn(List.of(link1, link2));
             
-        doThrow(new RuntimeException("API Limit Exceeded")).when(gitHubSyncService).syncRepository(link1.getId());
+        doThrow(new RuntimeException("API Limit Exceeded")).when(gitHubSyncService).syncRepository(link1.getId(), com.supervisesuite.backend.projects.service.SyncAttemptSource.CRON);
         
         provider.executeSync();
         
-        verify(gitHubSyncService, times(1)).syncRepository(link1.getId());
-        verify(gitHubSyncService, times(1)).syncRepository(link2.getId());
+        verify(gitHubSyncService, times(1)).syncRepository(link1.getId(), com.supervisesuite.backend.projects.service.SyncAttemptSource.CRON);
+        verify(gitHubSyncService, times(1)).syncRepository(link2.getId(), com.supervisesuite.backend.projects.service.SyncAttemptSource.CRON);
     }
 }
