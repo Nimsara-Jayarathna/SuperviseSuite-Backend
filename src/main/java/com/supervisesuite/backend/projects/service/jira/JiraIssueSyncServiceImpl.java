@@ -25,7 +25,7 @@ class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
     private final ProjectJiraIntegrationRepository jiraIntegrationRepository;
     private final ProjectJiraIssueRepository jiraIssueRepository;
     private final JiraClient jiraClient;
-    private final JiraTokenEncryptionService jiraTokenEncryptionService;
+    private final JiraAuthManager jiraAuthManager;
     private final JiraIssueMapper jiraIssueMapper;
     private final JiraIssueSyncProcessor syncProcessor;
 
@@ -33,13 +33,13 @@ class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
             ProjectJiraIntegrationRepository jiraIntegrationRepository,
             ProjectJiraIssueRepository jiraIssueRepository,
             JiraClient jiraClient,
-            JiraTokenEncryptionService jiraTokenEncryptionService,
+            JiraAuthManager jiraAuthManager,
             JiraIssueMapper jiraIssueMapper,
             JiraIssueSyncProcessor syncProcessor) {
         this.jiraIntegrationRepository = jiraIntegrationRepository;
         this.jiraIssueRepository = jiraIssueRepository;
         this.jiraClient = jiraClient;
-        this.jiraTokenEncryptionService = jiraTokenEncryptionService;
+        this.jiraAuthManager = jiraAuthManager;
         this.jiraIssueMapper = jiraIssueMapper;
         this.syncProcessor = syncProcessor;
     }
@@ -52,8 +52,7 @@ class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
                 .orElseThrow(() -> new ValidationException(
                         "jira", "No active Jira integration found for this project."));
 
-        String accessToken = jiraTokenEncryptionService.decrypt(
-                integration.getAccessTokenEncrypted());
+        String accessToken = jiraAuthManager.getOrRefreshAccessToken(integration);
 
         List<JiraIssueDto> fetchedIssues = jiraClient.fetchAllIssues(
                 integration.getCloudId(), accessToken);

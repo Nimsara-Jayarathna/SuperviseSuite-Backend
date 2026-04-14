@@ -33,7 +33,7 @@ class JiraIssueSyncServiceImplTest {
     private JiraClient jiraClient;
 
     @Mock
-    private JiraTokenEncryptionService jiraTokenEncryptionService;
+    private JiraAuthManager jiraAuthManager;
 
     @Mock
     private JiraIssueMapper jiraIssueMapper;
@@ -46,7 +46,7 @@ class JiraIssueSyncServiceImplTest {
             jiraIntegrationRepository,
             jiraIssueRepository,
             jiraClient,
-            jiraTokenEncryptionService,
+            jiraAuthManager,
             jiraIssueMapper,
             new JiraIssueSyncProcessor()
         );
@@ -67,7 +67,7 @@ class JiraIssueSyncServiceImplTest {
 
         when(jiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
             .thenReturn(Optional.of(integration));
-        when(jiraTokenEncryptionService.decrypt("encrypted-token")).thenReturn("access-token");
+        when(jiraAuthManager.getOrRefreshAccessToken(integration)).thenReturn("access-token");
         when(jiraClient.fetchAllIssues("cloud-1", "access-token"))
             .thenReturn(List.of(duplicateA1, duplicateA2, uniqueB));
         when(jiraIssueRepository.findAllByProjectId(projectId)).thenReturn(List.of());
