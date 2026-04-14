@@ -23,6 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -51,12 +52,12 @@ public class GitHubSyncService {
         this.gitHubClient = gitHubClient;
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void syncRepository(UUID linkId) {
         refreshRepository(linkId);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void refreshRepository(UUID linkId) {
         ProjectRepositoryLink link = projectRepositoryLinkRepository
             .findById(linkId)
@@ -94,13 +95,19 @@ public class GitHubSyncService {
             link.setSyncError(null);
             link.setUpdatedAt(now);
             projectRepositoryLinkRepository.save(link);
-        } catch (RuntimeException exception) {
-            link.setLastSyncedAt(now);
-            link.setSyncStatus(GitHubIntegrationV2Constants.SYNC_STATUS_FAILED);
-            link.setSyncError(nullable(exception.getMessage(), "GitHub repository sync failed."));
-            link.setUpdatedAt(now);
-            projectRepositoryLinkRepository.save(link);
-            throw new ServiceUnavailableException(nullable(exception.getMessage(), "GitHub repository sync failed."), exception);
+        } catch (Exception exception) {
+            // Commit failure status. We do NOT re-throw so the REQUIRES_NEW transaction can commit.
+            try {
+                link.setLastSyncedAt(now);
+                link.setSyncStatus(GitHubIntegrationV2Constants.SYNC_STATUS_FAILED);
+                link.setSyncError(nullable(exception.getMessage(), "GitHub repository sync failed."));
+                link.setUpdatedAt(now);
+                projectRepositoryLinkRepository.save(link);
+            } catch (Exception fatal) {
+                // If we can't even save the failure status (e.g. DB is down), then we log it.
+                org.slf4j.LoggerFactory.getLogger(GitHubSyncService.class)
+                    .error("Fatal error saving sync failure status for linkId={}", linkId, fatal);
+            }
         }
     }
 

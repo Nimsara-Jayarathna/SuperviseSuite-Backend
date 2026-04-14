@@ -34,6 +34,10 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+          batch_size: 25
+          order_inserts: true
+          order_updates: true
+          batch_versioned_data: true
   flyway:
     enabled: true
     baseline-on-migrate: false

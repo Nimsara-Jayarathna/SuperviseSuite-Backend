@@ -32,6 +32,7 @@ public class GitHubRepositorySyncProvider implements SystemSyncProvider {
 
     @Override
     public void executeSync() {
+        long start = System.currentTimeMillis();
         GitHubProperties.RepositoryRefresh config = gitHubProperties.getJobs().getRepositoryRefresh();
         if (config == null || !config.isEnabled()) {
             return;
@@ -68,12 +69,14 @@ public class GitHubRepositorySyncProvider implements SystemSyncProvider {
             }
         }
 
+        long durationMs = System.currentTimeMillis() - start;
         LOGGER.info(
-            "Scheduled GitHub heavy sync completed attempted={} succeeded={} failed={} batchSize={}",
+            "Scheduled GitHub heavy sync completed attempted={} succeeded={} failed={} batchSize={} durationMs={}",
             attempted,
             succeeded,
             failed,
-            batchSize
+            batchSize,
+            durationMs
         );
     }
 }

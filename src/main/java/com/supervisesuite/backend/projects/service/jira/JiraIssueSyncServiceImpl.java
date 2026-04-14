@@ -49,6 +49,7 @@ class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void syncProjectIssues(UUID projectId) {
         ProjectJiraIntegration integration = jiraIntegrationRepository
                 .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId)

@@ -33,6 +33,7 @@ public class JiraIssueSyncProvider implements SystemSyncProvider {
 
     @Override
     public void executeSync() {
+        long start = System.currentTimeMillis();
         JiraProperties.Jobs.IssueSync config = jiraProperties.getJobs().getIssueSync();
         if (config == null || !config.isEnabled()) {
             return;
@@ -66,12 +67,14 @@ public class JiraIssueSyncProvider implements SystemSyncProvider {
             }
         }
 
+        long durationMs = System.currentTimeMillis() - start;
         LOGGER.info(
-            "Scheduled Jira heavy sync completed attempted={} succeeded={} failed={} batchSize={}",
+            "Scheduled Jira heavy sync completed attempted={} succeeded={} failed={} batchSize={} durationMs={}",
             attempted,
             succeeded,
             failed,
-            batchSize
+            batchSize,
+            durationMs
         );
     }
 }

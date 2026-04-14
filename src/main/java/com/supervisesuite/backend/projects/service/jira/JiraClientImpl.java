@@ -168,14 +168,33 @@ class JiraClientImpl implements JiraClient {
             String accessToken,
             EnhancedSearchRequest body) {
         String modernUri = "https://api.atlassian.com/ex/jira/" + cloudId + "/rest/api/3/search/jql";
-        return restClient.post()
-                .uri(modernUri)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .body(body)
-                .retrieve()
-                .body(EnhancedSearchResponse.class);
+        int maxRetries = 3;
+        int attempt = 0;
+        
+        while (true) {
+            try {
+                attempt++;
+                return restClient.post()
+                        .uri(modernUri)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON)
+                        .body(body)
+                        .retrieve()
+                        .body(EnhancedSearchResponse.class);
+            } catch (RestClientResponseException ex) {
+                if (attempt < maxRetries && (ex.getStatusCode().value() == 429 || ex.getStatusCode().value() == 503)) {
+                    try {
+                        Thread.sleep(1000L * attempt); // Simple backoff
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw ex;
+                    }
+                    continue;
+                }
+                throw ex;
+            }
+        }
     }
 
     private LegacySearchResponse fetchLegacyPage(
@@ -183,14 +202,33 @@ class JiraClientImpl implements JiraClient {
             String accessToken,
             LegacySearchRequest body) {
         String legacyUri = "https://api.atlassian.com/ex/jira/" + cloudId + "/rest/api/3/search";
-        return restClient.post()
-                .uri(legacyUri)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .body(body)
-                .retrieve()
-                .body(LegacySearchResponse.class);
+        int maxRetries = 3;
+        int attempt = 0;
+
+        while (true) {
+            try {
+                attempt++;
+                return restClient.post()
+                        .uri(legacyUri)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON)
+                        .body(body)
+                        .retrieve()
+                        .body(LegacySearchResponse.class);
+            } catch (RestClientResponseException ex) {
+                if (attempt < maxRetries && (ex.getStatusCode().value() == 429 || ex.getStatusCode().value() == 503)) {
+                    try {
+                        Thread.sleep(1000L * attempt);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw ex;
+                    }
+                    continue;
+                }
+                throw ex;
+            }
+        }
     }
 
     private static List<String> appendField(List<String> base, String field) {
