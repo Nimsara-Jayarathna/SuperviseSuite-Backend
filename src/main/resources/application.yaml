@@ -54,6 +54,9 @@ app:
   system:
     cleanup:
       fixed-delay-ms: ${SYSTEM_CLEANUP_FIXED_DELAY_MS:900000}
+    sync:
+      cron: ${SYSTEM_SYNC_CRON:0 0 0 * * *}
+      zone: ${SYSTEM_SYNC_ZONE:UTC}
   auth:
     password-reset:
       token-expiry-minutes: ${PASSWORD_RESET_TOKEN_EXPIRY_MINUTES:15}
@@ -108,12 +111,8 @@ app:
     jobs:
       access-request-cleanup:
         enabled: ${GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED:true}
-        initial-delay-ms: ${GITHUB_ACCESS_REQUEST_CLEANUP_INITIAL_DELAY_MS:120000}
-        fixed-delay-ms: ${GITHUB_ACCESS_REQUEST_CLEANUP_FIXED_DELAY_MS:900000}
       repository-refresh:
         enabled: ${GITHUB_REPOSITORY_REFRESH_JOB_ENABLED:true}
-        cron: ${GITHUB_REPOSITORY_REFRESH_CRON:0 0 0 * * *}
-        zone: ${GITHUB_REPOSITORY_REFRESH_ZONE:UTC}
         batch-size: ${GITHUB_REPOSITORY_REFRESH_BATCH_SIZE:50}
   jira:
     client-id: ${ATLASSIAN_CLIENT_ID:}
@@ -131,6 +130,10 @@ app:
       backlog-growing-consecutive-weeks: ${ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS:2}
       high-priority-names: ${ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES:High,Highest}
       bug-type-names: ${ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES:Bug}
+    jobs:
+      issue-sync:
+        enabled: ${JIRA_ISSUE_SYNC_JOB_ENABLED:true}
+        batch-size: ${JIRA_ISSUE_SYNC_BATCH_SIZE:50}
   brevo:
     api-key: ${BREVO_API_KEY:}
     sender-email: ${BREVO_SENDER_EMAIL:no-reply@supervisesuite.xyz}

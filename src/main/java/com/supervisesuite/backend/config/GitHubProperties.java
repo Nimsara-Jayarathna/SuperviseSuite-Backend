@@ -165,16 +165,6 @@ public class GitHubProperties {
          * Enable/disable expired token cleanup scheduler.
          */
         private boolean enabled = true;
-
-        /**
-         * Initial delay before first cleanup run (milliseconds).
-         */
-        private long initialDelayMs = 120_000L;
-
-        /**
-         * Fixed delay between cleanup runs (milliseconds).
-         */
-        private long fixedDelayMs = 900_000L;
     }
 
     @Getter
@@ -184,16 +174,6 @@ public class GitHubProperties {
          * Enable/disable daily linked repository refresh scheduler.
          */
         private boolean enabled = true;
-
-        /**
-         * Cron expression for refresh time.
-         */
-        private String cron = "0 0 0 * * *";
-
-        /**
-         * Time zone for cron evaluation.
-         */
-        private String zone = "UTC";
 
         /**
          * Maximum number of linked repositories refreshed per run.
