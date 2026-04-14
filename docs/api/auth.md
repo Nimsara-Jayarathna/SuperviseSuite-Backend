@@ -9,6 +9,9 @@
 - [POST /api/auth/login](#post-apiauthlogin)
 - [POST /api/auth/refresh](#post-apiauthrefresh)
 - [POST /api/auth/logout](#post-apiauthlogout)
+- [POST /api/auth/forgot-password](#post-apiauthforgot-password)
+- [GET /api/auth/reset-password/validate](#get-apiauthreset-passwordvalidate)
+- [POST /api/auth/reset-password](#post-apiauthreset-password)
 
 ## Response Model
 
@@ -550,3 +553,105 @@ This response is returned regardless of whether a valid refresh token cookie was
 
 - If the `ss_refresh_token` cookie is absent or its value is not found in the database, the call still returns `204` with cleared cookies. Clients can always trust that after this response the session is fully terminated.
 - If the access token is still valid when logout is called, it will remain technically valid until it naturally expires (15 min). The frontend discards it immediately by dropping the cookie.
+
+---
+
+## Password Reset Flow
+
+Password resets are handled in strict isolation as a guest flow via tokenized links sent via email. 
+The token uses a 32-byte secure random string stored hashed (SHA-256) inside the database.
+
+### `POST /api/auth/forgot-password`
+
+Initiates the password reset process by generating a token and emailing the user. 
+To prevent user enumeration, it always returns a generic success message so long as the request format is valid.
+
+**Request**
+```json
+{
+  "email": "student@my.sliit.lk"
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "status": "SUCCESS",
+  "message": "If the email is registered, a reset link has been sent.",
+  "data": {
+    "message": "If the email is registered, a reset link has been sent."
+  }
+}
+```
+
+### `GET /api/auth/reset-password/validate`
+
+Validates that the given token exists in the database and has not expired. Used by the frontend to show either the new-password form or an "expired token" modal before the user attempts to reset.
+
+**Request**
+```http
+GET /api/auth/reset-password/validate?token=c29tZS1yYW5kb2ItdG9rZW4=
+```
+
+**Response (200 OK)**
+```json
+{
+  "status": "SUCCESS",
+  "message": "Reset token validation completed.",
+  "data": {
+    "valid": true,
+    "email": "student@my.sliit.lk",
+    "expiresAt": "2026-04-14T10:00:00Z"
+  }
+}
+```
+
+**Response (400 Bad Request - Invalid/Expired)**
+```json
+{
+  "status": "VALIDATION_ERROR",
+  "message": "Invalid or expired reset token.",
+  "error": { "code": "VALIDATION_ERROR", "details": [] }
+}
+```
+
+### `POST /api/auth/reset-password`
+
+Processes the actual password update. The token is checked again before updating. Importantly, the service checks that the *new password is not the same as the current password*. Token is deleted upon a successful reset.
+
+**Request**
+```json
+{
+  "token": "c29tZS1yYW5kb2ItdG9rZW4=",
+  "newPassword": "SecretNewPassword123!",
+  "confirmNewPassword": "SecretNewPassword123!"
+}
+```
+
+**Response (200 OK - Success)**
+```json
+{
+  "status": "SUCCESS",
+  "message": "Password reset successful.",
+  "data": {
+    "message": "Password reset successful."
+  }
+}
+```
+
+**Response (400 Bad Request - Same Password)**
+```json
+{
+  "status": "VALIDATION_ERROR",
+  "message": "Validation failed",
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "details": [
+      {
+        "field": "newPassword",
+        "issue": "New password cannot be the same as the current password"
+      }
+    ]
+  }
+}
+```
