@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Orchestrator service adhering to SRP that delegates processing rules to a domain component.
@@ -28,6 +29,7 @@ class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
     private final JiraAuthManager jiraAuthManager;
     private final JiraIssueMapper jiraIssueMapper;
     private final JiraIssueSyncProcessor syncProcessor;
+    private final TransactionTemplate transactionTemplate;
 
     JiraIssueSyncServiceImpl(
             ProjectJiraIntegrationRepository jiraIntegrationRepository,
@@ -35,17 +37,18 @@ class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
             JiraClient jiraClient,
             JiraAuthManager jiraAuthManager,
             JiraIssueMapper jiraIssueMapper,
-            JiraIssueSyncProcessor syncProcessor) {
+            JiraIssueSyncProcessor syncProcessor,
+            TransactionTemplate transactionTemplate) {
         this.jiraIntegrationRepository = jiraIntegrationRepository;
         this.jiraIssueRepository = jiraIssueRepository;
         this.jiraClient = jiraClient;
         this.jiraAuthManager = jiraAuthManager;
         this.jiraIssueMapper = jiraIssueMapper;
         this.syncProcessor = syncProcessor;
+        this.transactionTemplate = transactionTemplate;
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void syncProjectIssues(UUID projectId) {
         ProjectJiraIntegration integration = jiraIntegrationRepository
                 .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId)
@@ -59,31 +62,34 @@ class JiraIssueSyncServiceImpl implements JiraIssueSyncService {
 
         List<JiraIssueDto> uniqueFetchedIssues = syncProcessor.deduplicate(fetchedIssues);
 
-        List<ProjectJiraIssue> existingIssues = jiraIssueRepository.findAllByProjectId(projectId);
-        Map<String, ProjectJiraIssue> existingByKey = new HashMap<>();
-        for (ProjectJiraIssue existing : existingIssues) {
-            existingByKey.put(existing.getIssueKey(), existing);
-        }
+        transactionTemplate.execute(status -> {
+            List<ProjectJiraIssue> existingIssues = jiraIssueRepository.findAllByProjectId(projectId);
+            Map<String, ProjectJiraIssue> existingByKey = new HashMap<>();
+            for (ProjectJiraIssue existing : existingIssues) {
+                existingByKey.put(existing.getIssueKey(), existing);
+            }
 
-        Instant now = Instant.now();
-        List<ProjectJiraIssue> toSave = new ArrayList<>();
-        for (JiraIssueDto dto : uniqueFetchedIssues) {
-            String issueKey = dto.getKey();
-            ProjectJiraIssue issue = existingByKey.getOrDefault(issueKey, new ProjectJiraIssue());
-            jiraIssueMapper.mapToEntity(issue, dto, projectId, now);
-            toSave.add(issue);
-        }
+            Instant now = Instant.now();
+            List<ProjectJiraIssue> toSave = new ArrayList<>();
+            for (JiraIssueDto dto : uniqueFetchedIssues) {
+                String issueKey = dto.getKey();
+                ProjectJiraIssue issue = existingByKey.getOrDefault(issueKey, new ProjectJiraIssue());
+                jiraIssueMapper.mapToEntity(issue, dto, projectId, now);
+                toSave.add(issue);
+            }
 
-        syncProcessor.processRelationships(toSave);
+            syncProcessor.processRelationships(toSave);
 
-        jiraIssueRepository.saveAll(toSave);
+            jiraIssueRepository.saveAll(toSave);
 
-        List<String> fetchedKeys = uniqueFetchedIssues.stream().map(JiraIssueDto::getKey).toList();
+            List<String> fetchedKeys = uniqueFetchedIssues.stream().map(JiraIssueDto::getKey).toList();
 
-        if (!fetchedKeys.isEmpty()) {
-            jiraIssueRepository.deleteAllByProjectIdAndIssueKeyNotIn(projectId, fetchedKeys);
-        } else {
-            jiraIssueRepository.deleteAllByProjectId(projectId);
-        }
+            if (!fetchedKeys.isEmpty()) {
+                jiraIssueRepository.deleteAllByProjectIdAndIssueKeyNotIn(projectId, fetchedKeys);
+            } else {
+                jiraIssueRepository.deleteAllByProjectId(projectId);
+            }
+            return null;
+        });
     }
 }

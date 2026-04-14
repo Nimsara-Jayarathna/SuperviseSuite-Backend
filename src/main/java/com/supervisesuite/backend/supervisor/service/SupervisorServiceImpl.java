@@ -1452,7 +1452,6 @@ class SupervisorServiceImpl implements SupervisorService {
     }
 
     @Override
-    @Transactional
     public JiraHealthDto refreshProjectJiraData(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);

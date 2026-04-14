@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 
 import com.supervisesuite.backend.projects.dto.JiraIssueDto;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
@@ -19,6 +20,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class JiraIssueSyncServiceImplTest {
@@ -38,6 +41,9 @@ class JiraIssueSyncServiceImplTest {
     @Mock
     private JiraIssueMapper jiraIssueMapper;
 
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
     private JiraIssueSyncServiceImpl service;
 
     @BeforeEach
@@ -48,8 +54,14 @@ class JiraIssueSyncServiceImplTest {
             jiraClient,
             jiraAuthManager,
             jiraIssueMapper,
-            new JiraIssueSyncProcessor()
+            new JiraIssueSyncProcessor(),
+            transactionTemplate
         );
+
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
     }
 
     @Test

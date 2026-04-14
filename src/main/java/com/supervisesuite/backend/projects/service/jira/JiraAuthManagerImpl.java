@@ -38,7 +38,6 @@ class JiraAuthManagerImpl implements JiraAuthManager {
     }
 
     @Override
-    @Transactional
     public String getOrRefreshAccessToken(ProjectJiraIntegration integration) {
         Instant now = Instant.now();
 
