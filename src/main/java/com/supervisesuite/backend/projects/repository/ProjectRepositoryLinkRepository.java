@@ -72,4 +72,10 @@ public interface ProjectRepositoryLinkRepository extends JpaRepository<ProjectRe
     void deleteByProjectId(UUID projectId);
 
     void deleteByGithubInstallationId(Long githubInstallationId);
+
+    @Query(
+        value = "select id from project_repository_links where id = :linkId for update nowait",
+        nativeQuery = true
+    )
+    List<UUID> lockByIdNowait(@Param("linkId") UUID linkId);
 }
