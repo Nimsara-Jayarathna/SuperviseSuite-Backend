@@ -179,6 +179,11 @@ public class GitHubProperties {
          * Maximum number of linked repositories refreshed per run.
          */
         private int batchSize = 50;
+
+        /**
+         * Seconds after which an IN_PROGRESS sync claim is treated as stale and reclaimable.
+         */
+        private int inProgressTimeoutSeconds = 900;
     }
 
 }

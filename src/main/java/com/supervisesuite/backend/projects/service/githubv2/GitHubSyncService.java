@@ -3,8 +3,10 @@ package com.supervisesuite.backend.projects.service.githubv2;
 import com.supervisesuite.backend.common.error.ConflictException;
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
+import com.supervisesuite.backend.config.GitHubProperties;
 import com.supervisesuite.backend.projects.dto.ProjectCommitDto;
 import com.supervisesuite.backend.projects.dto.ProjectRepositoryMetadataDto;
+import com.supervisesuite.backend.projects.service.SyncAttemptSource;
 import com.supervisesuite.backend.projects.entity.GitHubAccessSource;
 import com.supervisesuite.backend.projects.entity.GitHubRepositoryEntity;
 import com.supervisesuite.backend.projects.entity.ProjectRepositoryLink;
@@ -22,12 +24,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class GitHubSyncService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(GitHubSyncService.class);
 
     private final ProjectRepositoryLinkRepository projectRepositoryLinkRepository;
     private final GitHubAccessSourceRepository accessSourceRepository;
@@ -35,6 +39,8 @@ public class GitHubSyncService {
     private final ProjectRepositoryLinkCommitRepository commitRepository;
     private final ProjectRepositoryLinkContributorRepository contributorRepository;
     private final GitHubClient gitHubClient;
+    private final TransactionTemplate transactionTemplate;
+    private final GitHubProperties gitHubProperties;
 
     public GitHubSyncService(
         ProjectRepositoryLinkRepository projectRepositoryLinkRepository,
@@ -42,7 +48,9 @@ public class GitHubSyncService {
         GitHubRepositoryEntityRepository gitHubRepositoryEntityRepository,
         ProjectRepositoryLinkCommitRepository commitRepository,
         ProjectRepositoryLinkContributorRepository contributorRepository,
-        GitHubClient gitHubClient
+        GitHubClient gitHubClient,
+        TransactionTemplate transactionTemplate,
+        GitHubProperties gitHubProperties
     ) {
         this.projectRepositoryLinkRepository = projectRepositoryLinkRepository;
         this.accessSourceRepository = accessSourceRepository;
@@ -50,38 +58,91 @@ public class GitHubSyncService {
         this.commitRepository = commitRepository;
         this.contributorRepository = contributorRepository;
         this.gitHubClient = gitHubClient;
+        this.transactionTemplate = transactionTemplate;
+        this.gitHubProperties = gitHubProperties;
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void syncRepository(UUID linkId) {
-        refreshRepository(linkId);
+        syncRepository(linkId, SyncAttemptSource.MANUAL);
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void syncRepository(UUID linkId, SyncAttemptSource source) {
+        refreshRepository(linkId, source);
+    }
+
     public void refreshRepository(UUID linkId) {
-        ProjectRepositoryLink link = projectRepositoryLinkRepository
-            .findById(linkId)
+        refreshRepository(linkId, SyncAttemptSource.MANUAL);
+    }
+
+    public void refreshRepository(UUID linkId, SyncAttemptSource source) {
+        LOGGER.info("GitHub sync attempt source={} linkId={}", source, linkId);
+        ProjectRepositoryLink link = projectRepositoryLinkRepository.findById(linkId)
             .orElseThrow(() -> new ValidationException("repositoryId", "Linked repository was not found."));
+
         if (!Boolean.TRUE.equals(link.getIsEnabled())) {
             throw new ConflictException("Disabled repositories cannot be refreshed.");
         }
 
-        GitHubRepositoryEntity repositoryEntity = gitHubRepositoryEntityRepository
-            .findById(link.getGithubRepositoryId())
+        Instant now = Instant.now();
+        int timeoutSeconds = Math.max(30, gitHubProperties.getJobs().getRepositoryRefresh().getInProgressTimeoutSeconds());
+        Instant staleBefore = now.minusSeconds(timeoutSeconds);
+        boolean claimed = transactionTemplate.execute(status -> projectRepositoryLinkRepository.claimForSync(
+            linkId,
+            GitHubIntegrationV2Constants.SYNC_STATUS_IN_PROGRESS,
+            now,
+            now,
+            staleBefore
+        )) > 0;
+        if (!claimed) {
+            LOGGER.info(
+                "Deferred GitHub sync source={} linkId={} because another sync is already in progress.",
+                source,
+                linkId
+            );
+            return;
+        }
+
+        link = projectRepositoryLinkRepository.findById(linkId)
+            .orElseThrow(() -> new ValidationException("repositoryId", "Linked repository was not found."));
+
+        GitHubRepositoryEntity repositoryEntity = gitHubRepositoryEntityRepository.findById(link.getGithubRepositoryId())
             .orElseThrow(() -> new ValidationException("githubRepositoryId", "GitHub repository was not found."));
 
-        GitHubAccessSource accessSource = accessSourceRepository
-            .findById(repositoryEntity.getAccessSourceId())
+        GitHubAccessSource accessSource = accessSourceRepository.findById(repositoryEntity.getAccessSourceId())
             .orElseThrow(() -> new ValidationException("sourceId", "GitHub access source was not found."));
 
-        Instant now = Instant.now();
         try {
+            // Network I/O (Outside transaction)
             String repositoryUrl = resolveRepositoryUrl(repositoryEntity);
             ProjectRepositoryMetadataDto metadata = gitHubClient.fetchRepositoryMetadata(
                 repositoryUrl,
                 accessSource.getInstallationId()
             );
             List<ProjectCommitDto> commits = gitHubClient.fetchRecentCommits(repositoryUrl, accessSource.getInstallationId());
+
+            // Persist (Atomic transaction)
+            persistSyncResults(linkId, metadata, commits);
+            LOGGER.info("GitHub sync completed source={} linkId={} status=SUCCESS", source, linkId);
+        } catch (Exception exception) {
+            // Persist failure status
+            persistSyncFailure(linkId, exception, now);
+            LOGGER.warn(
+                "GitHub sync completed source={} linkId={} status=FAILED message={}",
+                source,
+                linkId,
+                nullable(exception.getMessage(), "GitHub repository sync failed.")
+            );
+            throw new ServiceUnavailableException(nullable(exception.getMessage(), "GitHub repository sync failed."), exception);
+        }
+    }
+
+    protected void persistSyncResults(UUID linkId, ProjectRepositoryMetadataDto metadata, List<ProjectCommitDto> commits) {
+        transactionTemplate.executeWithoutResult(status -> {
+            Instant now = Instant.now();
+            ProjectRepositoryLink link = projectRepositoryLinkRepository.findById(linkId)
+                .orElseThrow(() -> new ValidationException("repositoryId", "Linked repository was not found."));
+            GitHubRepositoryEntity repositoryEntity = gitHubRepositoryEntityRepository.findById(link.getGithubRepositoryId())
+                .orElseThrow(() -> new ValidationException("githubRepositoryId", "GitHub repository was not found."));
 
             applyRepositoryMetadata(repositoryEntity, metadata);
             gitHubRepositoryEntityRepository.save(repositoryEntity);
@@ -95,20 +156,19 @@ public class GitHubSyncService {
             link.setSyncError(null);
             link.setUpdatedAt(now);
             projectRepositoryLinkRepository.save(link);
-        } catch (Exception exception) {
-            // Commit failure status. We do NOT re-throw so the REQUIRES_NEW transaction can commit.
-            try {
+        });
+    }
+
+    protected void persistSyncFailure(UUID linkId, Exception exception, Instant now) {
+        transactionTemplate.executeWithoutResult(status -> {
+            projectRepositoryLinkRepository.findById(linkId).ifPresent(link -> {
                 link.setLastSyncedAt(now);
                 link.setSyncStatus(GitHubIntegrationV2Constants.SYNC_STATUS_FAILED);
                 link.setSyncError(nullable(exception.getMessage(), "GitHub repository sync failed."));
                 link.setUpdatedAt(now);
                 projectRepositoryLinkRepository.save(link);
-            } catch (Exception fatal) {
-                // If we can't even save the failure status (e.g. DB is down), then we log it.
-                org.slf4j.LoggerFactory.getLogger(GitHubSyncService.class)
-                    .error("Fatal error saving sync failure status for linkId={}", linkId, fatal);
-            }
-        }
+            });
+        });
     }
 
     private void applyRepositoryMetadata(GitHubRepositoryEntity repositoryEntity, ProjectRepositoryMetadataDto metadata) {

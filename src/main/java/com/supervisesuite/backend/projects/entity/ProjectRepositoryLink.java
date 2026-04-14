@@ -55,6 +55,8 @@ public class ProjectRepositoryLink {
 
     private Instant lastSyncedAt;
 
+    private Instant lastSyncAttemptedAt;
+
     private String syncStatus;
 
     @Column(columnDefinition = "TEXT")

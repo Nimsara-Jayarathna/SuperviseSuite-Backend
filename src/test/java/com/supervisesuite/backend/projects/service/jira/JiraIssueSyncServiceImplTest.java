@@ -11,6 +11,8 @@ import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIssue;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
+import com.supervisesuite.backend.config.JiraProperties;
+import java.util.function.Consumer;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,6 +46,9 @@ class JiraIssueSyncServiceImplTest {
     @Mock
     private TransactionTemplate transactionTemplate;
 
+    @Mock
+    private JiraProperties jiraProperties;
+
     private JiraIssueSyncServiceImpl service;
 
     @BeforeEach
@@ -55,13 +60,25 @@ class JiraIssueSyncServiceImplTest {
             jiraAuthManager,
             jiraIssueMapper,
             new JiraIssueSyncProcessor(),
-            transactionTemplate
+            transactionTemplate,
+            jiraProperties
         );
+
+        JiraProperties.Jobs jobs = new JiraProperties.Jobs();
+        JiraProperties.Jobs.IssueSync issueSync = new JiraProperties.Jobs.IssueSync();
+        issueSync.setInProgressTimeoutSeconds(900);
+        jobs.setIssueSync(issueSync);
+        when(jiraProperties.getJobs()).thenReturn(jobs);
 
         when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
             TransactionCallback<?> callback = invocation.getArgument(0);
             return callback.doInTransaction(null);
         });
+        doAnswer(invocation -> {
+            Consumer<Object> callback = invocation.getArgument(0);
+            callback.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
     }
 
     @Test
@@ -79,6 +96,13 @@ class JiraIssueSyncServiceImplTest {
 
         when(jiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
             .thenReturn(Optional.of(integration));
+        when(jiraIntegrationRepository.claimForSync(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        )).thenReturn(1);
         when(jiraAuthManager.getOrRefreshAccessToken(integration)).thenReturn("access-token");
         when(jiraClient.fetchAllIssues("cloud-1", "access-token"))
             .thenReturn(List.of(duplicateA1, duplicateA2, uniqueB));

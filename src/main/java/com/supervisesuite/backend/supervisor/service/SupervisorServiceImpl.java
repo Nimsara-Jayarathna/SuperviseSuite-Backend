@@ -2,6 +2,7 @@ package com.supervisesuite.backend.supervisor.service;
 
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.ApiErrorDetail;
+import com.supervisesuite.backend.common.error.ConflictException;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
@@ -864,8 +865,13 @@ class SupervisorServiceImpl implements SupervisorService {
                         jiraIntegration != null,
                         jiraIntegration != null ? jiraIntegration.getWorkspaceName() : null,
                     jiraIntegration != null ? jiraIntegration.getWorkspaceUrl() : null,
-                    jiraIntegration != null ? jiraIntegration.getConnectedAt() : null,
-                    jiraIntegration != null ? jiraIntegration.getTokenExpiresAt() : null),
+                    jiraIntegration != null
+                        ? (jiraIntegration.getLastSyncedAt() != null
+                            ? jiraIntegration.getLastSyncedAt()
+                            : jiraIntegration.getConnectedAt())
+                        : null,
+                    jiraIntegration != null ? jiraIntegration.getTokenExpiresAt() : null,
+                    jiraIntegration != null ? jiraIntegration.getSyncStatus() : null),
                 project.getLastActivityAt(),
                 toDetailLeader(project.getLeaderUserId()),
                 getProjectMembers(project.getId()),
@@ -1352,6 +1358,9 @@ class SupervisorServiceImpl implements SupervisorService {
             throw new ValidationException(
                     "Jira is not connected for this project.",
                     List.of(new ApiErrorDetail("jira", "Jira is not connected for this project.")));
+        }
+        if ("IN_PROGRESS".equals(activeIntegration.getSyncStatus())) {
+            throw new ConflictException("Cannot disconnect Jira while sync is in progress.");
         }
 
         Instant now = Instant.now();

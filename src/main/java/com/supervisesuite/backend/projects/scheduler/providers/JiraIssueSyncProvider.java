@@ -4,6 +4,7 @@ import com.supervisesuite.backend.common.scheduler.SystemSyncProvider;
 import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
+import com.supervisesuite.backend.projects.service.SyncAttemptSource;
 import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
 import java.util.List;
 import org.slf4j.Logger;
@@ -55,7 +56,7 @@ public class JiraIssueSyncProvider implements SystemSyncProvider {
         for (ProjectJiraIntegration integration : candidateIntegrations.getContent()) {
             attempted++;
             try {
-                jiraIssueSyncService.syncProjectIssues(integration.getProjectId());
+                jiraIssueSyncService.syncProjectIssues(integration.getProjectId(), SyncAttemptSource.CRON);
                 succeeded++;
             } catch (RuntimeException exception) {
                 failed++;

@@ -1,8 +1,11 @@
 package com.supervisesuite.backend.config;
 
+import java.util.concurrent.Executor;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.SchedulingConfigurer;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 import org.springframework.beans.factory.DisposableBean;
 
@@ -15,6 +18,7 @@ import org.springframework.beans.factory.DisposableBean;
 public class SchedulerConfig implements SchedulingConfigurer, DisposableBean {
 
     private ThreadPoolTaskScheduler taskScheduler;
+    private ThreadPoolTaskExecutor userSyncExecutor;
 
     @Override
     public void configureTasks(ScheduledTaskRegistrar taskRegistrar) {
@@ -37,5 +41,22 @@ public class SchedulerConfig implements SchedulingConfigurer, DisposableBean {
         if (taskScheduler != null) {
             taskScheduler.shutdown();
         }
+        if (userSyncExecutor != null) {
+            userSyncExecutor.shutdown();
+        }
+    }
+
+    @Bean(name = "userSyncExecutor")
+    public Executor userSyncExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(200);
+        executor.setThreadNamePrefix("user-sync-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.initialize();
+        this.userSyncExecutor = executor;
+        return executor;
     }
 }

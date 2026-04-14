@@ -51,6 +51,15 @@ public class ProjectJiraIntegration {
 
     private Instant tokenExpiresAt;
 
+    private Instant lastSyncedAt;
+
+    private Instant lastSyncAttemptedAt;
+
+    private String syncStatus;
+
+    @Column(columnDefinition = "TEXT")
+    private String syncError;
+
     private Instant updatedAt;
 
     private Instant revokedAt;

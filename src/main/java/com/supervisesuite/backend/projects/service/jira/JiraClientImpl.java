@@ -6,6 +6,7 @@ import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.projects.dto.JiraIssueDto;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -18,6 +19,9 @@ import org.springframework.web.client.RestClientResponseException;
 class JiraClientImpl implements JiraClient {
 
     private static final int PAGE_SIZE = 100;
+    private static final int MAX_RETRIES = 4;
+    private static final long BASE_BACKOFF_MS = 500L;
+    private static final long MAX_BACKOFF_MS = 8_000L;
     private static final List<String> BASE_FIELDS = List.of(
             "summary",
             "issuetype",
@@ -168,9 +172,8 @@ class JiraClientImpl implements JiraClient {
             String accessToken,
             EnhancedSearchRequest body) {
         String modernUri = "https://api.atlassian.com/ex/jira/" + cloudId + "/rest/api/3/search/jql";
-        int maxRetries = 3;
         int attempt = 0;
-        
+
         while (true) {
             try {
                 attempt++;
@@ -183,13 +186,8 @@ class JiraClientImpl implements JiraClient {
                         .retrieve()
                         .body(EnhancedSearchResponse.class);
             } catch (RestClientResponseException ex) {
-                if (attempt < maxRetries && (ex.getStatusCode().value() == 429 || ex.getStatusCode().value() == 503)) {
-                    try {
-                        Thread.sleep(1000L * attempt); // Simple backoff
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw ex;
-                    }
+                if (attempt < MAX_RETRIES && isRetryableStatus(ex)) {
+                    sleepForRetry(ex, attempt);
                     continue;
                 }
                 throw ex;
@@ -202,7 +200,6 @@ class JiraClientImpl implements JiraClient {
             String accessToken,
             LegacySearchRequest body) {
         String legacyUri = "https://api.atlassian.com/ex/jira/" + cloudId + "/rest/api/3/search";
-        int maxRetries = 3;
         int attempt = 0;
 
         while (true) {
@@ -217,17 +214,47 @@ class JiraClientImpl implements JiraClient {
                         .retrieve()
                         .body(LegacySearchResponse.class);
             } catch (RestClientResponseException ex) {
-                if (attempt < maxRetries && (ex.getStatusCode().value() == 429 || ex.getStatusCode().value() == 503)) {
-                    try {
-                        Thread.sleep(1000L * attempt);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw ex;
-                    }
+                if (attempt < MAX_RETRIES && isRetryableStatus(ex)) {
+                    sleepForRetry(ex, attempt);
                     continue;
                 }
                 throw ex;
             }
+        }
+    }
+
+    private static boolean isRetryableStatus(RestClientResponseException ex) {
+        int status = ex.getStatusCode().value();
+        return status == 429 || status == 503;
+    }
+
+    private static void sleepForRetry(RestClientResponseException ex, int attempt) {
+        long sleepMs = parseRetryAfterMs(ex);
+        if (sleepMs <= 0L) {
+            long exp = Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * (1L << Math.max(0, attempt - 1)));
+            long jitter = ThreadLocalRandom.current().nextLong(Math.max(1L, exp / 3));
+            sleepMs = Math.min(MAX_BACKOFF_MS, exp + jitter);
+        }
+        try {
+            Thread.sleep(sleepMs);
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+            throw ex;
+        }
+    }
+
+    private static long parseRetryAfterMs(RestClientResponseException ex) {
+        String retryAfter = ex.getResponseHeaders() == null
+            ? null
+            : ex.getResponseHeaders().getFirst(HttpHeaders.RETRY_AFTER);
+        if (retryAfter == null || retryAfter.isBlank()) {
+            return -1L;
+        }
+        try {
+            long seconds = Long.parseLong(retryAfter.trim());
+            return Math.max(0L, seconds) * 1000L;
+        } catch (NumberFormatException ignored) {
+            return -1L;
         }
     }
 

@@ -451,16 +451,25 @@ public class SupervisorProjectDetailDto {
         private String workspaceUrl;
         private Instant lastSyncedAt;
         private Instant tokenExpiresAt;
+        private String syncStatus;
 
         public JiraIntegration() {
         }
 
-        public JiraIntegration(boolean connected, String workspaceName, String workspaceUrl, Instant lastSyncedAt, Instant tokenExpiresAt) {
+        public JiraIntegration(
+            boolean connected,
+            String workspaceName,
+            String workspaceUrl,
+            Instant lastSyncedAt,
+            Instant tokenExpiresAt,
+            String syncStatus
+        ) {
             this.connected = connected;
             this.workspaceName = workspaceName;
             this.workspaceUrl = workspaceUrl;
             this.lastSyncedAt = lastSyncedAt;
             this.tokenExpiresAt = tokenExpiresAt;
+            this.syncStatus = syncStatus;
         }
 
         public boolean isConnected() {
@@ -501,6 +510,14 @@ public class SupervisorProjectDetailDto {
 
         public void setTokenExpiresAt(Instant tokenExpiresAt) {
             this.tokenExpiresAt = tokenExpiresAt;
+        }
+
+        public String getSyncStatus() {
+            return syncStatus;
+        }
+
+        public void setSyncStatus(String syncStatus) {
+            this.syncStatus = syncStatus;
         }
     }
 }

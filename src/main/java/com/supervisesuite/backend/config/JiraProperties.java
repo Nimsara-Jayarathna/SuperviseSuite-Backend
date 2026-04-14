@@ -46,6 +46,7 @@ public class JiraProperties {
         public static class IssueSync {
             private boolean enabled = true;
             private int batchSize = 50;
+            private int inProgressTimeoutSeconds = 900;
         }
     }
 }

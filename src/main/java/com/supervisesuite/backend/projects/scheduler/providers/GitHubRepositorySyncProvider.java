@@ -4,6 +4,7 @@ import com.supervisesuite.backend.common.scheduler.SystemSyncProvider;
 import com.supervisesuite.backend.config.GitHubProperties;
 import com.supervisesuite.backend.projects.entity.ProjectRepositoryLink;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkRepository;
+import com.supervisesuite.backend.projects.service.SyncAttemptSource;
 import com.supervisesuite.backend.projects.service.githubv2.GitHubSyncService;
 import java.util.List;
 import org.slf4j.Logger;
@@ -56,7 +57,7 @@ public class GitHubRepositorySyncProvider implements SystemSyncProvider {
         for (ProjectRepositoryLink link : candidateLinks) {
             attempted++;
             try {
-                gitHubSyncService.syncRepository(link.getId());
+                gitHubSyncService.syncRepository(link.getId(), SyncAttemptSource.CRON);
                 succeeded++;
             } catch (RuntimeException exception) {
                 failed++;

@@ -118,6 +118,7 @@ app:
       repository-refresh:
         enabled: ${GITHUB_REPOSITORY_REFRESH_JOB_ENABLED:true}
         batch-size: ${GITHUB_REPOSITORY_REFRESH_BATCH_SIZE:50}
+        in-progress-timeout-seconds: ${GITHUB_REPOSITORY_SYNC_IN_PROGRESS_TIMEOUT_SECONDS:900}
   jira:
     client-id: ${ATLASSIAN_CLIENT_ID:}
     client-secret: ${ATLASSIAN_CLIENT_SECRET:}
@@ -138,6 +139,7 @@ app:
       issue-sync:
         enabled: ${JIRA_ISSUE_SYNC_JOB_ENABLED:true}
         batch-size: ${JIRA_ISSUE_SYNC_BATCH_SIZE:50}
+        in-progress-timeout-seconds: ${JIRA_ISSUE_SYNC_IN_PROGRESS_TIMEOUT_SECONDS:900}
   brevo:
     api-key: ${BREVO_API_KEY:}
     sender-email: ${BREVO_SENDER_EMAIL:no-reply@supervisesuite.xyz}
