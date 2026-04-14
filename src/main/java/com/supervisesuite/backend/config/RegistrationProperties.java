@@ -20,7 +20,6 @@ public class RegistrationProperties {
     private String studentEmailPrefixRegex = "^IT(1[5-9]|[2-4][0-9]|50)[0-9]{6}$";
     private long otpExpirySeconds = 600;
     private long sessionExpirySeconds = 600;
-    private Cleanup cleanup = new Cleanup();
 
     public boolean hasAnyDomainRestriction() {
         return hasStudentDomain() || hasSupervisorDomain();
@@ -93,13 +92,5 @@ public class RegistrationProperties {
         } catch (PatternSyntaxException ex) {
             return false;
         }
-    }
-
-    @Getter
-    @Setter
-    public static class Cleanup {
-        private boolean enabled = true;
-        private long initialDelayMs = 120000;
-        private long fixedDelayMs = 900000;
     }
 }

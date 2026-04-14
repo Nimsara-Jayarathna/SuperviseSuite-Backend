@@ -51,10 +51,12 @@ app:
     # Set to false in local dev (HTTP). Must be true in production (HTTPS).
     # Browsers (except Chrome) block Secure cookies over plain HTTP even on localhost.
     secure: ${COOKIE_SECURE:true}
+  system:
+    cleanup:
+      fixed-delay-ms: ${SYSTEM_CLEANUP_FIXED_DELAY_MS:900000}
   auth:
     password-reset:
       token-expiry-minutes: ${PASSWORD_RESET_TOKEN_EXPIRY_MINUTES:15}
-      cleanup-cron: ${PASSWORD_RESET_CLEANUP_CRON:0 0 * * * *}
   frontend:
     base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
   registration:
@@ -65,10 +67,6 @@ app:
     student-email-prefix-regex: ${REGISTRATION_STUDENT_EMAIL_PREFIX_REGEX:^IT(1[5-9]|[2-4][0-9]|50)[0-9]{6}$}
     otp-expiry-seconds: ${REGISTRATION_OTP_EXPIRY_SECONDS:600}
     session-expiry-seconds: ${REGISTRATION_SESSION_EXPIRY_SECONDS:600}
-    cleanup:
-      enabled: ${REGISTRATION_CLEANUP_ENABLED:true}
-      initial-delay-ms: ${REGISTRATION_CLEANUP_INITIAL_DELAY_MS:120000}
-      fixed-delay-ms: ${REGISTRATION_CLEANUP_FIXED_DELAY_MS:900000}
   rate-limiting:
     enabled: ${RATE_LIMITING_ENABLED:true}
     trust-forwarded-for: ${RATE_LIMITING_TRUST_FORWARDED_FOR:true}

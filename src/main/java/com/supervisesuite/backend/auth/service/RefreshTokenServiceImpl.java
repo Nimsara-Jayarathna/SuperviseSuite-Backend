@@ -116,4 +116,10 @@ class RefreshTokenServiceImpl implements RefreshTokenService {
             throw new IllegalStateException("SHA-256 algorithm not available", e);
         }
     }
+
+    @Override
+    @Transactional
+    public void cleanupExpiredAndRevokedTokens() {
+        refreshTokenRepository.deleteAllByExpiresAtBeforeOrRevokedAtIsNotNull(Instant.now());
+    }
 }
