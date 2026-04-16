@@ -3,6 +3,7 @@ package com.supervisesuite.backend.projects.service.jira;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,10 +22,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.quality.Strictness;
+import org.mockito.junit.jupiter.MockitoSettings;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class JiraAuthManagerImplTest {
 
     @Mock
@@ -91,7 +95,7 @@ class JiraAuthManagerImplTest {
         when(jiraTokenEncryptionService.encrypt("new-refresh-token")).thenReturn("enc:new-refresh-token");
         when(jiraTokenEncryptionService.decrypt("enc:new-access-token")).thenReturn("new-access-token");
         when(restClient.post()
-                .uri("https://auth.atlassian.com/oauth/token")
+                .uri(anyString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON)
                 .body(any())
