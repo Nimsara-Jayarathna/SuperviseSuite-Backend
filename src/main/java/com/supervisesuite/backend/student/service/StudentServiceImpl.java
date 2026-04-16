@@ -33,6 +33,9 @@ import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
 import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileAccessRole;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
+import com.supervisesuite.backend.meetings.service.MeetingChannelService;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashMap;
 import java.util.ArrayList;
@@ -60,6 +63,7 @@ class StudentServiceImpl implements StudentService {
     private final JiraSprintProgressService jiraSprintProgressService;
     private final JiraWorkloadService jiraWorkloadService;
     private final ProjectFileService projectFileService;
+    private final MeetingChannelService meetingChannelService;
 
     StudentServiceImpl(
          UserRepository userRepository,
@@ -73,7 +77,8 @@ class StudentServiceImpl implements StudentService {
             JiraHealthService jiraHealthService,
             JiraSprintProgressService jiraSprintProgressService,
             JiraWorkloadService jiraWorkloadService,
-            ProjectFileService projectFileService
+            ProjectFileService projectFileService,
+            MeetingChannelService meetingChannelService
     ) {
          this.userRepository = userRepository;
          this.projectMemberRepository = projectMemberRepository;
@@ -87,6 +92,7 @@ class StudentServiceImpl implements StudentService {
          this.jiraSprintProgressService = jiraSprintProgressService;
          this.jiraWorkloadService = jiraWorkloadService;
          this.projectFileService = projectFileService;
+         this.meetingChannelService = meetingChannelService;
     }
 
     @Override
@@ -391,6 +397,22 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
         dto.setRoots(roots);
         dto.setOrphans(orphans);
         return dto;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MeetingChannelDto> getProjectMeetingChannels(String authenticatedUserId, String projectId) {
+        return meetingChannelService.listForStudent(authenticatedUserId, projectId);
+    }
+
+    @Override
+    @Transactional
+    public MeetingChannelDto addProjectMeetingChannel(
+        String authenticatedUserId,
+        String projectId,
+        CreateMeetingChannelRequest request
+    ) {
+        return meetingChannelService.createAsStudent(authenticatedUserId, projectId, request);
     }
 
     private User resolveStudent(String authenticatedUserId) {

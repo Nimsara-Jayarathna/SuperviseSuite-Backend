@@ -103,6 +103,10 @@ import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
 import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileAccessRole;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
+import com.supervisesuite.backend.meetings.dto.UpdateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.service.MeetingChannelService;
 
 @Service
 class SupervisorServiceImpl implements SupervisorService {
@@ -150,6 +154,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final JiraSprintProgressService jiraSprintProgressService;
     private final JiraWorkloadService jiraWorkloadService;
     private final ProjectFileService projectFileService;
+    private final MeetingChannelService meetingChannelService;
     private final RestClient restClient;
     private final SecureRandom secureRandom = new SecureRandom();
     private final Map<String, PendingJiraWorkspaceSelection> pendingJiraWorkspaceSelections = new ConcurrentHashMap<>();
@@ -176,6 +181,7 @@ class SupervisorServiceImpl implements SupervisorService {
             JiraSprintProgressService jiraSprintProgressService,
             JiraWorkloadService jiraWorkloadService,
             ProjectFileService projectFileService,
+            MeetingChannelService meetingChannelService,
             RestClient.Builder restClientBuilder) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
@@ -197,6 +203,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.jiraSprintProgressService = jiraSprintProgressService;
         this.jiraWorkloadService = jiraWorkloadService;
         this.projectFileService = projectFileService;
+        this.meetingChannelService = meetingChannelService;
         this.restClient = restClientBuilder.build();
     }
 
@@ -1489,6 +1496,49 @@ class SupervisorServiceImpl implements SupervisorService {
         projectRepository.save(project);
 
         return jiraHealthService.getHealthOverview(project.getId());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MeetingChannelDto> getProjectMeetingChannels(String authenticatedUserId, String projectId) {
+        return meetingChannelService.listForSupervisor(authenticatedUserId, projectId);
+    }
+
+    @Override
+    @Transactional
+    public MeetingChannelDto addProjectMeetingChannel(
+        String authenticatedUserId,
+        String projectId,
+        CreateMeetingChannelRequest request
+    ) {
+        return meetingChannelService.createAsSupervisor(authenticatedUserId, projectId, request);
+    }
+
+    @Override
+    @Transactional
+    public MeetingChannelDto updateProjectMeetingChannel(
+        String authenticatedUserId,
+        String projectId,
+        String channelId,
+        UpdateMeetingChannelRequest request
+    ) {
+        return meetingChannelService.updateAsSupervisor(authenticatedUserId, projectId, channelId, request);
+    }
+
+    @Override
+    @Transactional
+    public void deleteProjectMeetingChannel(String authenticatedUserId, String projectId, String channelId) {
+        meetingChannelService.deleteAsSupervisor(authenticatedUserId, projectId, channelId);
+    }
+
+    @Override
+    @Transactional
+    public MeetingChannelDto approveProjectMeetingChannel(
+        String authenticatedUserId,
+        String projectId,
+        String channelId
+    ) {
+        return meetingChannelService.approveAsSupervisor(authenticatedUserId, projectId, channelId);
     }
 
     private ProjectMember buildProjectMember(
