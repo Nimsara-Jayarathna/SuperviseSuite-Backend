@@ -90,10 +90,16 @@ class JiraAuthManagerImplTest {
         when(jiraProperties.getClientId()).thenReturn("client-id");
         when(jiraProperties.getClientSecret()).thenReturn("client-secret");
         when(jiraProperties.getTokenTargetUrl()).thenReturn("https://auth.atlassian.com/oauth/token");
-        when(jiraTokenEncryptionService.decrypt("enc:refresh-token")).thenReturn("refresh-token");
+        when(jiraTokenEncryptionService.decrypt(anyString())).thenAnswer(invocation -> {
+            String encrypted = invocation.getArgument(0, String.class);
+            return switch (encrypted) {
+                case "enc:refresh-token" -> "refresh-token";
+                case "enc:new-access-token" -> "new-access-token";
+                default -> null;
+            };
+        });
         when(jiraTokenEncryptionService.encrypt("new-access-token")).thenReturn("enc:new-access-token");
         when(jiraTokenEncryptionService.encrypt("new-refresh-token")).thenReturn("enc:new-refresh-token");
-        when(jiraTokenEncryptionService.decrypt("enc:new-access-token")).thenReturn("new-access-token");
         when(restClient.post()
                 .uri(anyString())
                 .contentType(MediaType.APPLICATION_JSON)
