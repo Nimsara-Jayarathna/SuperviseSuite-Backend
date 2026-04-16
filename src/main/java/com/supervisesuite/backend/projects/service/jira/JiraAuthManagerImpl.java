@@ -6,7 +6,6 @@ import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -20,6 +19,7 @@ class JiraAuthManagerImpl implements JiraAuthManager {
 
     private static final org.slf4j.Logger log =
             org.slf4j.LoggerFactory.getLogger(JiraAuthManagerImpl.class);
+    private static final long REFRESH_SKEW_SECONDS = 60L;
 
     private final JiraProperties jiraProperties;
     private final ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
@@ -40,11 +40,19 @@ class JiraAuthManagerImpl implements JiraAuthManager {
     @Override
     public String getOrRefreshAccessToken(ProjectJiraIntegration integration) {
         Instant now = Instant.now();
+        Instant tokenExpiresAt = integration.getTokenExpiresAt();
+        boolean tokenExpired = tokenExpiresAt != null && !now.isBefore(tokenExpiresAt);
 
-        // Check if token is expired or expires in less than 60 seconds
-        if (integration.getTokenExpiresAt() != null && now.isAfter(integration.getTokenExpiresAt().minusSeconds(60))) {
-            String refreshTokenEncrypted = integration.getRefreshTokenEncrypted();
-            if (refreshTokenEncrypted != null && !refreshTokenEncrypted.isBlank()) {
+        // Refresh shortly before expiry to avoid sending a token that is about to expire.
+        if (tokenExpiresAt != null && now.isAfter(tokenExpiresAt.minusSeconds(REFRESH_SKEW_SECONDS))) {
+            String refreshTokenEncrypted = trimToNull(integration.getRefreshTokenEncrypted());
+            if (refreshTokenEncrypted == null) {
+                if (tokenExpired) {
+                    throw new ServiceUnavailableException(
+                            "Jira access token has expired and this Jira connection cannot be refreshed. "
+                                    + "Please reconnect Jira from the Integrations tab.");
+                }
+            } else {
                 try {
                     String refreshToken = jiraTokenEncryptionService.decrypt(refreshTokenEncrypted);
                     String clientId = trimToNull(jiraProperties.getClientId());
@@ -52,35 +60,42 @@ class JiraAuthManagerImpl implements JiraAuthManager {
                     String targetUrl = trimToNull(jiraProperties.getTokenTargetUrl());
                     String tokenTargetUrl = targetUrl == null ? "https://auth.atlassian.com/oauth/token" : targetUrl;
 
-                    if (clientId != null && clientSecret != null) {
-                        Map<String, Object> tokenRequest = new LinkedHashMap<>();
-                        tokenRequest.put("grant_type", "refresh_token");
-                        tokenRequest.put("client_id", clientId);
-                        tokenRequest.put("client_secret", clientSecret);
-                        tokenRequest.put("refresh_token", refreshToken);
-
-                        Map<?, ?> tokenResponse = restClient.post()
-                                .uri(tokenTargetUrl)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .accept(MediaType.APPLICATION_JSON)
-                                .body(tokenRequest)
-                                .retrieve()
-                                .body(Map.class);
-
-                        String newAccessToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("access_token")));
-                        String newRefreshToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("refresh_token")));
-                        Number expiresInSecs = tokenResponse == null || tokenResponse.get("expires_in") == null ? null : (Number) tokenResponse.get("expires_in");
-
-                        if (newAccessToken != null && !"null".equalsIgnoreCase(newAccessToken)) {
-                            integration.setAccessTokenEncrypted(jiraTokenEncryptionService.encrypt(newAccessToken));
-                            if (newRefreshToken != null && !"null".equalsIgnoreCase(newRefreshToken)) {
-                                integration.setRefreshTokenEncrypted(jiraTokenEncryptionService.encrypt(newRefreshToken));
-                            }
-                            if (expiresInSecs != null) {
-                                integration.setTokenExpiresAt(Instant.now().plusSeconds(expiresInSecs.longValue()));
-                            }
-                            projectJiraIntegrationRepository.saveAndFlush(integration);
+                    if (clientId == null || clientSecret == null) {
+                        if (tokenExpired) {
+                            throw new ServiceUnavailableException(
+                                    "Jira access token has expired and Jira OAuth refresh is not fully configured. "
+                                            + "Please check Atlassian client credentials.");
                         }
+                        return jiraTokenEncryptionService.decrypt(integration.getAccessTokenEncrypted());
+                    }
+
+                    Map<String, Object> tokenRequest = new LinkedHashMap<>();
+                    tokenRequest.put("grant_type", "refresh_token");
+                    tokenRequest.put("client_id", clientId);
+                    tokenRequest.put("client_secret", clientSecret);
+                    tokenRequest.put("refresh_token", refreshToken);
+
+                    Map<?, ?> tokenResponse = restClient.post()
+                            .uri(tokenTargetUrl)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .accept(MediaType.APPLICATION_JSON)
+                            .body(tokenRequest)
+                            .retrieve()
+                            .body(Map.class);
+
+                    String newAccessToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("access_token")));
+                    String newRefreshToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("refresh_token")));
+                    Number expiresInSecs = tokenResponse == null || tokenResponse.get("expires_in") == null ? null : (Number) tokenResponse.get("expires_in");
+
+                    if (newAccessToken != null && !"null".equalsIgnoreCase(newAccessToken)) {
+                        integration.setAccessTokenEncrypted(jiraTokenEncryptionService.encrypt(newAccessToken));
+                        if (newRefreshToken != null && !"null".equalsIgnoreCase(newRefreshToken)) {
+                            integration.setRefreshTokenEncrypted(jiraTokenEncryptionService.encrypt(newRefreshToken));
+                        }
+                        if (expiresInSecs != null) {
+                            integration.setTokenExpiresAt(Instant.now().plusSeconds(expiresInSecs.longValue()));
+                        }
+                        projectJiraIntegrationRepository.saveAndFlush(integration);
                     }
                 } catch (RestClientResponseException ex) {
                     log.warn("Jira token refresh rejected by Atlassian for project {}. Status: {}, Body: {}",
@@ -93,6 +108,11 @@ class JiraAuthManagerImpl implements JiraAuthManager {
                 } catch (ResourceAccessException ex) {
                     log.warn("Jira token refresh network error for project {} — proceeding with existing token. Error: {}",
                             integration.getProjectId(), ex.getMessage());
+                    if (tokenExpired) {
+                        throw new ServiceUnavailableException(
+                                "Jira access token has expired and could not be refreshed. "
+                                        + "Please reconnect Jira from the Integrations tab.");
+                    }
                 } catch (Exception ex) {
                     log.warn("Jira token refresh unexpected error for project {}. Error: {}",
                             integration.getProjectId(), ex.getMessage());
