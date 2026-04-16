@@ -115,6 +115,8 @@ class SupervisorServiceImpl implements SupervisorService {
     private static final String DEFAULT_MILESTONE_STATUS = "PLANNED";
     private static final String CANCELLED_MILESTONE_STATUS = "CANCELLED";
     private static final String COMPLETED_MILESTONE_STATUS = "COMPLETED";
+    private static final String DEFAULT_JIRA_SCOPE = "read:jira-user read:jira-work offline_access";
+    private static final String REQUIRED_JIRA_SCOPE = "offline_access";
     private static final Set<String> ALLOWED_LIFECYCLE_STATUSES = Set.of(
             "PLANNING",
             "ACTIVE",
@@ -1007,7 +1009,7 @@ class SupervisorServiceImpl implements SupervisorService {
         String url = authTargetUrl
             + "?audience=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getAudience()), "api.atlassian.com"))
             + "&client_id=" + urlencode(clientId)
-            + "&scope=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getScope()), "read:jira-user read:jira-work offline_access"))
+            + "&scope=" + urlencode(normalizeJiraScope(jiraProperties.getScope()))
             + "&redirect_uri=" + urlencode(redirectUri)
             + "&state=" + urlencode(state)
             + "&response_type=code&prompt=consent";
@@ -1647,6 +1649,19 @@ class SupervisorServiceImpl implements SupervisorService {
     private String defaultIfBlank(String value, String fallback) {
         String trimmed = trimToNull(value);
         return trimmed == null ? fallback : trimmed;
+    }
+
+    private String normalizeJiraScope(String configuredScope) {
+        String scope = defaultIfBlank(trimToNull(configuredScope), DEFAULT_JIRA_SCOPE);
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        for (String token : scope.split("\\s+")) {
+            String trimmed = trimToNull(token);
+            if (trimmed != null) {
+                normalized.add(trimmed);
+            }
+        }
+        normalized.add(REQUIRED_JIRA_SCOPE);
+        return String.join(" ", normalized);
     }
 
     private String urlencode(String value) {

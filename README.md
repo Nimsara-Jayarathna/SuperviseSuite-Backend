@@ -123,7 +123,7 @@ The backend reads DB and auth config from environment variables:
 - `ATLASSIAN_CLIENT_ID` — Atlassian OAuth client id
 - `ATLASSIAN_CLIENT_SECRET` — Atlassian OAuth client secret
 - `ATLASSIAN_REDIRECT_URI` — OAuth redirect URI registered in Atlassian developer console (used by `/api/supervisor/jira/oauth/complete`)
-- `ATLASSIAN_SCOPE` — Jira scopes requested during OAuth (default: `read:jira-user read:jira-work`)
+- `ATLASSIAN_SCOPE` — Jira scopes requested during OAuth (default: `read:jira-user read:jira-work offline_access`)
 - `ATLASSIAN_AUDIENCE` — OAuth audience for Atlassian API token exchange (default: `api.atlassian.com`)
 - `ATLASSIAN_AUTH_TARGET_URL` — Atlassian authorize endpoint (default: `https://auth.atlassian.com/authorize`)
 - `ATLASSIAN_TOKEN_TARGET_URL` — Atlassian token endpoint (default: `https://auth.atlassian.com/oauth/token`)
@@ -204,7 +204,7 @@ GITHUB_SYNC_MAX_COMMIT_PAGES=5
 ATLASSIAN_CLIENT_ID=<your-atlassian-client-id>
 ATLASSIAN_CLIENT_SECRET=<your-atlassian-client-secret>
 ATLASSIAN_REDIRECT_URI=http://localhost:5173/jira/callback
-ATLASSIAN_SCOPE=read:jira-user read:jira-work
+ATLASSIAN_SCOPE=read:jira-user read:jira-work offline_access
 ATLASSIAN_AUDIENCE=api.atlassian.com
 ATLASSIAN_AUTH_TARGET_URL=https://auth.atlassian.com/authorize
 ATLASSIAN_TOKEN_TARGET_URL=https://auth.atlassian.com/oauth/token

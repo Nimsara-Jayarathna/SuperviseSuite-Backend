@@ -46,6 +46,8 @@ import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMileston
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -155,6 +157,7 @@ class SupervisorServiceImplUnitTest {
         supervisor.setFirstName("Sup");
         supervisor.setLastName("User");
         lenient().when(userRepository.findById(supervisorId)).thenReturn(Optional.of(supervisor));
+        lenient().when(restClientBuilder.build()).thenReturn(restClient);
     }
 
     @Test
@@ -406,9 +409,11 @@ class SupervisorServiceImplUnitTest {
         when(jiraProperties.getOauthStateTtlSeconds()).thenReturn(900L);
 
         JiraAuthUrlDto result = service.getProjectJiraAuthUrl(supervisorId.toString(), projectId.toString());
+        String decodedUrl = decodeUrl(result.url());
 
         assertThat(result.url()).contains("https://auth.atlassian.com/authorize");
         assertThat(result.url()).contains("state=");
+        assertThat(decodedUrl).contains("scope=read:jira-user read:jira-work offline_access");
 
         ArgumentCaptor<ProjectJiraOAuthState> captor = ArgumentCaptor.forClass(ProjectJiraOAuthState.class);
         verify(projectJiraOAuthStateRepository).saveAndFlush(captor.capture());
@@ -417,6 +422,31 @@ class SupervisorServiceImplUnitTest {
         assertThat(saved.getUserId()).isEqualTo(supervisorId);
         assertThat(saved.getStateNonceHash()).isNotBlank();
         assertThat(saved.getExpiresAt()).isNotNull();
+    }
+
+    @Test
+    void getProjectJiraAuthUrl_whenOfflineAccessAlreadyPresent_doesNotDuplicateScope() {
+        UUID projectId = UUID.randomUUID();
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+            .thenReturn(Optional.of(project));
+        when(projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
+            .thenReturn(Optional.empty());
+        when(jiraProperties.getClientId()).thenReturn("client-id");
+        when(jiraProperties.getRedirectUri()).thenReturn("http://localhost:5173/supervisor/jira/callback");
+        when(jiraProperties.getAuthTargetUrl()).thenReturn("https://auth.atlassian.com/authorize");
+        when(jiraProperties.getAudience()).thenReturn("api.atlassian.com");
+        when(jiraProperties.getScope()).thenReturn("read:jira-user read:jira-work offline_access");
+        when(jiraProperties.getOauthStateTtlSeconds()).thenReturn(900L);
+
+        JiraAuthUrlDto result = service.getProjectJiraAuthUrl(supervisorId.toString(), projectId.toString());
+        String decodedUrl = decodeUrl(result.url());
+
+        assertThat(decodedUrl).contains("scope=read:jira-user read:jira-work offline_access");
+        assertThat(decodedUrl.split("offline_access", -1)).hasSize(2);
     }
 
     @Test
@@ -569,5 +599,9 @@ class SupervisorServiceImplUnitTest {
         project.setLastActivityAt(Instant.now());
         project.setProgressPercent(0);
         return project;
+    }
+
+    private static String decodeUrl(String value) {
+        return URLDecoder.decode(value, StandardCharsets.UTF_8);
     }
 }

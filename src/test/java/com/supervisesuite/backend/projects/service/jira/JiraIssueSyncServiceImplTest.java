@@ -1,11 +1,13 @@
 package com.supervisesuite.backend.projects.service.jira;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
 
+import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.projects.dto.JiraIssueDto;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIssue;
@@ -136,6 +138,35 @@ class JiraIssueSyncServiceImplTest {
         verify(jiraIssueRepository)
             .deleteAllByProjectIdAndIssueKeyNotIn(org.mockito.ArgumentMatchers.eq(projectId), staleKeysCaptor.capture());
         assertThat(staleKeysCaptor.getValue()).containsExactly("SCRUM-127", "SCRUM-128");
+    }
+
+    @Test
+    void syncProjectIssues_whenExpiredConnectionCannotRefresh_propagatesReconnectRequiredFailure() {
+        UUID projectId = UUID.randomUUID();
+
+        ProjectJiraIntegration integration = new ProjectJiraIntegration();
+        integration.setProjectId(projectId);
+        integration.setCloudId("cloud-1");
+
+        when(jiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
+            .thenReturn(Optional.of(integration));
+        when(jiraIntegrationRepository.claimForSync(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        )).thenReturn(1);
+        when(jiraAuthManager.getOrRefreshAccessToken(integration))
+            .thenThrow(new ServiceUnavailableException(
+                "Jira access token has expired and this Jira connection cannot be refreshed. "
+                    + "Please reconnect Jira from the Integrations tab."
+            ));
+
+        assertThatThrownBy(() -> service.syncProjectIssues(projectId))
+            .isInstanceOf(ServiceUnavailableException.class)
+            .hasMessageContaining("cannot be refreshed")
+            .hasMessageContaining("Please reconnect Jira");
     }
 
     private static JiraIssueDto issue(String key) {
