@@ -10,6 +10,8 @@ import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
 import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.student.service.StudentService;
@@ -20,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -163,5 +166,26 @@ public class StudentController {
     ) {
         JiraHierarchyDto data = studentService.getJiraHierarchy(authentication.getName(), projectId);
         return apiResponseFactory.ok("Jira hierarchy loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/meeting-channels")
+    public ResponseEntity<ApiResponse<List<MeetingChannelDto>>> getProjectMeetingChannels(
+        Authentication authentication,
+        @PathVariable String projectId,
+        HttpServletRequest request
+    ) {
+        List<MeetingChannelDto> data = studentService.getProjectMeetingChannels(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Meeting channels loaded.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/meeting-channels")
+    public ResponseEntity<ApiResponse<MeetingChannelDto>> addProjectMeetingChannel(
+        Authentication authentication,
+        @PathVariable String projectId,
+        @Valid @RequestBody CreateMeetingChannelRequest body,
+        HttpServletRequest request
+    ) {
+        MeetingChannelDto data = studentService.addProjectMeetingChannel(authentication.getName(), projectId, body);
+        return apiResponseFactory.created("Meeting channel submitted successfully.", data, request);
     }
 }
