@@ -21,6 +21,9 @@ import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
 import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
+import com.supervisesuite.backend.meetings.dto.UpdateMeetingChannelRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
@@ -44,6 +47,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -376,6 +380,77 @@ public class SupervisorController {
     ) {
         JiraHealthDto data = supervisorService.refreshProjectJiraData(authentication.getName(), projectId);
         return apiResponseFactory.ok("Jira data refreshed successfully.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/meeting-channels")
+    public ResponseEntity<ApiResponse<List<MeetingChannelDto>>> getProjectMeetingChannels(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        List<MeetingChannelDto> data = supervisorService.getProjectMeetingChannels(
+            authentication.getName(),
+            projectId
+        );
+        return apiResponseFactory.ok("Meeting channels loaded.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/meeting-channels")
+    public ResponseEntity<ApiResponse<MeetingChannelDto>> addProjectMeetingChannel(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @Valid @RequestBody CreateMeetingChannelRequest body
+    ) {
+        MeetingChannelDto data = supervisorService.addProjectMeetingChannel(
+            authentication.getName(),
+            projectId,
+            body
+        );
+        return apiResponseFactory.created("Meeting channel added successfully.", data, request);
+    }
+
+    @PatchMapping("/projects/{projectId}/meeting-channels/{channelId}")
+    public ResponseEntity<ApiResponse<MeetingChannelDto>> updateProjectMeetingChannel(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @PathVariable String channelId,
+        @Valid @RequestBody UpdateMeetingChannelRequest body
+    ) {
+        MeetingChannelDto data = supervisorService.updateProjectMeetingChannel(
+            authentication.getName(),
+            projectId,
+            channelId,
+            body
+        );
+        return apiResponseFactory.ok("Meeting channel updated successfully.", data, request);
+    }
+
+    @DeleteMapping("/projects/{projectId}/meeting-channels/{channelId}")
+    public ResponseEntity<ApiResponse<Void>> deleteProjectMeetingChannel(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @PathVariable String channelId
+    ) {
+        supervisorService.deleteProjectMeetingChannel(authentication.getName(), projectId, channelId);
+        return apiResponseFactory.ok("Meeting channel deleted successfully.", null, request);
+    }
+
+    @PostMapping("/projects/{projectId}/meeting-channels/{channelId}/approve")
+    public ResponseEntity<ApiResponse<MeetingChannelDto>> approveProjectMeetingChannel(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @PathVariable String channelId
+    ) {
+        MeetingChannelDto data = supervisorService.approveProjectMeetingChannel(
+            authentication.getName(),
+            projectId,
+            channelId
+        );
+        return apiResponseFactory.ok("Meeting channel approved successfully.", data, request);
     }
 
     @PostMapping("/projects")

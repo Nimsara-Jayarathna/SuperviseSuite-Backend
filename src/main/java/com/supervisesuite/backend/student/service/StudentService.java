@@ -9,6 +9,8 @@ import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
 import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
 
 public interface StudentService {
     List<StudentProjectSummaryDto> getProjects(String authenticatedUserId);
@@ -44,4 +46,12 @@ public interface StudentService {
     JiraWorkloadDto getJiraWorkload(String authenticatedUserId, String projectId);
 
     JiraHierarchyDto getJiraHierarchy(String authenticatedUserId, String projectId);
+
+    List<MeetingChannelDto> getProjectMeetingChannels(String authenticatedUserId, String projectId);
+
+    MeetingChannelDto addProjectMeetingChannel(
+        String authenticatedUserId,
+        String projectId,
+        CreateMeetingChannelRequest request
+    );
 }

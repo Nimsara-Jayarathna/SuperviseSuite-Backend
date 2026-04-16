@@ -38,6 +38,7 @@ import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressServic
 import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionService;
 import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
+import com.supervisesuite.backend.meetings.service.MeetingChannelService;
 import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.SupervisorDashboardDto;
@@ -115,6 +116,8 @@ class SupervisorServiceImplUnitTest {
     @Mock
     private ProjectFileService projectFileService;
     @Mock
+    private MeetingChannelService meetingChannelService;
+    @Mock
     private RestClient.Builder restClientBuilder;
     @Mock
     private RestClient restClient;
@@ -147,6 +150,7 @@ class SupervisorServiceImplUnitTest {
                 jiraSprintProgressService,
                 jiraWorkloadService,
                 projectFileService,
+                meetingChannelService,
                 restClientBuilder);
 
         supervisorId = UUID.randomUUID();

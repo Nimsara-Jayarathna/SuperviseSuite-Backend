@@ -1,6 +1,6 @@
-# Schema Reference (Current Through V23)
+# Schema Reference (Current Through V29)
 
-This document reflects the effective schema after applying migrations `V1` to `V23`.
+This document reflects the effective schema after applying migrations `V1` to `V29`.
 
 ## Core Tables
 
@@ -28,6 +28,21 @@ This document reflects the effective schema after applying migrations `V1` to `V
 
 - Hashed refresh-token persistence for cookie-based auth sessions.
 
+### `registration_sessions`
+
+- Registration continuation token state used in OTP-verified registration flow.
+- Stores hashed token material, expiry, and usage timestamps.
+
+### `email_otps`
+
+- One-time password lifecycle table for email verification.
+- Stores hashed OTP values, expiry timestamps, and attempt counters.
+
+### `password_reset_tokens`
+
+- Password reset token state and expiry tracking.
+- Used by forgot-password / reset-password validation flows.
+
 ### `project_files`
 
 - Project-scoped file metadata table for supervisor/student attachments.
@@ -43,6 +58,28 @@ This document reflects the effective schema after applying migrations `V1` to `V
   - FK `project_id -> projects.id` with `ON DELETE CASCADE`
   - FK `uploaded_by -> users.id`
   - check: `file_size > 0`
+
+### `project_meeting_channels`
+
+- Project-scoped meeting channel registry used by Meetings tab channel management.
+- Key columns:
+  - identity/linkage: `id`, `project_id`
+  - channel metadata: `platform`, `channel_name`, `link_or_identifier`
+  - creator attribution: `added_by`, `added_by_name`, `added_by_role`
+  - approval lifecycle: `status`, `approved_by`, `approved_by_name`, `approved_at`
+  - audit: `created_at`, `updated_at`
+- Supported platforms: `GOOGLE_MEET`, `ZOOM`, `TEAMS`, `WHATSAPP`, `OTHER`.
+- Status model: `PENDING`, `APPROVED`.
+- Notable constraints:
+  - FK `project_id -> projects.id` with `ON DELETE CASCADE`
+  - FK `added_by -> users.id`
+  - FK `approved_by -> users.id`
+  - approval consistency check:
+    - `PENDING` requires `approved_by`/`approved_at` null
+    - `APPROVED` requires `approved_by`/`approved_at` non-null
+- Key indexes:
+  - `(project_id, status, created_at DESC)` for pending-first listing
+  - `(project_id, created_at DESC)` for default recency listing
 
 ## GitHub Integration (Current V2 Model)
 
