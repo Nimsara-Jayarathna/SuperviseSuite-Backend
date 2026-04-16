@@ -156,6 +156,42 @@ This log is aligned to migration files under `src/main/resources/db/migration`.
 - Added `email_otps` table for one-time password verification state.
 - Stores hashed OTP values with expiry and attempt lifecycle columns.
 - Supports cleanup and replay prevention for registration init/verify/complete flow.
+
+## 2026-04-13 — Password reset token persistence
+
+### `V26__password_reset_tokens.sql`
+
+- Added `password_reset_tokens` table for forgot-password / reset-password continuation flow.
+- Stores hashed reset token material, expiry, and usage/cleanup lifecycle fields.
+
+## 2026-04-13 — Sync/concurrency hardening
+
+### `V27__optimistic_locking_and_sync_indexes.sql`
+
+- Added optimistic-locking/version support and supporting indexes for high-frequency sync/update paths.
+- Focused on reducing stale-write collisions and improving query performance during background sync.
+
+### `V28__sync_in_progress_and_attempt_tracking.sql`
+
+- Added sync attempt/in-progress tracking fields used by background sync orchestration.
+- Supports safer retry behavior and clearer sync state visibility.
+
+## 2026-04-16 — Meetings channel schema
+
+### `V29__project_meeting_channels.sql`
+
+- Added `project_meeting_channels` table with:
+  - channel metadata (`platform`, `channel_name`, `link_or_identifier`)
+  - attribution (`added_by`, `added_by_name`, `added_by_role`)
+  - approval lifecycle (`status`, `approved_by`, `approved_by_name`, `approved_at`)
+  - audit fields (`created_at`, `updated_at`)
+- Added constraints:
+  - platform whitelist (`GOOGLE_MEET`, `ZOOM`, `TEAMS`, `WHATSAPP`, `OTHER`)
+  - role/status check constraints
+  - approval consistency check for pending vs approved rows
+- Added indexes:
+  - `(project_id, status, created_at DESC)` for pending-first listing
+  - `(project_id, created_at DESC)` for recency listing
 ## 2026-04 Project file attachments
 
 ### `V23__project_files.sql`
