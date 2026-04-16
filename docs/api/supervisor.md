@@ -38,6 +38,11 @@ All endpoints in this document:
 - `GET /api/supervisor/projects/{projectId}/jira/workload`
 - `GET /api/supervisor/projects/{projectId}/jira/hierarchy`
 - `POST /api/supervisor/projects/{projectId}/jira/refresh`
+- `GET /api/supervisor/projects/{projectId}/meeting-channels`
+- `POST /api/supervisor/projects/{projectId}/meeting-channels`
+- `PATCH /api/supervisor/projects/{projectId}/meeting-channels/{channelId}`
+- `DELETE /api/supervisor/projects/{projectId}/meeting-channels/{channelId}`
+- `POST /api/supervisor/projects/{projectId}/meeting-channels/{channelId}/approve`
 - `GET /api/supervisor/projects/{projectId}/files`
 - `POST /api/supervisor/projects/{projectId}/files/upload-url`
 - `POST /api/supervisor/projects/{projectId}/files/confirm`
@@ -634,6 +639,111 @@ These settings affect Jira health/sprint values shown in the Jira tab:
 Scope note:
 
 - These settings do not change Jira OAuth authorization flows.
+
+---
+
+## GET /api/supervisor/projects/{projectId}/meeting-channels
+
+Returns all meeting channels for a supervisor-owned project.
+
+### Response fields
+
+Each item:
+
+- `id`
+- `projectId`
+- `platform` (`GOOGLE_MEET|ZOOM|TEAMS|WHATSAPP|OTHER`)
+- `channelName`
+- `linkOrIdentifier`
+- `addedBy`
+- `addedByName`
+- `addedByRole` (`SUPERVISOR|STUDENT`)
+- `status` (`PENDING|APPROVED`)
+- `approvedBy` (nullable)
+- `approvedByName` (nullable)
+- `approvedAt` (nullable)
+- `createdAt`
+- `updatedAt` (nullable)
+
+### Notes
+
+- Project must be owned by authenticated supervisor.
+- Results are returned pending-first to prioritize approval flow.
+
+---
+
+## POST /api/supervisor/projects/{projectId}/meeting-channels
+
+Creates a new meeting channel as supervisor.
+
+### Request fields
+
+- `platform` (required): `GOOGLE_MEET|ZOOM|TEAMS|WHATSAPP|OTHER`
+- `channelName` (required, max `120`)
+- `linkOrIdentifier` (required, max `1024`)
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Created channel is auto-approved:
+  - `addedByRole = SUPERVISOR`
+  - `status = APPROVED`
+  - `approvedBy = supervisor`
+  - `approvedAt = now`
+- Returns created `MeetingChannelDto`.
+
+---
+
+## PATCH /api/supervisor/projects/{projectId}/meeting-channels/{channelId}
+
+Updates an existing meeting channel.
+
+### Request fields
+
+- `platform` (required): `GOOGLE_MEET|ZOOM|TEAMS|WHATSAPP|OTHER`
+- `channelName` (required, max `120`)
+- `linkOrIdentifier` (required, max `1024`)
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Channel must exist under the same project.
+- Updates platform/name/link fields only.
+- Returns updated `MeetingChannelDto`.
+
+---
+
+## DELETE /api/supervisor/projects/{projectId}/meeting-channels/{channelId}
+
+Deletes a meeting channel from a supervisor-owned project.
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Channel must exist under the same project.
+- Permanently removes channel row (no soft-delete for meeting channels).
+- Returns success envelope with `data: null`.
+
+---
+
+## POST /api/supervisor/projects/{projectId}/meeting-channels/{channelId}/approve
+
+Approves a pending meeting channel submission.
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Channel must exist under the same project.
+- Only `PENDING` channels can be approved.
+- On success:
+  - `status = APPROVED`
+  - `approvedBy = supervisor`
+  - `approvedAt = now`
+- Returns updated `MeetingChannelDto`.
+
+### Validation error
+
+- `status`: `Only pending meeting channels can be approved.`
 
 ---
 

@@ -20,6 +20,8 @@ All endpoints in this document:
 - [GET /api/student/projects/{projectId}/jira/sprint-progress](#get-apistudentprojectsprojectidjirasprint-progress)
 - [GET /api/student/projects/{projectId}/jira/workload](#get-apistudentprojectsprojectidjiraworkload)
 - [GET /api/student/projects/{projectId}/jira/hierarchy](#get-apistudentprojectsprojectidjirahierarchy)
+- [GET /api/student/projects/{projectId}/meeting-channels](#get-apistudentprojectsprojectidmeeting-channels)
+- [POST /api/student/projects/{projectId}/meeting-channels](#post-apistudentprojectsprojectidmeeting-channels)
 - [GET /api/student/projects/{projectId}/files](#get-apistudentprojectsprojectidfiles)
 - [POST /api/student/projects/{projectId}/files/upload-url](#post-apistudentprojectsprojectidfilesupload-url)
 - [POST /api/student/projects/{projectId}/files/confirm](#post-apistudentprojectsprojectidfilesconfirm)
@@ -338,6 +340,65 @@ Each node in `roots[]`, `orphans[]`, and every nested `children[]` array has:
 - Endpoint is read-only for students.
 - Data is served from DB-backed Jira issue cache; no live Jira API call is made.
 - If Jira is not connected or no issues are cached, `roots` and `orphans` are both empty arrays.
+
+---
+
+## GET /api/student/projects/{projectId}/meeting-channels
+
+Returns all meeting channels for a project where the authenticated student is a member.
+
+### Response fields
+
+Each item:
+
+- `id`
+- `projectId`
+- `platform` (`GOOGLE_MEET|ZOOM|TEAMS|WHATSAPP|OTHER`)
+- `channelName`
+- `linkOrIdentifier`
+- `addedBy`
+- `addedByName`
+- `addedByRole` (`SUPERVISOR|STUDENT`)
+- `status` (`PENDING|APPROVED`)
+- `approvedBy` (nullable)
+- `approvedByName` (nullable)
+- `approvedAt` (nullable)
+- `createdAt`
+- `updatedAt` (nullable)
+
+### Notes
+
+- Student must be assigned to project with `member_role = STUDENT`.
+- Results are returned pending-first to prioritize items requiring approval.
+- Data is role-safe and read-only for listing.
+
+---
+
+## POST /api/student/projects/{projectId}/meeting-channels
+
+Submits a new meeting channel for the project.
+
+### Request fields
+
+- `platform` (required): `GOOGLE_MEET|ZOOM|TEAMS|WHATSAPP|OTHER`
+- `channelName` (required, max `120`)
+- `linkOrIdentifier` (required, max `1024`)
+
+### Behavior
+
+- Student must be assigned to project with `member_role = STUDENT`.
+- Created channel is persisted with:
+  - `addedByRole = STUDENT`
+  - `status = PENDING`
+  - `approvedBy = null`
+  - `approvedAt = null`
+- Returns created `MeetingChannelDto`.
+
+### Common validation errors
+
+- `platform`: `Platform is required.` / `Unsupported meeting platform.`
+- `channelName`: required / max-length validation
+- `linkOrIdentifier`: required / max-length validation
 
 ---
 
