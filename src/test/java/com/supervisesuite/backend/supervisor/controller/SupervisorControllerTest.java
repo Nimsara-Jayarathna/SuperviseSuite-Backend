@@ -15,6 +15,9 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
+import com.supervisesuite.backend.meetings.dto.UpdateMeetingChannelRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
@@ -123,6 +126,170 @@ class SupervisorControllerTest {
 
         assertThat(response).isSameAs(expected);
         verify(supervisorService).getProjectGitHubActivityPage("supervisor-id", "project-1", null, 2, 0);
+    }
+
+    @Test
+    void getProjectMeetingChannels_delegatesToServiceAndFactory() {
+        List<MeetingChannelDto> data = List.of(
+            new MeetingChannelDto(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            )
+        );
+        ResponseEntity<ApiResponse<List<MeetingChannelDto>>> expected = ResponseEntity.ok(new ApiResponse<>());
+
+        when(supervisorService.getProjectMeetingChannels("supervisor-id", "project-1")).thenReturn(data);
+        when(apiResponseFactory.ok("Meeting channels loaded.", data, request)).thenReturn(expected);
+
+        ResponseEntity<ApiResponse<List<MeetingChannelDto>>> response = controller.getProjectMeetingChannels(
+            authentication,
+            request,
+            "project-1"
+        );
+
+        assertThat(response).isSameAs(expected);
+        verify(supervisorService).getProjectMeetingChannels("supervisor-id", "project-1");
+    }
+
+    @Test
+    void addProjectMeetingChannel_delegatesToServiceAndFactory() {
+        CreateMeetingChannelRequest body = new CreateMeetingChannelRequest();
+        body.setPlatform("ZOOM");
+        body.setChannelName("Weekly sync");
+        body.setLinkOrIdentifier("https://example.com");
+        MeetingChannelDto data = new MeetingChannelDto(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            "ZOOM",
+            "Weekly sync",
+            "https://example.com",
+            UUID.randomUUID(),
+            "Supervisor",
+            "SUPERVISOR",
+            "APPROVED",
+            UUID.randomUUID(),
+            "Supervisor",
+            null,
+            null,
+            null
+        );
+        ResponseEntity<ApiResponse<MeetingChannelDto>> expected = ResponseEntity.status(201).body(new ApiResponse<>());
+
+        when(supervisorService.addProjectMeetingChannel("supervisor-id", "project-1", body)).thenReturn(data);
+        when(apiResponseFactory.created("Meeting channel added successfully.", data, request)).thenReturn(expected);
+
+        ResponseEntity<ApiResponse<MeetingChannelDto>> response = controller.addProjectMeetingChannel(
+            authentication,
+            request,
+            "project-1",
+            body
+        );
+
+        assertThat(response).isSameAs(expected);
+        verify(supervisorService).addProjectMeetingChannel("supervisor-id", "project-1", body);
+    }
+
+    @Test
+    void updateProjectMeetingChannel_delegatesToServiceAndFactory() {
+        UpdateMeetingChannelRequest body = new UpdateMeetingChannelRequest();
+        body.setPlatform("TEAMS");
+        body.setChannelName("Teams room");
+        body.setLinkOrIdentifier("ABC123");
+        MeetingChannelDto data = new MeetingChannelDto(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            "TEAMS",
+            "Teams room",
+            "ABC123",
+            UUID.randomUUID(),
+            "Student",
+            "STUDENT",
+            "PENDING",
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+        ResponseEntity<ApiResponse<MeetingChannelDto>> expected = ResponseEntity.ok(new ApiResponse<>());
+
+        when(supervisorService.updateProjectMeetingChannel("supervisor-id", "project-1", "channel-1", body))
+            .thenReturn(data);
+        when(apiResponseFactory.ok("Meeting channel updated successfully.", data, request)).thenReturn(expected);
+
+        ResponseEntity<ApiResponse<MeetingChannelDto>> response = controller.updateProjectMeetingChannel(
+            authentication,
+            request,
+            "project-1",
+            "channel-1",
+            body
+        );
+
+        assertThat(response).isSameAs(expected);
+        verify(supervisorService).updateProjectMeetingChannel("supervisor-id", "project-1", "channel-1", body);
+    }
+
+    @Test
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    void deleteProjectMeetingChannel_delegatesToServiceAndFactory() {
+        ResponseEntity<ApiResponse<Void>> expected = ResponseEntity.ok(new ApiResponse<>());
+        when(apiResponseFactory.ok("Meeting channel deleted successfully.", null, request)).thenReturn((ResponseEntity) expected);
+
+        ResponseEntity<ApiResponse<Void>> response = controller.deleteProjectMeetingChannel(
+            authentication,
+            request,
+            "project-1",
+            "channel-1"
+        );
+
+        assertThat(response).isSameAs(expected);
+        verify(supervisorService).deleteProjectMeetingChannel("supervisor-id", "project-1", "channel-1");
+    }
+
+    @Test
+    void approveProjectMeetingChannel_delegatesToServiceAndFactory() {
+        MeetingChannelDto data = new MeetingChannelDto(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            "ZOOM",
+            "Weekly sync",
+            "https://example.com",
+            UUID.randomUUID(),
+            "Student",
+            "STUDENT",
+            "APPROVED",
+            UUID.randomUUID(),
+            "Supervisor",
+            null,
+            null,
+            null
+        );
+        ResponseEntity<ApiResponse<MeetingChannelDto>> expected = ResponseEntity.ok(new ApiResponse<>());
+
+        when(supervisorService.approveProjectMeetingChannel("supervisor-id", "project-1", "channel-1")).thenReturn(data);
+        when(apiResponseFactory.ok("Meeting channel approved successfully.", data, request)).thenReturn(expected);
+
+        ResponseEntity<ApiResponse<MeetingChannelDto>> response = controller.approveProjectMeetingChannel(
+            authentication,
+            request,
+            "project-1",
+            "channel-1"
+        );
+
+        assertThat(response).isSameAs(expected);
+        verify(supervisorService).approveProjectMeetingChannel("supervisor-id", "project-1", "channel-1");
     }
 
     @Test
