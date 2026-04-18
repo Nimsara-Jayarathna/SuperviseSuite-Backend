@@ -104,9 +104,13 @@ import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileAccessRole;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
 import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingRecordRequest;
 import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
+import com.supervisesuite.backend.meetings.dto.MeetingRecordDto;
 import com.supervisesuite.backend.meetings.dto.UpdateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.UpdateMeetingRecordRequest;
 import com.supervisesuite.backend.meetings.service.MeetingChannelService;
+import com.supervisesuite.backend.meetings.service.MeetingRecordService;
 
 @Service
 class SupervisorServiceImpl implements SupervisorService {
@@ -155,6 +159,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final JiraWorkloadService jiraWorkloadService;
     private final ProjectFileService projectFileService;
     private final MeetingChannelService meetingChannelService;
+    private final MeetingRecordService meetingRecordService;
     private final RestClient restClient;
     private final SecureRandom secureRandom = new SecureRandom();
     private final Map<String, PendingJiraWorkspaceSelection> pendingJiraWorkspaceSelections = new ConcurrentHashMap<>();
@@ -182,6 +187,7 @@ class SupervisorServiceImpl implements SupervisorService {
             JiraWorkloadService jiraWorkloadService,
             ProjectFileService projectFileService,
             MeetingChannelService meetingChannelService,
+            MeetingRecordService meetingRecordService,
             RestClient.Builder restClientBuilder) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
@@ -204,6 +210,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.jiraWorkloadService = jiraWorkloadService;
         this.projectFileService = projectFileService;
         this.meetingChannelService = meetingChannelService;
+        this.meetingRecordService = meetingRecordService;
         this.restClient = restClientBuilder.build();
     }
 
@@ -1539,6 +1546,49 @@ class SupervisorServiceImpl implements SupervisorService {
         String channelId
     ) {
         return meetingChannelService.approveAsSupervisor(authenticatedUserId, projectId, channelId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MeetingRecordDto> getProjectMeetingRecords(String authenticatedUserId, String projectId) {
+        return meetingRecordService.listForSupervisor(authenticatedUserId, projectId);
+    }
+
+    @Override
+    @Transactional
+    public MeetingRecordDto addProjectMeetingRecord(
+        String authenticatedUserId,
+        String projectId,
+        CreateMeetingRecordRequest request
+    ) {
+        return meetingRecordService.createAsSupervisor(authenticatedUserId, projectId, request);
+    }
+
+    @Override
+    @Transactional
+    public MeetingRecordDto updateProjectMeetingRecord(
+        String authenticatedUserId,
+        String projectId,
+        String recordId,
+        UpdateMeetingRecordRequest request
+    ) {
+        return meetingRecordService.updateAsSupervisor(authenticatedUserId, projectId, recordId, request);
+    }
+
+    @Override
+    @Transactional
+    public void deleteProjectMeetingRecord(String authenticatedUserId, String projectId, String recordId) {
+        meetingRecordService.deleteAsSupervisor(authenticatedUserId, projectId, recordId);
+    }
+
+    @Override
+    @Transactional
+    public MeetingRecordDto approveProjectMeetingRecord(
+        String authenticatedUserId,
+        String projectId,
+        String recordId
+    ) {
+        return meetingRecordService.approveAsSupervisor(authenticatedUserId, projectId, recordId);
     }
 
     private ProjectMember buildProjectMember(

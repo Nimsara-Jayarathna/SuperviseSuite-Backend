@@ -34,8 +34,11 @@ import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileAccessRole;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
 import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingRecordRequest;
 import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
+import com.supervisesuite.backend.meetings.dto.MeetingRecordDto;
 import com.supervisesuite.backend.meetings.service.MeetingChannelService;
+import com.supervisesuite.backend.meetings.service.MeetingRecordService;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashMap;
 import java.util.ArrayList;
@@ -64,6 +67,7 @@ class StudentServiceImpl implements StudentService {
     private final JiraWorkloadService jiraWorkloadService;
     private final ProjectFileService projectFileService;
     private final MeetingChannelService meetingChannelService;
+    private final MeetingRecordService meetingRecordService;
 
     StudentServiceImpl(
          UserRepository userRepository,
@@ -78,7 +82,8 @@ class StudentServiceImpl implements StudentService {
             JiraSprintProgressService jiraSprintProgressService,
             JiraWorkloadService jiraWorkloadService,
             ProjectFileService projectFileService,
-            MeetingChannelService meetingChannelService
+            MeetingChannelService meetingChannelService,
+            MeetingRecordService meetingRecordService
     ) {
          this.userRepository = userRepository;
          this.projectMemberRepository = projectMemberRepository;
@@ -90,9 +95,10 @@ class StudentServiceImpl implements StudentService {
          this.projectJiraIssueRepository = projectJiraIssueRepository;
          this.jiraHealthService = jiraHealthService;
          this.jiraSprintProgressService = jiraSprintProgressService;
-         this.jiraWorkloadService = jiraWorkloadService;
-         this.projectFileService = projectFileService;
-         this.meetingChannelService = meetingChannelService;
+            this.jiraWorkloadService = jiraWorkloadService;
+            this.projectFileService = projectFileService;
+            this.meetingChannelService = meetingChannelService;
+            this.meetingRecordService = meetingRecordService;
     }
 
     @Override
@@ -413,6 +419,22 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
         CreateMeetingChannelRequest request
     ) {
         return meetingChannelService.createAsStudent(authenticatedUserId, projectId, request);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MeetingRecordDto> getProjectMeetingRecords(String authenticatedUserId, String projectId) {
+        return meetingRecordService.listForStudent(authenticatedUserId, projectId);
+    }
+
+    @Override
+    @Transactional
+    public MeetingRecordDto addProjectMeetingRecord(
+        String authenticatedUserId,
+        String projectId,
+        CreateMeetingRecordRequest request
+    ) {
+        return meetingRecordService.createAsStudent(authenticatedUserId, projectId, request);
     }
 
     private User resolveStudent(String authenticatedUserId) {
