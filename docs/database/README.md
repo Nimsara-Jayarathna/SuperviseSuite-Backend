@@ -4,7 +4,7 @@ This directory tracks database structure and migration history for the backend.
 
 ## Structure
 
-- `schema-v1.md`: schema reference updated through meetings channel schema migration (`V29`).
+- `schema-v1.md`: schema reference updated through meetings records schema migration (`V30`).
 - `migrations.md`: chronological migration log and rules for future schema changes.
 
 ## Source of Truth
@@ -45,6 +45,8 @@ This directory tracks database structure and migration history for the backend.
   - `V28__sync_in_progress_and_attempt_tracking.sql`
 - Meetings channel migrations:
   - `V29__project_meeting_channels.sql`
+- Meetings record migrations:
+  - `V30__project_meeting_records.sql`
 
 ## Change Workflow
 

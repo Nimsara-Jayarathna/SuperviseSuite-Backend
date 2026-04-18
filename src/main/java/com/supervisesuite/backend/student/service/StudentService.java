@@ -10,7 +10,9 @@ import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingRecordRequest;
 import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
+import com.supervisesuite.backend.meetings.dto.MeetingRecordDto;
 
 public interface StudentService {
     List<StudentProjectSummaryDto> getProjects(String authenticatedUserId);
@@ -53,5 +55,13 @@ public interface StudentService {
         String authenticatedUserId,
         String projectId,
         CreateMeetingChannelRequest request
+    );
+
+    List<MeetingRecordDto> getProjectMeetingRecords(String authenticatedUserId, String projectId);
+
+    MeetingRecordDto addProjectMeetingRecord(
+        String authenticatedUserId,
+        String projectId,
+        CreateMeetingRecordRequest request
     );
 }

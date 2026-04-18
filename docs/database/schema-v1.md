@@ -1,6 +1,6 @@
-# Schema Reference (Current Through V29)
+# Schema Reference (Current Through V30)
 
-This document reflects the effective schema after applying migrations `V1` to `V29`.
+This document reflects the effective schema after applying migrations `V1` to `V30`.
 
 ## Core Tables
 
@@ -80,6 +80,32 @@ This document reflects the effective schema after applying migrations `V1` to `V
 - Key indexes:
   - `(project_id, status, created_at DESC)` for pending-first listing
   - `(project_id, created_at DESC)` for default recency listing
+
+### `project_meeting_records`
+
+- Project-scoped meeting record registry used by Meetings tab records management.
+- Key columns:
+  - identity/linkage: `id`, `project_id`
+  - record metadata: `meeting_date`, `duration_minutes`
+  - discussion: `discussion_summary`, `discussion_details` (optional)
+  - optional linkage: `channel_id` (nullable)
+  - creator attribution: `added_by`, `added_by_name`, `added_by_role`
+  - approval lifecycle: `status`, `approved_by`, `approved_by_name`, `approved_at`
+  - audit: `created_at`, `updated_at`
+- Status model: `PENDING`, `APPROVED`.
+- Notable constraints:
+  - FK `project_id -> projects.id` with `ON DELETE CASCADE`
+  - FK `channel_id -> project_meeting_channels.id` with `ON DELETE SET NULL`
+  - FK `added_by -> users.id`
+  - FK `approved_by -> users.id`
+  - check: `duration_minutes > 0`
+  - role/status check constraints
+  - approval consistency check:
+    - `PENDING` requires `approved_by`/`approved_at` null
+    - `APPROVED` requires `approved_by`/`approved_at` non-null
+- Key indexes:
+  - `(project_id, status, meeting_date DESC, created_at DESC)` for pending-first listing
+  - `(project_id, meeting_date DESC, created_at DESC)` for default recency listing
 
 ## GitHub Integration (Current V2 Model)
 

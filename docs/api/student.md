@@ -22,6 +22,8 @@ All endpoints in this document:
 - [GET /api/student/projects/{projectId}/jira/hierarchy](#get-apistudentprojectsprojectidjirahierarchy)
 - [GET /api/student/projects/{projectId}/meeting-channels](#get-apistudentprojectsprojectidmeeting-channels)
 - [POST /api/student/projects/{projectId}/meeting-channels](#post-apistudentprojectsprojectidmeeting-channels)
+- [GET /api/student/projects/{projectId}/meeting-records](#get-apistudentprojectsprojectidmeeting-records)
+- [POST /api/student/projects/{projectId}/meeting-records](#post-apistudentprojectsprojectidmeeting-records)
 - [GET /api/student/projects/{projectId}/files](#get-apistudentprojectsprojectidfiles)
 - [POST /api/student/projects/{projectId}/files/upload-url](#post-apistudentprojectsprojectidfilesupload-url)
 - [POST /api/student/projects/{projectId}/files/confirm](#post-apistudentprojectsprojectidfilesconfirm)
@@ -399,6 +401,71 @@ Submits a new meeting channel for the project.
 - `platform`: `Platform is required.` / `Unsupported meeting platform.`
 - `channelName`: required / max-length validation
 - `linkOrIdentifier`: required / max-length validation
+
+---
+
+## GET /api/student/projects/{projectId}/meeting-records
+
+Returns all meeting records for a project where the authenticated student is a member.
+
+### Response fields
+
+Each item:
+
+- `id`
+- `projectId`
+- `meetingDate` (ISO date, `YYYY-MM-DD`)
+- `durationMinutes` (positive integer)
+- `discussionSummary` (max `1024`)
+- `discussionDetails` (nullable, max `5000`)
+- `channelId` (nullable, UUID of `project_meeting_channels`)
+- `addedBy`
+- `addedByName`
+- `addedByRole` (`SUPERVISOR|STUDENT`)
+- `status` (`PENDING|APPROVED`)
+- `approvedBy` (nullable)
+- `approvedByName` (nullable)
+- `approvedAt` (nullable)
+- `createdAt`
+- `updatedAt` (nullable)
+
+### Notes
+
+- Student must be assigned to project with `member_role = STUDENT`.
+- Results are returned pending-first to prioritize items requiring approval.
+- Within the same status rank, records are ordered by `meetingDate DESC`, then `createdAt DESC`.
+
+---
+
+## POST /api/student/projects/{projectId}/meeting-records
+
+Submits a new meeting record for the project.
+
+### Request fields
+
+- `meetingDate` (required): ISO date `YYYY-MM-DD`
+- `durationMinutes` (required): must be `> 0`
+- `discussionSummary` (required, max `1024`)
+- `discussionDetails` (optional, max `5000`)
+- `channelId` (optional, UUID): must belong to the same project if provided
+
+### Behavior
+
+- Student must be assigned to project with `member_role = STUDENT`.
+- Created record is persisted with:
+  - `addedByRole = STUDENT`
+  - `status = PENDING`
+  - `approvedBy = null`
+  - `approvedAt = null`
+- Returns created `MeetingRecordDto`.
+
+### Common validation errors
+
+- `meetingDate`: `Meeting date is required.`
+- `durationMinutes`: `Duration is required.` / `Duration must be greater than 0 minutes.`
+- `discussionSummary`: required / max-length validation
+- `discussionDetails`: max-length validation
+- `channelId`: `Invalid channel selected.`
 
 ---
 

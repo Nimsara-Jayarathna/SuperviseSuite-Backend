@@ -31,8 +31,11 @@ import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
 import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingRecordRequest;
 import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
+import com.supervisesuite.backend.meetings.dto.MeetingRecordDto;
 import com.supervisesuite.backend.meetings.dto.UpdateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.UpdateMeetingRecordRequest;
 import java.util.List;
 
 public interface SupervisorService {
@@ -200,4 +203,23 @@ public interface SupervisorService {
     void deleteProjectMeetingChannel(String authenticatedUserId, String projectId, String channelId);
 
     MeetingChannelDto approveProjectMeetingChannel(String authenticatedUserId, String projectId, String channelId);
+
+    List<MeetingRecordDto> getProjectMeetingRecords(String authenticatedUserId, String projectId);
+
+    MeetingRecordDto addProjectMeetingRecord(
+        String authenticatedUserId,
+        String projectId,
+        CreateMeetingRecordRequest request
+    );
+
+    MeetingRecordDto updateProjectMeetingRecord(
+        String authenticatedUserId,
+        String projectId,
+        String recordId,
+        UpdateMeetingRecordRequest request
+    );
+
+    void deleteProjectMeetingRecord(String authenticatedUserId, String projectId, String recordId);
+
+    MeetingRecordDto approveProjectMeetingRecord(String authenticatedUserId, String projectId, String recordId);
 }

@@ -43,6 +43,11 @@ All endpoints in this document:
 - `PATCH /api/supervisor/projects/{projectId}/meeting-channels/{channelId}`
 - `DELETE /api/supervisor/projects/{projectId}/meeting-channels/{channelId}`
 - `POST /api/supervisor/projects/{projectId}/meeting-channels/{channelId}/approve`
+- `GET /api/supervisor/projects/{projectId}/meeting-records`
+- `POST /api/supervisor/projects/{projectId}/meeting-records`
+- `PATCH /api/supervisor/projects/{projectId}/meeting-records/{recordId}`
+- `DELETE /api/supervisor/projects/{projectId}/meeting-records/{recordId}`
+- `POST /api/supervisor/projects/{projectId}/meeting-records/{recordId}/approve`
 - `GET /api/supervisor/projects/{projectId}/files`
 - `POST /api/supervisor/projects/{projectId}/files/upload-url`
 - `POST /api/supervisor/projects/{projectId}/files/confirm`
@@ -744,6 +749,118 @@ Approves a pending meeting channel submission.
 ### Validation error
 
 - `status`: `Only pending meeting channels can be approved.`
+
+---
+
+## GET /api/supervisor/projects/{projectId}/meeting-records
+
+Returns all meeting records for a supervisor-owned project.
+
+### Response fields
+
+Each item:
+
+- `id`
+- `projectId`
+- `meetingDate` (ISO date, `YYYY-MM-DD`)
+- `durationMinutes` (positive integer)
+- `discussionSummary` (max `1024`)
+- `discussionDetails` (nullable, max `5000`)
+- `channelId` (nullable, UUID of `project_meeting_channels`)
+- `addedBy`
+- `addedByName`
+- `addedByRole` (`SUPERVISOR|STUDENT`)
+- `status` (`PENDING|APPROVED`)
+- `approvedBy` (nullable)
+- `approvedByName` (nullable)
+- `approvedAt` (nullable)
+- `createdAt`
+- `updatedAt` (nullable)
+
+### Notes
+
+- Project must be owned by authenticated supervisor.
+- Results are returned pending-first to prioritize approval flow.
+- Within the same status rank, records are ordered by `meetingDate DESC`, then `createdAt DESC`.
+
+---
+
+## POST /api/supervisor/projects/{projectId}/meeting-records
+
+Creates a new meeting record as supervisor.
+
+### Request fields
+
+- `meetingDate` (required): ISO date `YYYY-MM-DD`
+- `durationMinutes` (required): must be `> 0`
+- `discussionSummary` (required, max `1024`)
+- `discussionDetails` (optional, max `5000`)
+- `channelId` (optional, UUID): must belong to the same project if provided
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Created record is auto-approved:
+  - `addedByRole = SUPERVISOR`
+  - `status = APPROVED`
+  - `approvedBy = supervisor`
+  - `approvedAt = now`
+- Returns created `MeetingRecordDto`.
+
+---
+
+## PATCH /api/supervisor/projects/{projectId}/meeting-records/{recordId}
+
+Updates an existing meeting record.
+
+### Request fields
+
+- `meetingDate` (required): ISO date `YYYY-MM-DD`
+- `durationMinutes` (required): must be `> 0`
+- `discussionSummary` (required, max `1024`)
+- `discussionDetails` (optional, max `5000`)
+- `channelId` (optional, UUID): must belong to the same project if provided
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Record must exist under the same project.
+- Updates meeting date/duration/summary/details/channel only (approval status is not auto-changed).
+- Returns updated `MeetingRecordDto`.
+
+---
+
+## DELETE /api/supervisor/projects/{projectId}/meeting-records/{recordId}
+
+Deletes a meeting record from a supervisor-owned project.
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Record must exist under the same project.
+- Permanently removes record row (no soft-delete for meeting records).
+- Returns success envelope with `data: null`.
+
+---
+
+## POST /api/supervisor/projects/{projectId}/meeting-records/{recordId}/approve
+
+Approves a pending meeting record submission.
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Record must exist under the same project.
+- Only `PENDING` records can be approved.
+- On success:
+  - `status = APPROVED`
+  - `approvedBy = supervisor`
+  - `approvedAt = now`
+- Returns updated `MeetingRecordDto`.
+
+### Validation error
+
+- `status`: `Only pending meeting records can be approved.`
 
 ---
 

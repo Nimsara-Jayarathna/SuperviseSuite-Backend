@@ -192,6 +192,25 @@ This log is aligned to migration files under `src/main/resources/db/migration`.
 - Added indexes:
   - `(project_id, status, created_at DESC)` for pending-first listing
   - `(project_id, created_at DESC)` for recency listing
+
+## 2026-04-18 — Meetings record schema
+
+### `V30__project_meeting_records.sql`
+
+- Added `project_meeting_records` table with:
+  - record metadata (`meeting_date`, `duration_minutes`)
+  - discussion fields (`discussion_summary`, `discussion_details`)
+  - optional linkage (`channel_id` nullable, `ON DELETE SET NULL`)
+  - attribution (`added_by`, `added_by_name`, `added_by_role`)
+  - approval lifecycle (`status`, `approved_by`, `approved_by_name`, `approved_at`)
+  - audit fields (`created_at`, `updated_at`)
+- Added constraints:
+  - duration must be positive (`duration_minutes > 0`)
+  - role/status check constraints
+  - approval consistency check for pending vs approved rows
+- Added indexes:
+  - `(project_id, status, meeting_date DESC, created_at DESC)` for pending-first listing
+  - `(project_id, meeting_date DESC, created_at DESC)` for recency listing
 ## 2026-04 Project file attachments
 
 ### `V23__project_files.sql`

@@ -28,6 +28,7 @@ import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileAccessRole;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
 import com.supervisesuite.backend.meetings.service.MeetingChannelService;
+import com.supervisesuite.backend.meetings.service.MeetingRecordService;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.users.entity.User;
@@ -79,6 +80,9 @@ class StudentServiceImplTest {
     @Mock
     private MeetingChannelService meetingChannelService;
 
+    @Mock
+    private MeetingRecordService meetingRecordService;
+
     private StudentServiceImpl studentService;
 
     private UUID studentId;
@@ -99,7 +103,8 @@ class StudentServiceImplTest {
             jiraSprintProgressService,
             jiraWorkloadService,
             projectFileService,
-            meetingChannelService
+            meetingChannelService,
+            meetingRecordService
         );
 
         studentId = UUID.randomUUID();

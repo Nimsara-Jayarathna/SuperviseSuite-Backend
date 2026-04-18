@@ -11,7 +11,9 @@ import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingRecordRequest;
 import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
+import com.supervisesuite.backend.meetings.dto.MeetingRecordDto;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.student.service.StudentService;
@@ -187,5 +189,26 @@ public class StudentController {
     ) {
         MeetingChannelDto data = studentService.addProjectMeetingChannel(authentication.getName(), projectId, body);
         return apiResponseFactory.created("Meeting channel submitted successfully.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/meeting-records")
+    public ResponseEntity<ApiResponse<List<MeetingRecordDto>>> getProjectMeetingRecords(
+        Authentication authentication,
+        @PathVariable String projectId,
+        HttpServletRequest request
+    ) {
+        List<MeetingRecordDto> data = studentService.getProjectMeetingRecords(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Meeting records loaded.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/meeting-records")
+    public ResponseEntity<ApiResponse<MeetingRecordDto>> addProjectMeetingRecord(
+        Authentication authentication,
+        @PathVariable String projectId,
+        @Valid @RequestBody CreateMeetingRecordRequest body,
+        HttpServletRequest request
+    ) {
+        MeetingRecordDto data = studentService.addProjectMeetingRecord(authentication.getName(), projectId, body);
+        return apiResponseFactory.created("Meeting record submitted successfully.", data, request);
     }
 }
