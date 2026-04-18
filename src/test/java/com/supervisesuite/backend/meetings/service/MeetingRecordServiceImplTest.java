@@ -142,6 +142,61 @@ class MeetingRecordServiceImplTest {
     }
 
     @Test
+    void createAsStudent_rejectsTooLongDiscussionDetails() {
+        UUID studentId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        User student = new User();
+        student.setId(studentId);
+        student.setRole(Roles.STUDENT);
+        student.setEmail("student@example.com");
+
+        when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
+        when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(studentId, projectId, Roles.STUDENT))
+            .thenReturn(true);
+
+        Project project = new Project();
+        project.setId(projectId);
+        when(projectRepository.findByIdAndDeletedAtIsNull(projectId)).thenReturn(Optional.of(project));
+
+        CreateMeetingRecordRequest request = new CreateMeetingRecordRequest();
+        request.setMeetingDate(LocalDate.parse("2026-04-18"));
+        request.setDurationMinutes(30);
+        request.setDiscussionSummary("Summary");
+        request.setDiscussionDetails("a".repeat(5001));
+        request.setChannelId(null);
+
+        assertThatThrownBy(() -> service.createAsStudent(studentId.toString(), projectId.toString(), request))
+            .isInstanceOf(ValidationException.class);
+    }
+
+    @Test
+    void createAsSupervisor_rejectsTooLongDiscussionDetails() {
+        UUID supervisorId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        User supervisor = new User();
+        supervisor.setId(supervisorId);
+        supervisor.setRole(Roles.SUPERVISOR);
+        supervisor.setEmail("supervisor@example.com");
+
+        when(userRepository.findById(supervisorId)).thenReturn(Optional.of(supervisor));
+
+        Project project = new Project();
+        project.setId(projectId);
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+            .thenReturn(Optional.of(project));
+
+        CreateMeetingRecordRequest request = new CreateMeetingRecordRequest();
+        request.setMeetingDate(LocalDate.parse("2026-04-18"));
+        request.setDurationMinutes(30);
+        request.setDiscussionSummary("Summary");
+        request.setDiscussionDetails("a".repeat(5001));
+        request.setChannelId(null);
+
+        assertThatThrownBy(() -> service.createAsSupervisor(supervisorId.toString(), projectId.toString(), request))
+            .isInstanceOf(ValidationException.class);
+    }
+
+    @Test
     void approveAsSupervisor_rejectsAlreadyApproved() {
         UUID supervisorId = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
@@ -275,4 +330,3 @@ class MeetingRecordServiceImplTest {
         verify(projectMeetingRecordRepository).findByProjectIdPendingFirst(eq(projectId));
     }
 }
-

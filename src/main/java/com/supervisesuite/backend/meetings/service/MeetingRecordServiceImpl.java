@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 class MeetingRecordServiceImpl implements MeetingRecordService {
 
     private static final int DISCUSSION_SUMMARY_MAX_LENGTH = 1024;
+    private static final int DISCUSSION_DETAILS_MAX_LENGTH = 5000;
     private static final String STATUS_PENDING = "PENDING";
     private static final String STATUS_APPROVED = "APPROVED";
 
@@ -105,7 +106,7 @@ class MeetingRecordServiceImpl implements MeetingRecordService {
         record.setMeetingDate(validateMeetingDate(request.getMeetingDate()));
         record.setDurationMinutes(validateDurationMinutes(request.getDurationMinutes()));
         record.setDiscussionSummary(validateDiscussionSummary(request.getDiscussionSummary()));
-        record.setDiscussionDetails(normalizeOptionalText(request.getDiscussionDetails()));
+        record.setDiscussionDetails(validateDiscussionDetails(request.getDiscussionDetails()));
         record.setChannelId(validateChannelId(request.getChannelId(), project.getId()));
         record.setAddedBy(supervisor.getId());
         record.setAddedByName(resolveUserDisplayName(supervisor));
@@ -147,7 +148,7 @@ class MeetingRecordServiceImpl implements MeetingRecordService {
         record.setMeetingDate(validateMeetingDate(request.getMeetingDate()));
         record.setDurationMinutes(validateDurationMinutes(request.getDurationMinutes()));
         record.setDiscussionSummary(validateDiscussionSummary(request.getDiscussionSummary()));
-        record.setDiscussionDetails(normalizeOptionalText(request.getDiscussionDetails()));
+        record.setDiscussionDetails(validateDiscussionDetails(request.getDiscussionDetails()));
         record.setChannelId(validateChannelId(request.getChannelId(), project.getId()));
         record.setAddedBy(student.getId());
         record.setAddedByName(resolveUserDisplayName(student));
@@ -183,7 +184,7 @@ class MeetingRecordServiceImpl implements MeetingRecordService {
         record.setMeetingDate(validateMeetingDate(request.getMeetingDate()));
         record.setDurationMinutes(validateDurationMinutes(request.getDurationMinutes()));
         record.setDiscussionSummary(validateDiscussionSummary(request.getDiscussionSummary()));
-        record.setDiscussionDetails(normalizeOptionalText(request.getDiscussionDetails()));
+        record.setDiscussionDetails(validateDiscussionDetails(request.getDiscussionDetails()));
         record.setChannelId(validateChannelId(request.getChannelId(), parsedProjectId));
         ProjectMeetingRecord saved = projectMeetingRecordRepository.save(record);
         return toDto(saved);
@@ -265,9 +266,18 @@ class MeetingRecordServiceImpl implements MeetingRecordService {
         return trimmed;
     }
 
-    private String normalizeOptionalText(String value) {
+    private String validateDiscussionDetails(String value) {
         String trimmed = value == null ? "" : value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.length() > DISCUSSION_DETAILS_MAX_LENGTH) {
+            throw new ValidationException(
+                "discussionDetails",
+                "Discussion details must be at most " + DISCUSSION_DETAILS_MAX_LENGTH + " characters."
+            );
+        }
+        return trimmed;
     }
 
     private UUID validateChannelId(UUID channelId, UUID projectId) {
@@ -346,4 +356,3 @@ class MeetingRecordServiceImpl implements MeetingRecordService {
         }
     }
 }
-
