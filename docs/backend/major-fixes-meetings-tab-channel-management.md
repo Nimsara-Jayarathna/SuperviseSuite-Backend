@@ -51,4 +51,4 @@ This story documents backend implementation for project meeting channel manageme
 
 - Listing is sorted pending-first to prioritize approval workflow.
 - Student write scope is intentionally limited to create only in current version.
-- Records/minutes management is out of scope for this story.
+- Records/minutes management is implemented separately; see `docs/backend/major-fixes-meetings-tab-records-management.md`.
