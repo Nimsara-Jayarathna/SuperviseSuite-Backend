@@ -28,6 +28,7 @@ import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionServi
 import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
 import com.supervisesuite.backend.meetings.service.MeetingChannelService;
+import com.supervisesuite.backend.meetings.service.MeetingRecordService;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import java.util.List;
@@ -86,6 +87,8 @@ class SupervisorJiraHierarchyServiceImplTest {
     @Mock
     private MeetingChannelService meetingChannelService;
     @Mock
+    private MeetingRecordService meetingRecordService;
+    @Mock
     private RestClient.Builder restClientBuilder;
     @Mock
     private RestClient restClient;
@@ -118,6 +121,7 @@ class SupervisorJiraHierarchyServiceImplTest {
                 jiraWorkloadService,
                 projectFileService,
                 meetingChannelService,
+                meetingRecordService,
                 restClientBuilder);
 
         supervisorId = UUID.randomUUID();
