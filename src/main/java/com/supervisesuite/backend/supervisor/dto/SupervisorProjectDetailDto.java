@@ -26,6 +26,7 @@ public class SupervisorProjectDetailDto {
     private Leader leader;
     private List<Member> members;
     private List<Milestone> milestones;
+    private MilestoneInsights milestoneInsights;
     private Files files;
 
     public SupervisorProjectDetailDto() {
@@ -200,6 +201,14 @@ public class SupervisorProjectDetailDto {
 
     public void setFiles(Files files) {
         this.files = files;
+    }
+
+    public MilestoneInsights getMilestoneInsights() {
+        return milestoneInsights;
+    }
+
+    public void setMilestoneInsights(MilestoneInsights milestoneInsights) {
+        this.milestoneInsights = milestoneInsights;
     }
 
     public static class Files {
@@ -377,6 +386,9 @@ public class SupervisorProjectDetailDto {
         private LocalDate dueDate;
         private String status;
         private Integer sequenceNo;
+        private Boolean isOverdue;
+        private Integer daysOverdue;
+        private Boolean isChronologyViolation;
 
         public Milestone() {
         }
@@ -442,6 +454,72 @@ public class SupervisorProjectDetailDto {
 
         public void setSequenceNo(Integer sequenceNo) {
             this.sequenceNo = sequenceNo;
+        }
+
+        public Boolean getIsOverdue() {
+            return isOverdue;
+        }
+
+        public void setIsOverdue(Boolean isOverdue) {
+            this.isOverdue = isOverdue;
+        }
+
+        public Integer getDaysOverdue() {
+            return daysOverdue;
+        }
+
+        public void setDaysOverdue(Integer daysOverdue) {
+            this.daysOverdue = daysOverdue;
+        }
+
+        public Boolean getIsChronologyViolation() {
+            return isChronologyViolation;
+        }
+
+        public void setIsChronologyViolation(Boolean isChronologyViolation) {
+            this.isChronologyViolation = isChronologyViolation;
+        }
+    }
+
+    public static class MilestoneInsights {
+        private Integer overdueOpenMilestones;
+        private Integer dueSoonCount;
+        private String timelineRiskLevel;
+
+        public MilestoneInsights() {
+        }
+
+        public MilestoneInsights(
+                Integer overdueOpenMilestones,
+                Integer dueSoonCount,
+                String timelineRiskLevel) {
+            this.overdueOpenMilestones = overdueOpenMilestones;
+            this.dueSoonCount = dueSoonCount;
+            this.timelineRiskLevel = timelineRiskLevel;
+        }
+
+        public Integer getOverdueOpenMilestones() {
+            return overdueOpenMilestones;
+        }
+
+        public void setOverdueOpenMilestones(Integer overdueOpenMilestones) {
+            this.overdueOpenMilestones = overdueOpenMilestones;
+        }
+
+        public Integer getDueSoonCount() {
+            return dueSoonCount;
+        }
+
+        public void setDueSoonCount(Integer dueSoonCount) {
+            this.dueSoonCount = dueSoonCount;
+        }
+
+        public String getTimelineRiskLevel() {
+            return timelineRiskLevel;
+        }
+
+        public void setTimelineRiskLevel(String timelineRiskLevel) {
+            this.timelineRiskLevel = timelineRiskLevel;
         }
     }
 

@@ -37,11 +37,13 @@ import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
 import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressService;
 import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionService;
 import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
 import com.supervisesuite.backend.meetings.service.MeetingChannelService;
 import com.supervisesuite.backend.meetings.service.MeetingRecordService;
 import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
+import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.SupervisorDashboardDto;
 import com.supervisesuite.backend.supervisor.dto.SupervisorProjectDetailDto;
 import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectMilestoneRequest;
@@ -60,6 +62,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.client.RestClient;
 
@@ -242,6 +245,201 @@ class SupervisorServiceImplUnitTest {
                 request))
                 .isInstanceOf(ValidationException.class)
                 .hasMessageContaining("Validation failed");
+    }
+
+    @Test
+    void addProjectMilestone_openPastDueDate_throwsValidationException() {
+        UUID projectId = UUID.randomUUID();
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        AddSupervisorProjectMilestoneRequest request = new AddSupervisorProjectMilestoneRequest();
+        request.setTitle("Late milestone");
+        request.setDueDate(LocalDate.now().minusDays(1));
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+                .thenReturn(Optional.of(project));
+        when(projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(projectId)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.addProjectMilestone(supervisorId.toString(), projectId.toString(), request))
+                .isInstanceOfSatisfying(ValidationException.class, exception -> {
+                    assertThat(exception.getDetails()).hasSize(1);
+                    assertThat(exception.getDetails().getFirst().getField()).isEqualTo("dueDate");
+                });
+    }
+
+    @Test
+    void updateProjectMilestone_completedToPlanned_throwsValidationException() {
+        UUID projectId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        ProjectMilestone milestone = new ProjectMilestone();
+        milestone.setId(milestoneId);
+        milestone.setProjectId(projectId);
+        milestone.setTitle("M1");
+        milestone.setStatus("COMPLETED");
+        milestone.setDueDate(LocalDate.now().plusDays(3));
+
+        UpdateSupervisorProjectMilestoneRequest request = new UpdateSupervisorProjectMilestoneRequest();
+        request.setTitle("M1");
+        request.setDueDate(milestone.getDueDate());
+        request.setStatus("PLANNED");
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+                .thenReturn(Optional.of(project));
+        when(projectMilestoneRepository.findByIdAndProjectId(milestoneId, projectId))
+                .thenReturn(Optional.of(milestone));
+
+        assertThatThrownBy(() -> service.updateProjectMilestone(
+                supervisorId.toString(),
+                projectId.toString(),
+                milestoneId.toString(),
+                request))
+                .isInstanceOfSatisfying(ValidationException.class, exception -> {
+                    assertThat(exception.getDetails()).hasSize(1);
+                    assertThat(exception.getDetails().getFirst().getField()).isEqualTo("status");
+                });
+    }
+
+    @Test
+    void updateProjectMilestone_legacyInvalidDueDateChanged_keepsRuleEnforcement() {
+        UUID projectId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        ProjectMilestone milestone = new ProjectMilestone();
+        milestone.setId(milestoneId);
+        milestone.setProjectId(projectId);
+        milestone.setTitle("Legacy");
+        milestone.setStatus("PLANNED");
+        milestone.setDueDate(LocalDate.now().minusDays(1));
+
+        UpdateSupervisorProjectMilestoneRequest request = new UpdateSupervisorProjectMilestoneRequest();
+        request.setTitle("Legacy updated");
+        request.setDueDate(LocalDate.now().minusDays(2));
+        request.setStatus("PLANNED");
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+                .thenReturn(Optional.of(project));
+        when(projectMilestoneRepository.findByIdAndProjectId(milestoneId, projectId))
+                .thenReturn(Optional.of(milestone));
+
+        assertThatThrownBy(() -> service.updateProjectMilestone(
+                supervisorId.toString(),
+                projectId.toString(),
+                milestoneId.toString(),
+                request))
+                .isInstanceOfSatisfying(ValidationException.class, exception -> {
+                    assertThat(exception.getDetails()).hasSize(1);
+                    assertThat(exception.getDetails().getFirst().getField()).isEqualTo("dueDate");
+                });
+    }
+
+    @Test
+    void addProjectMilestone_recomputesProjectMilestoneDateFromAllMilestones() {
+        UUID projectId = UUID.randomUUID();
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(30));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        ProjectMilestone existing = new ProjectMilestone();
+        existing.setId(UUID.randomUUID());
+        existing.setProjectId(projectId);
+        existing.setSequenceNo(1);
+        existing.setStatus("PLANNED");
+        existing.setDueDate(LocalDate.now().plusDays(2));
+
+        ProjectMilestone created = new ProjectMilestone();
+        created.setId(UUID.randomUUID());
+        created.setProjectId(projectId);
+        created.setSequenceNo(2);
+        created.setStatus("PLANNED");
+        created.setDueDate(LocalDate.now().plusDays(10));
+
+        AddSupervisorProjectMilestoneRequest request = new AddSupervisorProjectMilestoneRequest();
+        request.setTitle("M2");
+        request.setDueDate(created.getDueDate());
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+                .thenReturn(Optional.of(project));
+        when(projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(projectId))
+                .thenReturn(List.of(existing), List.of(existing, created), List.of(existing, created));
+        when(projectMilestoneRepository.save(ArgumentMatchers.any(ProjectMilestone.class))).thenReturn(created);
+        when(projectRepository.save(project)).thenReturn(project);
+        when(repositoryLinkService.resolveLink(projectId)).thenReturn(null);
+        when(projectService.getGitHubPreview(projectId, null)).thenReturn(emptyGitHubPreview());
+        when(projectMemberRepository.findByProjectIdOrderByCreatedAtAsc(projectId)).thenReturn(List.of());
+        when(userRepository.findAllById(ArgumentMatchers.anyCollection())).thenReturn(List.of());
+        when(projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
+                .thenReturn(Optional.empty());
+
+        SupervisorProjectDetailDto result = service.addProjectMilestone(
+                supervisorId.toString(),
+                projectId.toString(),
+                request);
+
+        assertThat(result.getMilestoneDate()).isEqualTo(existing.getDueDate());
+    }
+
+    @Test
+    void getProjectById_legacyInvalidMilestones_areFlaggedInResponse() {
+        UUID projectId = UUID.randomUUID();
+        Project project = project("P1", "ACTIVE", LocalDate.now().plusDays(10));
+        project.setId(projectId);
+        project.setSupervisor(supervisor);
+
+        ProjectMilestone ordered = new ProjectMilestone();
+        ordered.setId(UUID.randomUUID());
+        ordered.setProjectId(projectId);
+        ordered.setSequenceNo(1);
+        ordered.setTitle("M1");
+        ordered.setStatus("PLANNED");
+        ordered.setDueDate(LocalDate.now().plusDays(1));
+
+        ProjectMilestone legacyInvalid = new ProjectMilestone();
+        legacyInvalid.setId(UUID.randomUUID());
+        legacyInvalid.setProjectId(projectId);
+        legacyInvalid.setSequenceNo(2);
+        legacyInvalid.setTitle("M2");
+        legacyInvalid.setStatus("PLANNED");
+        legacyInvalid.setDueDate(LocalDate.now().minusDays(1));
+
+        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
+                .thenReturn(Optional.of(project));
+        when(projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(projectId))
+                .thenReturn(List.of(ordered, legacyInvalid));
+        when(repositoryLinkService.resolveLink(projectId)).thenReturn(null);
+        when(projectService.getGitHubPreview(projectId, null)).thenReturn(emptyGitHubPreview());
+        when(projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
+                .thenReturn(Optional.empty());
+        when(projectMemberRepository.findByProjectIdOrderByCreatedAtAsc(projectId)).thenReturn(List.of());
+        when(userRepository.findAllById(ArgumentMatchers.anyCollection())).thenReturn(List.of());
+        when(projectFileService.listFiles(
+                supervisorId.toString(),
+                projectId.toString(),
+                com.supervisesuite.backend.projectfiles.service.ProjectFileAccessRole.SUPERVISOR))
+                .thenReturn(new ProjectFileListDto(
+                        List.of(),
+                        new ProjectFileListDto.Config(10_000_000L, 255, List.of("pdf"), 300)));
+
+        SupervisorProjectDetailDto detail = service.getProjectById(supervisorId.toString(), projectId.toString());
+
+        assertThat(detail.getMilestones()).hasSize(2);
+        SupervisorProjectDetailDto.Milestone legacyMilestone = detail.getMilestones().get(1);
+        assertThat(legacyMilestone.getIsOverdue()).isTrue();
+        assertThat(legacyMilestone.getDaysOverdue()).isGreaterThan(0);
+        assertThat(legacyMilestone.getIsChronologyViolation()).isTrue();
+        assertThat(detail.getMilestoneInsights()).isNotNull();
+        assertThat(detail.getMilestoneInsights().getOverdueOpenMilestones()).isEqualTo(1);
+        assertThat(detail.getMilestoneInsights().getTimelineRiskLevel()).isEqualTo("HIGH");
     }
 
     @Test
@@ -607,6 +805,15 @@ class SupervisorServiceImplUnitTest {
         project.setLastActivityAt(Instant.now());
         project.setProgressPercent(0);
         return project;
+    }
+
+    private static com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto emptyGitHubPreview() {
+        return new com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto(
+                false,
+                List.of(),
+                new com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto.ActivitySummary(0, null, "idle"),
+                List.of(),
+                List.of());
     }
 
     private static String decodeUrl(String value) {
