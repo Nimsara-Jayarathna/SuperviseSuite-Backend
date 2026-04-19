@@ -139,7 +139,6 @@ public class SupervisorDashboardDto {
         private LocalDate milestoneDate;
         private Instant lastActivityAt;
         private Integer progressPercent;
-        private String healthNote;
         private String jiraHealthIndicator;
 
         public ProjectItem() {
@@ -152,8 +151,7 @@ public class SupervisorDashboardDto {
             String lifecycleStatus,
             LocalDate milestoneDate,
             Instant lastActivityAt,
-            Integer progressPercent,
-            String healthNote
+            Integer progressPercent
         ) {
             this.id = id;
             this.title = title;
@@ -162,7 +160,6 @@ public class SupervisorDashboardDto {
             this.milestoneDate = milestoneDate;
             this.lastActivityAt = lastActivityAt;
             this.progressPercent = progressPercent;
-            this.healthNote = healthNote;
         }
 
         public UUID getId() {
@@ -219,14 +216,6 @@ public class SupervisorDashboardDto {
 
         public void setProgressPercent(Integer progressPercent) {
             this.progressPercent = progressPercent;
-        }
-
-        public String getHealthNote() {
-            return healthNote;
-        }
-
-        public void setHealthNote(String healthNote) {
-            this.healthNote = healthNote;
         }
 
         public String getJiraHealthIndicator() {

@@ -81,7 +81,7 @@ Returns dashboard aggregates and lightweight project records for `/supervisor/da
 
 - Includes only supervisor-owned, non-deleted projects.
 - `projects[]` item fields:
-  - `id`, `title`, `summary`, `lifecycleStatus`, `milestoneDate`, `lastActivityAt`, `progressPercent`, `healthNote`, `jiraHealthIndicator`
+  - `id`, `title`, `summary`, `lifecycleStatus`, `milestoneDate`, `lastActivityAt`, `progressPercent`, `jiraHealthIndicator`
 
 ---
 
@@ -99,7 +99,6 @@ Returns supervisor-owned project list records for `/supervisor/projects`.
 - `semester`
 - `milestoneDate`
 - `progressPercent`
-- `healthNote`
 - `memberCount`
 
 ### Notes
@@ -116,7 +115,7 @@ Returns one supervisor-owned project detail record.
 ### Response fields
 
 - core fields:
-  - `id`, `title`, `summary`, `lifecycleStatus`, `batch`, `semester`, `milestoneDate`, `progressPercent`, `healthNote`, `repositoryUrl`, `lastActivityAt`
+  - `id`, `title`, `summary`, `lifecycleStatus`, `batch`, `semester`, `milestoneDate`, `progressPercent`, `repositoryUrl`, `lastActivityAt`
 - GitHub preview block:
   - `github.repositoryLinked`
   - `github.authorizedInstallationId`
@@ -195,7 +194,6 @@ Creates project + memberships + initial milestones in one transaction.
 
 - `lifecycleStatus = PLANNING`
 - `progressPercent = 0`
-- `healthNote = null`
 - each initial milestone:
   - `status = PLANNED`
   - `sequenceNo` starts at `1` and increments in request order
@@ -223,7 +221,6 @@ Updates core project fields used by overview edit.
 - `batch` (required)
 - `semester` (required)
 - `lifecycleStatus` (required, one of `PLANNING|ACTIVE|AT_RISK|BEHIND|COMPLETED`)
-- `healthNote` (optional nullable string)
 - `leaderStudentId` (optional nullable UUID)
   - when present, must refer to an already assigned project student member
 

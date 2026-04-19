@@ -189,7 +189,6 @@ class StudentServiceImpl implements StudentService {
             project.getMilestoneDate(),
             project.getLastActivityAt(),
             project.getProgressPercent(),
-            project.getHealthNote(),
             projectService.getGitHubPreview(project.getId(), effectiveUrl),
             githubRepositories,
             new StudentProjectDetailDto.JiraIntegration(

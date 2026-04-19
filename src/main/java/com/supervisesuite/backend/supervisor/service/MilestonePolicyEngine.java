@@ -141,6 +141,7 @@ final class MilestonePolicyEngine {
             return null;
         }
         return milestones.stream()
+                .filter(milestone -> OPEN_STATUSES.contains(milestone.getStatus()))
                 .map(ProjectMilestone::getDueDate)
                 .filter(dueDate -> dueDate != null)
                 .min(Comparator.naturalOrder())

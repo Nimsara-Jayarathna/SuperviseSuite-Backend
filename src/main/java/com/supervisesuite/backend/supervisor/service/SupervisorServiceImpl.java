@@ -366,7 +366,6 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setBatch(request.getBatch().trim());
         project.setSemester(request.getSemester().trim());
         project.setStatus(lifecycleStatus);
-        project.setHealthNote(trimToNull(request.getHealthNote()));
         if (request.getLeaderStudentId() != null) {
             validateLeaderAssignment(project.getId(), request.getLeaderStudentId());
             project.setLeaderUserId(request.getLeaderStudentId());
@@ -609,7 +608,6 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setSemester(request.getSemester().trim());
         project.setStatus(DEFAULT_LIFECYCLE_STATUS);
         project.setProgressPercent(0);
-        project.setHealthNote(null);
         project.setLeaderUserId(resolveLeaderForCreate(request.getLeaderStudentId(), students));
         project.setMilestoneDate(earliestMilestoneDate);
         project.setLastActivityAt(now);
@@ -903,7 +901,6 @@ class SupervisorServiceImpl implements SupervisorService {
                 project.getSemester(),
                 project.getMilestoneDate(),
                 project.getProgressPercent(),
-                project.getHealthNote(),
                 projectService.getGitHubPreview(project.getId(), effectiveUrl),
                 githubRepositories,
                 new SupervisorProjectDetailDto.JiraIntegration(
@@ -1691,7 +1688,6 @@ class SupervisorServiceImpl implements SupervisorService {
                 project.getSemester(),
                 project.getMilestoneDate(),
                 project.getProgressPercent(),
-                project.getHealthNote(),
                 projectMemberRepository.countByProjectId(project.getId()));
     }
 
@@ -1703,8 +1699,7 @@ class SupervisorServiceImpl implements SupervisorService {
                 project.getStatus(),
                 project.getMilestoneDate(),
                 project.getLastActivityAt(),
-                project.getProgressPercent(),
-                project.getHealthNote());
+                project.getProgressPercent());
         item.setJiraHealthIndicator(jiraHealthIndicator);
         return item;
     }

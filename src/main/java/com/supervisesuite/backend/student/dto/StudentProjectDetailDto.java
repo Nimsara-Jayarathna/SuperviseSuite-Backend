@@ -19,7 +19,6 @@ public class StudentProjectDetailDto {
     private LocalDate milestoneDate;
     private Instant lastActivityAt;
     private Integer progressPercent;
-    private String healthNote;
     private ProjectGitHubPreviewDto github;
     private ProjectGitHubRepositoriesDto githubRepositories;
     private JiraIntegration jira;
@@ -41,7 +40,6 @@ public class StudentProjectDetailDto {
         LocalDate milestoneDate,
         Instant lastActivityAt,
         Integer progressPercent,
-        String healthNote,
         ProjectGitHubPreviewDto github,
         ProjectGitHubRepositoriesDto githubRepositories,
         JiraIntegration jira,
@@ -58,7 +56,6 @@ public class StudentProjectDetailDto {
         this.milestoneDate = milestoneDate;
         this.lastActivityAt = lastActivityAt;
         this.progressPercent = progressPercent;
-        this.healthNote = healthNote;
         this.github = github;
         this.githubRepositories = githubRepositories;
         this.jira = jira;
@@ -138,16 +135,6 @@ public class StudentProjectDetailDto {
     public void setProgressPercent(Integer progressPercent) {
         this.progressPercent = progressPercent;
     }
-
-    public String getHealthNote() {
-        return healthNote;
-    }
-
-    public void setHealthNote(String healthNote) {
-        this.healthNote = healthNote;
-    }
-
-
 
     public ProjectGitHubPreviewDto getGithub() {
         return github;
