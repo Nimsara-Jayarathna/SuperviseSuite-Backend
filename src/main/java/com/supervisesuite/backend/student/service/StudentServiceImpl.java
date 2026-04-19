@@ -40,6 +40,7 @@ import com.supervisesuite.backend.meetings.dto.MeetingRecordDto;
 import com.supervisesuite.backend.meetings.service.MeetingChannelService;
 import com.supervisesuite.backend.meetings.service.MeetingRecordService;
 import jakarta.persistence.EntityNotFoundException;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -152,11 +153,12 @@ class StudentServiceImpl implements StudentService {
             .filter(member -> member != null)
             .toList();
 
-        List<StudentProjectDetailDto.Milestone> milestones = projectMilestoneRepository
-            .findByProjectIdOrderBySequenceNoAsc(project.getId())
-            .stream()
+        List<ProjectMilestone> projectMilestones = projectMilestoneRepository
+            .findByProjectIdOrderBySequenceNoAsc(project.getId());
+        List<StudentProjectDetailDto.Milestone> milestones = projectMilestones.stream()
             .map(this::toDetailMilestone)
             .toList();
+        LocalDate milestoneDate = computeOpenMilestoneDate(projectMilestones);
 
         StudentProjectDetailDto.Leader leader = null;
         if (project.getLeaderUserId() != null) {
@@ -186,7 +188,7 @@ class StudentServiceImpl implements StudentService {
             project.getStatus(),
             project.getBatch(),
             project.getSemester(),
-            project.getMilestoneDate(),
+            milestoneDate,
             project.getLastActivityAt(),
             project.getProgressPercent(),
             projectService.getGitHubPreview(project.getId(), effectiveUrl),
@@ -470,11 +472,28 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
             project.getStatus(),
             project.getBatch(),
             project.getSemester(),
-            project.getMilestoneDate(),
+            resolveEffectiveMilestoneDate(project.getId()),
             project.getLastActivityAt(),
             project.getProgressPercent(),
             supervisorName
         );
+    }
+
+    private LocalDate resolveEffectiveMilestoneDate(UUID projectId) {
+        List<ProjectMilestone> milestones = projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(projectId);
+        return computeOpenMilestoneDate(milestones);
+    }
+
+    private LocalDate computeOpenMilestoneDate(List<ProjectMilestone> milestones) {
+        if (milestones == null || milestones.isEmpty()) {
+            return null;
+        }
+        return milestones.stream()
+            .filter(milestone -> "PLANNED".equals(milestone.getStatus()) || "IN_PROGRESS".equals(milestone.getStatus()))
+            .map(ProjectMilestone::getDueDate)
+            .filter(dueDate -> dueDate != null)
+            .min(LocalDate::compareTo)
+            .orElse(null);
     }
 
     private StudentProjectDetailDto.Member toDetailMember(ProjectMember member, User user) {

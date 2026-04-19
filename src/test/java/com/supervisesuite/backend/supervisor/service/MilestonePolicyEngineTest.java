@@ -90,6 +90,32 @@ class MilestonePolicyEngineTest {
         assertThat(signal.isChronologyViolation()).isTrue();
     }
 
+    @Test
+    void computeProjectMilestoneDate_ignoresTerminalMilestones() {
+        LocalDate completedDue = LocalDate.now().minusDays(2);
+        LocalDate plannedDue = LocalDate.now().plusDays(10);
+        ProjectMilestone completed =
+                milestone(1, completedDue, MilestonePolicyEngine.STATUS_COMPLETED);
+        ProjectMilestone planned =
+                milestone(2, plannedDue, MilestonePolicyEngine.STATUS_PLANNED);
+
+        LocalDate milestoneDate = policy.computeProjectMilestoneDate(List.of(completed, planned));
+
+        assertThat(milestoneDate).isEqualTo(plannedDue);
+    }
+
+    @Test
+    void computeProjectMilestoneDate_allTerminal_returnsNull() {
+        ProjectMilestone completed =
+                milestone(1, LocalDate.now().minusDays(4), MilestonePolicyEngine.STATUS_COMPLETED);
+        ProjectMilestone missed =
+                milestone(2, LocalDate.now().minusDays(1), MilestonePolicyEngine.STATUS_MISSED);
+
+        LocalDate milestoneDate = policy.computeProjectMilestoneDate(List.of(completed, missed));
+
+        assertThat(milestoneDate).isNull();
+    }
+
     private static ProjectMilestone milestone(int sequenceNo, LocalDate dueDate, String status) {
         ProjectMilestone milestone = new ProjectMilestone();
         milestone.setId(UUID.randomUUID());

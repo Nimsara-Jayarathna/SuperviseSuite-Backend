@@ -22,6 +22,7 @@ class ProjectProgressBackfillRunner implements ApplicationRunner {
 
     private final ProjectRepository projectRepository;
     private final ProjectMilestoneRepository projectMilestoneRepository;
+    private final MilestonePolicyEngine milestonePolicyEngine;
 
     ProjectProgressBackfillRunner(
         ProjectRepository projectRepository,
@@ -29,6 +30,7 @@ class ProjectProgressBackfillRunner implements ApplicationRunner {
     ) {
         this.projectRepository = projectRepository;
         this.projectMilestoneRepository = projectMilestoneRepository;
+        this.milestonePolicyEngine = new MilestonePolicyEngine();
     }
 
     @Override
@@ -41,9 +43,14 @@ class ProjectProgressBackfillRunner implements ApplicationRunner {
             List<ProjectMilestone> milestones = projectMilestoneRepository
                 .findByProjectIdOrderBySequenceNoAsc(project.getId());
             int recalculatedProgress = calculateProgressPercent(milestones);
+            java.time.LocalDate recalculatedMilestoneDate = milestonePolicyEngine.computeProjectMilestoneDate(milestones);
 
-            if (!isSameProgress(project.getProgressPercent(), recalculatedProgress)) {
+            boolean progressChanged = !isSameProgress(project.getProgressPercent(), recalculatedProgress);
+            boolean milestoneDateChanged = !java.util.Objects.equals(project.getMilestoneDate(), recalculatedMilestoneDate);
+
+            if (progressChanged || milestoneDateChanged) {
                 project.setProgressPercent(recalculatedProgress);
+                project.setMilestoneDate(recalculatedMilestoneDate);
                 projectsToUpdate.add(project);
             }
         }

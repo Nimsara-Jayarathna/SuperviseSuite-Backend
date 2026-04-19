@@ -224,6 +224,7 @@ class SupervisorServiceImpl implements SupervisorService {
 
         LocalDate today = LocalDate.now();
         LocalDate milestoneWindowEnd = today.plusDays(14);
+        Map<UUID, LocalDate> effectiveMilestoneDateByProjectId = new HashMap<>();
 
         for (Project project : projects) {
             String lifecycleStatus = project.getStatus();
@@ -239,7 +240,8 @@ class SupervisorServiceImpl implements SupervisorService {
                 completedProjects++;
             }
 
-            LocalDate milestoneDate = project.getMilestoneDate();
+            LocalDate milestoneDate = resolveEffectiveMilestoneDate(project.getId());
+            effectiveMilestoneDateByProjectId.put(project.getId(), milestoneDate);
             if (milestoneDate != null
                     && !milestoneDate.isBefore(today)
                     && !milestoneDate.isAfter(milestoneWindowEnd)) {
@@ -289,7 +291,10 @@ class SupervisorServiceImpl implements SupervisorService {
         }
 
         List<SupervisorDashboardDto.ProjectItem> dashboardProjects = projects.stream()
-                .map(p -> toDashboardProjectItem(p, jiraIndicators.getOrDefault(p.getId(), "NOT_CONNECTED")))
+                .map(p -> toDashboardProjectItem(
+                        p,
+                        effectiveMilestoneDateByProjectId.get(p.getId()),
+                        jiraIndicators.getOrDefault(p.getId(), "NOT_CONNECTED")))
                 .toList();
 
         List<SupervisorDashboardDto.ProjectItem> recentProjects = projects.stream()
@@ -297,7 +302,10 @@ class SupervisorServiceImpl implements SupervisorService {
                         .comparing(Project::getLastActivityAt, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(Project::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(5)
-                .map(p -> toDashboardProjectItem(p, jiraIndicators.getOrDefault(p.getId(), "NOT_CONNECTED")))
+                .map(p -> toDashboardProjectItem(
+                        p,
+                        effectiveMilestoneDateByProjectId.get(p.getId()),
+                        jiraIndicators.getOrDefault(p.getId(), "NOT_CONNECTED")))
                 .toList();
 
         SupervisorDashboardDto dashboard = new SupervisorDashboardDto(
@@ -899,7 +907,7 @@ class SupervisorServiceImpl implements SupervisorService {
                 project.getStatus(),
                 project.getBatch(),
                 project.getSemester(),
-                project.getMilestoneDate(),
+                milestoneDetailView.milestoneDate(),
                 project.getProgressPercent(),
                 projectService.getGitHubPreview(project.getId(), effectiveUrl),
                 githubRepositories,
@@ -950,7 +958,10 @@ class SupervisorServiceImpl implements SupervisorService {
                 snapshot.overdueOpenMilestones(),
                 snapshot.dueSoonCount(),
                 snapshot.timelineRiskLevel());
-        return new MilestoneDetailView(milestoneDtos, insights);
+        return new MilestoneDetailView(
+                milestoneDtos,
+                insights,
+                milestonePolicyEngine.computeProjectMilestoneDate(projectMilestones));
     }
 
     private User resolveSupervisor(String authenticatedUserId) {
@@ -1686,18 +1697,21 @@ class SupervisorServiceImpl implements SupervisorService {
                 project.getStatus(),
                 project.getBatch(),
                 project.getSemester(),
-                project.getMilestoneDate(),
+                resolveEffectiveMilestoneDate(project.getId()),
                 project.getProgressPercent(),
                 projectMemberRepository.countByProjectId(project.getId()));
     }
 
-    private SupervisorDashboardDto.ProjectItem toDashboardProjectItem(Project project, String jiraHealthIndicator) {
+    private SupervisorDashboardDto.ProjectItem toDashboardProjectItem(
+            Project project,
+            LocalDate effectiveMilestoneDate,
+            String jiraHealthIndicator) {
         SupervisorDashboardDto.ProjectItem item = new SupervisorDashboardDto.ProjectItem(
                 project.getId(),
                 project.getName(),
                 project.getDescription(),
                 project.getStatus(),
-                project.getMilestoneDate(),
+                effectiveMilestoneDate,
                 project.getLastActivityAt(),
                 project.getProgressPercent());
         item.setJiraHealthIndicator(jiraHealthIndicator);
@@ -1845,9 +1859,16 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setMilestoneDate(milestonePolicyEngine.computeProjectMilestoneDate(milestones));
     }
 
+    private LocalDate resolveEffectiveMilestoneDate(UUID projectId) {
+        List<ProjectMilestone> milestones = projectMilestoneRepository
+                .findByProjectIdOrderBySequenceNoAsc(projectId);
+        return milestonePolicyEngine.computeProjectMilestoneDate(milestones);
+    }
+
     private record MilestoneDetailView(
             List<SupervisorProjectDetailDto.Milestone> milestones,
-            SupervisorProjectDetailDto.MilestoneInsights insights) {
+            SupervisorProjectDetailDto.MilestoneInsights insights,
+            LocalDate milestoneDate) {
     }
 
     private String validateLifecycleStatus(String rawStatus) {
