@@ -100,6 +100,8 @@ import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
 import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
 import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressService;
 import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
+import com.supervisesuite.backend.projects.service.milestones.MilestonePolicyEngine;
+import com.supervisesuite.backend.projects.service.milestones.ProjectMilestoneAggregateService;
 import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileAccessRole;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
@@ -154,6 +156,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final MeetingRecordService meetingRecordService;
     private final RestClient restClient;
     private final MilestonePolicyEngine milestonePolicyEngine;
+    private final ProjectMilestoneAggregateService projectMilestoneAggregateService;
     private final SecureRandom secureRandom = new SecureRandom();
     private final Map<String, PendingJiraWorkspaceSelection> pendingJiraWorkspaceSelections = new ConcurrentHashMap<>();
     private static final long JIRA_WORKSPACE_SELECTION_TTL_SECONDS = 600L;
@@ -181,7 +184,9 @@ class SupervisorServiceImpl implements SupervisorService {
             ProjectFileService projectFileService,
             MeetingChannelService meetingChannelService,
             MeetingRecordService meetingRecordService,
-            RestClient.Builder restClientBuilder) {
+            RestClient.Builder restClientBuilder,
+            MilestonePolicyEngine milestonePolicyEngine,
+            ProjectMilestoneAggregateService projectMilestoneAggregateService) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
@@ -205,7 +210,8 @@ class SupervisorServiceImpl implements SupervisorService {
         this.meetingChannelService = meetingChannelService;
         this.meetingRecordService = meetingRecordService;
         this.restClient = restClientBuilder.build();
-        this.milestonePolicyEngine = new MilestonePolicyEngine();
+        this.milestonePolicyEngine = milestonePolicyEngine;
+        this.projectMilestoneAggregateService = projectMilestoneAggregateService;
     }
 
     @Override
@@ -224,7 +230,6 @@ class SupervisorServiceImpl implements SupervisorService {
 
         LocalDate today = LocalDate.now();
         LocalDate milestoneWindowEnd = today.plusDays(14);
-        Map<UUID, LocalDate> effectiveMilestoneDateByProjectId = new HashMap<>();
 
         for (Project project : projects) {
             String lifecycleStatus = project.getStatus();
@@ -240,8 +245,7 @@ class SupervisorServiceImpl implements SupervisorService {
                 completedProjects++;
             }
 
-            LocalDate milestoneDate = resolveEffectiveMilestoneDate(project.getId());
-            effectiveMilestoneDateByProjectId.put(project.getId(), milestoneDate);
+            LocalDate milestoneDate = project.getMilestoneDate();
             if (milestoneDate != null
                     && !milestoneDate.isBefore(today)
                     && !milestoneDate.isAfter(milestoneWindowEnd)) {
@@ -293,7 +297,7 @@ class SupervisorServiceImpl implements SupervisorService {
         List<SupervisorDashboardDto.ProjectItem> dashboardProjects = projects.stream()
                 .map(p -> toDashboardProjectItem(
                         p,
-                        effectiveMilestoneDateByProjectId.get(p.getId()),
+                        p.getMilestoneDate(),
                         jiraIndicators.getOrDefault(p.getId(), "NOT_CONNECTED")))
                 .toList();
 
@@ -304,7 +308,7 @@ class SupervisorServiceImpl implements SupervisorService {
                 .limit(5)
                 .map(p -> toDashboardProjectItem(
                         p,
-                        effectiveMilestoneDateByProjectId.get(p.getId()),
+                        p.getMilestoneDate(),
                         jiraIndicators.getOrDefault(p.getId(), "NOT_CONNECTED")))
                 .toList();
 
@@ -509,7 +513,10 @@ class SupervisorServiceImpl implements SupervisorService {
         milestone.setCreatedAt(now);
         projectMilestoneRepository.save(milestone);
 
-        refreshProjectTimelineAggregates(project);
+        List<ProjectMilestone> milestonesForAggregates = new ArrayList<>(existingMilestones.size() + 1);
+        milestonesForAggregates.addAll(existingMilestones);
+        milestonesForAggregates.add(milestone);
+        projectMilestoneAggregateService.applyTo(project, milestonesForAggregates);
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
         projectRepository.save(project);
@@ -548,9 +555,11 @@ class SupervisorServiceImpl implements SupervisorService {
         if (statusChanged || dueDateChanged) {
             milestonePolicyEngine.validateDueDateForStatus(requestedDueDate, milestoneStatus, LocalDate.now());
         }
+
+        List<ProjectMilestone> milestonesForAggregates = null;
         if (dueDateChanged) {
-            List<ProjectMilestone> milestones = projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(project.getId());
-            milestonePolicyEngine.validateChronologyForUpdate(milestones, milestone.getId(), requestedDueDate);
+            milestonesForAggregates = projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(project.getId());
+            milestonePolicyEngine.validateChronologyForUpdate(milestonesForAggregates, milestone.getId(), requestedDueDate);
         }
 
         Instant now = Instant.now();
@@ -561,7 +570,21 @@ class SupervisorServiceImpl implements SupervisorService {
         milestone.setUpdatedAt(now);
         projectMilestoneRepository.save(milestone);
 
-        refreshProjectTimelineAggregates(project);
+        if (statusChanged || dueDateChanged) {
+            if (milestonesForAggregates != null) {
+                for (ProjectMilestone candidate : milestonesForAggregates) {
+                    if (Objects.equals(candidate.getId(), milestone.getId())) {
+                        candidate.setDueDate(requestedDueDate);
+                        candidate.setStatus(milestoneStatus);
+                        break;
+                    }
+                }
+            }
+            List<ProjectMilestone> orderedMilestones = milestonesForAggregates != null
+                    ? milestonesForAggregates
+                    : projectMilestoneAggregateService.loadOrderedMilestones(project.getId());
+            projectMilestoneAggregateService.applyTo(project, orderedMilestones);
+        }
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
         projectRepository.save(project);
@@ -630,6 +653,7 @@ class SupervisorServiceImpl implements SupervisorService {
         }
 
         List<CreateSupervisorProjectResponse.Milestone> milestones = new ArrayList<>();
+        List<ProjectMilestone> createdMilestones = new ArrayList<>(requestedMilestones.size());
         int sequenceNo = 1;
         for (CreateSupervisorProjectRequest.InitialMilestone requestMilestone : requestedMilestones) {
             ProjectMilestone milestone = new ProjectMilestone();
@@ -643,10 +667,11 @@ class SupervisorServiceImpl implements SupervisorService {
             milestone.setCreatedAt(now);
 
             ProjectMilestone savedMilestone = projectMilestoneRepository.save(milestone);
+            createdMilestones.add(savedMilestone);
             milestones.add(toCreateMilestone(savedMilestone));
         }
 
-        refreshProjectTimelineAggregates(savedProject);
+        projectMilestoneAggregateService.applyTo(savedProject, createdMilestones);
         Project updatedProject = projectRepository.save(savedProject);
 
         return new CreateSupervisorProjectResponse(
@@ -1697,7 +1722,7 @@ class SupervisorServiceImpl implements SupervisorService {
                 project.getStatus(),
                 project.getBatch(),
                 project.getSemester(),
-                resolveEffectiveMilestoneDate(project.getId()),
+                project.getMilestoneDate(),
                 project.getProgressPercent(),
                 projectMemberRepository.countByProjectId(project.getId()));
     }
@@ -1850,19 +1875,6 @@ class SupervisorServiceImpl implements SupervisorService {
                     "leaderStudentId",
                     "Leader must be an assigned student of this project.");
         }
-    }
-
-    private void refreshProjectTimelineAggregates(Project project) {
-        List<ProjectMilestone> milestones = projectMilestoneRepository
-                .findByProjectIdOrderBySequenceNoAsc(project.getId());
-        project.setProgressPercent(milestonePolicyEngine.calculateProgressPercent(milestones));
-        project.setMilestoneDate(milestonePolicyEngine.computeProjectMilestoneDate(milestones));
-    }
-
-    private LocalDate resolveEffectiveMilestoneDate(UUID projectId) {
-        List<ProjectMilestone> milestones = projectMilestoneRepository
-                .findByProjectIdOrderBySequenceNoAsc(projectId);
-        return milestonePolicyEngine.computeProjectMilestoneDate(milestones);
     }
 
     private record MilestoneDetailView(

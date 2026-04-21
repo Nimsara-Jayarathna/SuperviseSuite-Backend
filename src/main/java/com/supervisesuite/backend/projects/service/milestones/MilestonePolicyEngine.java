@@ -1,4 +1,4 @@
-package com.supervisesuite.backend.supervisor.service;
+package com.supervisesuite.backend.projects.service.milestones;
 
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
@@ -10,18 +10,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.stereotype.Component;
 
-final class MilestonePolicyEngine {
+@Component
+public final class MilestonePolicyEngine {
 
-    static final String STATUS_PLANNED = "PLANNED";
-    static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
-    static final String STATUS_COMPLETED = "COMPLETED";
-    static final String STATUS_MISSED = "MISSED";
-    static final String STATUS_CANCELLED = "CANCELLED";
+    public static final String STATUS_PLANNED = "PLANNED";
+    public static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
+    public static final String STATUS_COMPLETED = "COMPLETED";
+    public static final String STATUS_MISSED = "MISSED";
+    public static final String STATUS_CANCELLED = "CANCELLED";
 
-    static final String RISK_LOW = "LOW";
-    static final String RISK_MEDIUM = "MEDIUM";
-    static final String RISK_HIGH = "HIGH";
+    public static final String RISK_LOW = "LOW";
+    public static final String RISK_MEDIUM = "MEDIUM";
+    public static final String RISK_HIGH = "HIGH";
 
     private static final Set<String> ALLOWED_STATUSES = Set.of(
             STATUS_PLANNED,
@@ -32,7 +34,7 @@ final class MilestonePolicyEngine {
     private static final Set<String> OPEN_STATUSES = Set.of(STATUS_PLANNED, STATUS_IN_PROGRESS);
     private static final Set<String> TERMINAL_STATUSES = Set.of(STATUS_COMPLETED, STATUS_MISSED, STATUS_CANCELLED);
 
-    String normalizeAndValidateStatus(String rawStatus) {
+    public String normalizeAndValidateStatus(String rawStatus) {
         String normalizedStatus = rawStatus == null ? "" : rawStatus.trim().toUpperCase();
         if (!ALLOWED_STATUSES.contains(normalizedStatus)) {
             throw new ValidationException("status", "Milestone status is invalid.");
@@ -40,7 +42,7 @@ final class MilestonePolicyEngine {
         return normalizedStatus;
     }
 
-    void validateDueDateForStatus(LocalDate dueDate, String status, LocalDate today) {
+    public void validateDueDateForStatus(LocalDate dueDate, String status, LocalDate today) {
         if (dueDate == null || status == null || today == null) {
             return;
         }
@@ -51,7 +53,7 @@ final class MilestonePolicyEngine {
         }
     }
 
-    void validateStatusTransition(String currentStatus, String nextStatus) {
+    public void validateStatusTransition(String currentStatus, String nextStatus) {
         if (currentStatus == null || nextStatus == null || currentStatus.equals(nextStatus)) {
             return;
         }
@@ -69,7 +71,7 @@ final class MilestonePolicyEngine {
         }
     }
 
-    void validateChronologyWithPrevious(LocalDate previousDueDate, LocalDate currentDueDate) {
+    public void validateChronologyWithPrevious(LocalDate previousDueDate, LocalDate currentDueDate) {
         if (previousDueDate == null || currentDueDate == null) {
             return;
         }
@@ -80,7 +82,7 @@ final class MilestonePolicyEngine {
         }
     }
 
-    void validateChronologyForUpdate(List<ProjectMilestone> milestones, UUID targetMilestoneId, LocalDate newDueDate) {
+    public void validateChronologyForUpdate(List<ProjectMilestone> milestones, UUID targetMilestoneId, LocalDate newDueDate) {
         if (milestones == null || targetMilestoneId == null || newDueDate == null) {
             return;
         }
@@ -117,7 +119,7 @@ final class MilestonePolicyEngine {
         }
     }
 
-    int calculateProgressPercent(List<ProjectMilestone> milestones) {
+    public int calculateProgressPercent(List<ProjectMilestone> milestones) {
         if (milestones == null || milestones.isEmpty()) {
             return 0;
         }
@@ -136,7 +138,7 @@ final class MilestonePolicyEngine {
         return (int) Math.round((completedMilestones * 100.0) / activeMilestones);
     }
 
-    LocalDate computeProjectMilestoneDate(List<ProjectMilestone> milestones) {
+    public LocalDate computeProjectMilestoneDate(List<ProjectMilestone> milestones) {
         if (milestones == null || milestones.isEmpty()) {
             return null;
         }
@@ -148,7 +150,7 @@ final class MilestonePolicyEngine {
                 .orElse(null);
     }
 
-    MilestoneInsightsSnapshot computeInsights(List<ProjectMilestone> milestones, LocalDate today) {
+    public MilestoneInsightsSnapshot computeInsights(List<ProjectMilestone> milestones, LocalDate today) {
         if (milestones == null || milestones.isEmpty()) {
             return new MilestoneInsightsSnapshot(Map.of(), 0, 0, RISK_LOW);
         }
@@ -207,13 +209,14 @@ final class MilestonePolicyEngine {
                 timelineRiskLevel);
     }
 
-    record MilestoneSignal(boolean isOverdue, int daysOverdue, boolean isChronologyViolation) {
+    public record MilestoneSignal(boolean isOverdue, int daysOverdue, boolean isChronologyViolation) {
     }
 
-    record MilestoneInsightsSnapshot(
+    public record MilestoneInsightsSnapshot(
             Map<UUID, MilestoneSignal> signalsByMilestoneId,
             int overdueOpenMilestones,
             int dueSoonCount,
             String timelineRiskLevel) {
     }
 }
+

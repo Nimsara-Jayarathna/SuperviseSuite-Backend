@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
+import com.supervisesuite.backend.projects.service.milestones.MilestonePolicyEngine;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;

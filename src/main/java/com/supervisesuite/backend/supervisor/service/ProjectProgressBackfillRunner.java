@@ -4,33 +4,39 @@ import com.supervisesuite.backend.projects.entity.Project;
 import com.supervisesuite.backend.projects.entity.ProjectMilestone;
 import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
+import com.supervisesuite.backend.projects.service.milestones.ProjectMilestoneAggregateService;
 import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
+@ConditionalOnProperty(
+    name = "app.milestones.backfill-on-startup",
+    havingValue = "true",
+    matchIfMissing = true
+)
 class ProjectProgressBackfillRunner implements ApplicationRunner {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ProjectProgressBackfillRunner.class);
-    private static final String CANCELLED_MILESTONE_STATUS = "CANCELLED";
-    private static final String COMPLETED_MILESTONE_STATUS = "COMPLETED";
 
     private final ProjectRepository projectRepository;
     private final ProjectMilestoneRepository projectMilestoneRepository;
-    private final MilestonePolicyEngine milestonePolicyEngine;
+    private final ProjectMilestoneAggregateService projectMilestoneAggregateService;
 
     ProjectProgressBackfillRunner(
         ProjectRepository projectRepository,
-        ProjectMilestoneRepository projectMilestoneRepository
+        ProjectMilestoneRepository projectMilestoneRepository,
+        ProjectMilestoneAggregateService projectMilestoneAggregateService
     ) {
         this.projectRepository = projectRepository;
         this.projectMilestoneRepository = projectMilestoneRepository;
-        this.milestonePolicyEngine = new MilestonePolicyEngine();
+        this.projectMilestoneAggregateService = projectMilestoneAggregateService;
     }
 
     @Override
@@ -42,15 +48,15 @@ class ProjectProgressBackfillRunner implements ApplicationRunner {
         for (Project project : projects) {
             List<ProjectMilestone> milestones = projectMilestoneRepository
                 .findByProjectIdOrderBySequenceNoAsc(project.getId());
-            int recalculatedProgress = calculateProgressPercent(milestones);
-            java.time.LocalDate recalculatedMilestoneDate = milestonePolicyEngine.computeProjectMilestoneDate(milestones);
+            ProjectMilestoneAggregateService.ProjectMilestoneAggregates aggregates =
+                projectMilestoneAggregateService.compute(milestones);
 
-            boolean progressChanged = !isSameProgress(project.getProgressPercent(), recalculatedProgress);
-            boolean milestoneDateChanged = !java.util.Objects.equals(project.getMilestoneDate(), recalculatedMilestoneDate);
+            boolean progressChanged = !isSameProgress(project.getProgressPercent(), aggregates.progressPercent());
+            boolean milestoneDateChanged = !java.util.Objects.equals(project.getMilestoneDate(), aggregates.milestoneDate());
 
             if (progressChanged || milestoneDateChanged) {
-                project.setProgressPercent(recalculatedProgress);
-                project.setMilestoneDate(recalculatedMilestoneDate);
+                project.setProgressPercent(aggregates.progressPercent());
+                project.setMilestoneDate(aggregates.milestoneDate());
                 projectsToUpdate.add(project);
             }
         }
@@ -68,22 +74,5 @@ class ProjectProgressBackfillRunner implements ApplicationRunner {
 
     private boolean isSameProgress(Integer currentProgress, int recalculatedProgress) {
         return currentProgress != null && currentProgress == recalculatedProgress;
-    }
-
-    private int calculateProgressPercent(List<ProjectMilestone> milestones) {
-        long activeMilestones = milestones.stream()
-            .filter(milestone -> !CANCELLED_MILESTONE_STATUS.equals(milestone.getStatus()))
-            .count();
-
-        if (activeMilestones == 0) {
-            return 0;
-        }
-
-        long completedMilestones = milestones.stream()
-            .filter(milestone -> !CANCELLED_MILESTONE_STATUS.equals(milestone.getStatus()))
-            .filter(milestone -> COMPLETED_MILESTONE_STATUS.equals(milestone.getStatus()))
-            .count();
-
-        return (int) Math.round((completedMilestones * 100.0) / activeMilestones);
     }
 }

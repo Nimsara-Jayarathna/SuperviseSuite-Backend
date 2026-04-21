@@ -158,7 +158,7 @@ class StudentServiceImpl implements StudentService {
         List<StudentProjectDetailDto.Milestone> milestones = projectMilestones.stream()
             .map(this::toDetailMilestone)
             .toList();
-        LocalDate milestoneDate = computeOpenMilestoneDate(projectMilestones);
+        LocalDate milestoneDate = project.getMilestoneDate();
 
         StudentProjectDetailDto.Leader leader = null;
         if (project.getLeaderUserId() != null) {
@@ -472,28 +472,11 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
             project.getStatus(),
             project.getBatch(),
             project.getSemester(),
-            resolveEffectiveMilestoneDate(project.getId()),
+            project.getMilestoneDate(),
             project.getLastActivityAt(),
             project.getProgressPercent(),
             supervisorName
         );
-    }
-
-    private LocalDate resolveEffectiveMilestoneDate(UUID projectId) {
-        List<ProjectMilestone> milestones = projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(projectId);
-        return computeOpenMilestoneDate(milestones);
-    }
-
-    private LocalDate computeOpenMilestoneDate(List<ProjectMilestone> milestones) {
-        if (milestones == null || milestones.isEmpty()) {
-            return null;
-        }
-        return milestones.stream()
-            .filter(milestone -> "PLANNED".equals(milestone.getStatus()) || "IN_PROGRESS".equals(milestone.getStatus()))
-            .map(ProjectMilestone::getDueDate)
-            .filter(dueDate -> dueDate != null)
-            .min(LocalDate::compareTo)
-            .orElse(null);
     }
 
     private StudentProjectDetailDto.Member toDetailMember(ProjectMember member, User user) {

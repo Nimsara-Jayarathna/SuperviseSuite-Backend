@@ -37,6 +37,8 @@ import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
 import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressService;
 import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionService;
 import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
+import com.supervisesuite.backend.projects.service.milestones.MilestonePolicyEngine;
+import com.supervisesuite.backend.projects.service.milestones.ProjectMilestoneAggregateService;
 import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
 import com.supervisesuite.backend.meetings.service.MeetingChannelService;
@@ -135,6 +137,9 @@ class SupervisorServiceImplUnitTest {
 
     @BeforeEach
     void setUp() {
+        MilestonePolicyEngine milestonePolicyEngine = new MilestonePolicyEngine();
+        ProjectMilestoneAggregateService projectMilestoneAggregateService =
+                new ProjectMilestoneAggregateService(projectMilestoneRepository, milestonePolicyEngine);
         service = new SupervisorServiceImpl(
                 userRepository,
                 projectRepository,
@@ -158,7 +163,9 @@ class SupervisorServiceImplUnitTest {
                 projectFileService,
                 meetingChannelService,
                 meetingRecordService,
-                restClientBuilder);
+                restClientBuilder,
+                milestonePolicyEngine,
+                projectMilestoneAggregateService);
 
         supervisorId = UUID.randomUUID();
         supervisor = new User();
@@ -177,25 +184,9 @@ class SupervisorServiceImplUnitTest {
         Project active = project("Active", "ACTIVE", LocalDate.now().plusDays(7));
         Project completed = project("Done", "COMPLETED", LocalDate.now().plusDays(20));
 
-        ProjectMilestone planningMilestone = new ProjectMilestone();
-        planningMilestone.setId(UUID.randomUUID());
-        planningMilestone.setProjectId(planning.getId());
-        planningMilestone.setStatus("PLANNED");
-        planningMilestone.setDueDate(LocalDate.now().plusDays(1));
-
-        ProjectMilestone activeMilestone = new ProjectMilestone();
-        activeMilestone.setId(UUID.randomUUID());
-        activeMilestone.setProjectId(active.getId());
-        activeMilestone.setStatus("IN_PROGRESS");
-        activeMilestone.setDueDate(LocalDate.now().plusDays(7));
-
         when(projectRepository.findBySupervisorIdAndDeletedAtIsNullOrderByCreatedAtDesc(supervisorId))
                 .thenReturn(List.of(planning, active, completed));
-        when(projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(planning.getId()))
-                .thenReturn(List.of(planningMilestone));
-        when(projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(active.getId()))
-                .thenReturn(List.of(activeMilestone));
-        when(projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(completed.getId()))
+        when(projectJiraIntegrationRepository.findAllByProjectIdInAndRevokedAtIsNull(ArgumentMatchers.anyList()))
                 .thenReturn(List.of());
 
         SupervisorDashboardDto dashboard = service.getDashboard(supervisorId.toString());
@@ -205,34 +196,8 @@ class SupervisorServiceImplUnitTest {
         assertThat(dashboard.getActiveProjects()).isEqualTo(1);
         assertThat(dashboard.getCompletedProjects()).isEqualTo(1);
         assertThat(dashboard.getUpcomingMilestonesCount()).isEqualTo(2);
-    }
-
-    @Test
-    void getDashboard_ignoresTerminalMilestonesWhenResolvingMilestoneDate() {
-        Project active = project("Active", "ACTIVE", LocalDate.now().plusDays(1));
-
-        ProjectMilestone completedMilestone = new ProjectMilestone();
-        completedMilestone.setId(UUID.randomUUID());
-        completedMilestone.setProjectId(active.getId());
-        completedMilestone.setStatus("COMPLETED");
-        completedMilestone.setDueDate(LocalDate.now().plusDays(1));
-
-        ProjectMilestone openMilestone = new ProjectMilestone();
-        openMilestone.setId(UUID.randomUUID());
-        openMilestone.setProjectId(active.getId());
-        openMilestone.setStatus("PLANNED");
-        openMilestone.setDueDate(LocalDate.now().plusDays(20));
-
-        when(projectRepository.findBySupervisorIdAndDeletedAtIsNullOrderByCreatedAtDesc(supervisorId))
-                .thenReturn(List.of(active));
-        when(projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(active.getId()))
-                .thenReturn(List.of(completedMilestone, openMilestone));
-
-        SupervisorDashboardDto dashboard = service.getDashboard(supervisorId.toString());
-
-        assertThat(dashboard.getUpcomingMilestonesCount()).isZero();
-        assertThat(dashboard.getProjects()).hasSize(1);
-        assertThat(dashboard.getProjects().getFirst().getMilestoneDate()).isEqualTo(openMilestone.getDueDate());
+        verify(projectMilestoneRepository, never())
+                .findByProjectIdOrderBySequenceNoAsc(ArgumentMatchers.any(UUID.class));
     }
 
     @Test
