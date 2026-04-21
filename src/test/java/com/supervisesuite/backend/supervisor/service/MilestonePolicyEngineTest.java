@@ -8,6 +8,7 @@ import com.supervisesuite.backend.projects.entity.ProjectMilestone;
 import com.supervisesuite.backend.projects.service.milestones.MilestonePolicyEngine;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -55,6 +56,18 @@ class MilestonePolicyEngineTest {
                     assertThat(exception.getDetails()).hasSize(1);
                     assertThat(exception.getDetails().getFirst().getField()).isEqualTo("status");
                 });
+    }
+
+    @Test
+    void normalizeAndValidateStatus_usesLocaleRootForUppercaseNormalization() {
+        Locale previousDefault = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr"));
+
+            assertThat(policy.normalizeAndValidateStatus("planned")).isEqualTo("PLANNED");
+        } finally {
+            Locale.setDefault(previousDefault);
+        }
     }
 
     @Test

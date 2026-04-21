@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Locale;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -35,7 +36,7 @@ public final class MilestonePolicyEngine {
     private static final Set<String> TERMINAL_STATUSES = Set.of(STATUS_COMPLETED, STATUS_MISSED, STATUS_CANCELLED);
 
     public String normalizeAndValidateStatus(String rawStatus) {
-        String normalizedStatus = rawStatus == null ? "" : rawStatus.trim().toUpperCase();
+        String normalizedStatus = rawStatus == null ? "" : rawStatus.trim().toUpperCase(Locale.ROOT);
         if (!ALLOWED_STATUSES.contains(normalizedStatus)) {
             throw new ValidationException("status", "Milestone status is invalid.");
         }
@@ -219,4 +220,3 @@ public final class MilestonePolicyEngine {
             String timelineRiskLevel) {
     }
 }
-
