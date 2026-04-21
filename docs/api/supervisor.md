@@ -81,7 +81,7 @@ Returns dashboard aggregates and lightweight project records for `/supervisor/da
 
 - Includes only supervisor-owned, non-deleted projects.
 - `projects[]` item fields:
-  - `id`, `title`, `summary`, `lifecycleStatus`, `milestoneDate`, `lastActivityAt`, `progressPercent`, `healthNote`, `jiraHealthIndicator`
+  - `id`, `title`, `summary`, `lifecycleStatus`, `milestoneDate`, `lastActivityAt`, `progressPercent`, `jiraHealthIndicator`
 
 ---
 
@@ -99,7 +99,6 @@ Returns supervisor-owned project list records for `/supervisor/projects`.
 - `semester`
 - `milestoneDate`
 - `progressPercent`
-- `healthNote`
 - `memberCount`
 
 ### Notes
@@ -116,7 +115,7 @@ Returns one supervisor-owned project detail record.
 ### Response fields
 
 - core fields:
-  - `id`, `title`, `summary`, `lifecycleStatus`, `batch`, `semester`, `milestoneDate`, `progressPercent`, `healthNote`, `repositoryUrl`, `lastActivityAt`
+  - `id`, `title`, `summary`, `lifecycleStatus`, `batch`, `semester`, `milestoneDate`, `progressPercent`, `repositoryUrl`, `lastActivityAt`
 - GitHub preview block:
   - `github.repositoryLinked`
   - `github.authorizedInstallationId`
@@ -136,6 +135,9 @@ Returns one supervisor-owned project detail record.
   - `id`, `firstName`, `lastName`, `email`, `registrationNumber`, `memberRole`
 - `milestones[]`:
   - `id`, `title`, `description`, `dueDate`, `status`, `sequenceNo`
+  - `isOverdue`, `daysOverdue`, `isChronologyViolation`
+- `milestoneInsights`:
+  - `overdueOpenMilestones`, `dueSoonCount`, `timelineRiskLevel` (`LOW|MEDIUM|HIGH`)
 - `files`:
   - `items[]` (`id`, `fileName`, `fileType`, `fileSize`, `uploadedBy`, `uploadedByName`, `uploadedByRole`, `createdAt`, `updatedAt`)
   - `config` (`maxFileSizeBytes`, `maxFileNameLength`, `allowedTypes[]`, `presignedUrlExpirySeconds`)
@@ -192,11 +194,13 @@ Creates project + memberships + initial milestones in one transaction.
 
 - `lifecycleStatus = PLANNING`
 - `progressPercent = 0`
-- `healthNote = null`
 - each initial milestone:
   - `status = PLANNED`
   - `sequenceNo` starts at `1` and increments in request order
 - project `milestoneDate = earliest dueDate among milestones[]`
+- milestone policy:
+  - `PLANNED` and `IN_PROGRESS` due dates must be today or future
+  - due dates must be non-decreasing in milestone sequence order
 
 ### Response highlights
 
@@ -217,7 +221,6 @@ Updates core project fields used by overview edit.
 - `batch` (required)
 - `semester` (required)
 - `lifecycleStatus` (required, one of `PLANNING|ACTIVE|AT_RISK|BEHIND|COMPLETED`)
-- `healthNote` (optional nullable string)
 - `leaderStudentId` (optional nullable UUID)
   - when present, must refer to an already assigned project student member
 
@@ -900,7 +903,9 @@ Adds a new project milestone.
 
 - `status` defaults to `PLANNED`.
 - `sequenceNo` is auto-assigned as `(max existing sequenceNo + 1)`; starts at `1`.
-- Updates project `milestoneDate` to the added milestone’s due date.
+- Rejects past due dates for open milestones (`PLANNED`, `IN_PROGRESS`).
+- Enforces chronology: new due date must be on/after the previous sequence milestone.
+- Recomputes project `milestoneDate` from all milestones (earliest due date).
 - Recalculates and persists project `progressPercent` using milestone statuses.
 - Updates `updatedAt` and `lastActivityAt`.
 - Returns refreshed project detail payload.
@@ -921,7 +926,15 @@ Updates one milestone.
 ### Behavior
 
 - Updates milestone `updatedAt`.
+- Applies conditional due-date policy:
+  - open milestones (`PLANNED`, `IN_PROGRESS`) cannot use past due dates
+  - terminal milestones (`COMPLETED`, `MISSED`, `CANCELLED`) may keep past due dates
+- Enforces chronology against neighboring sequence milestones when due date changes.
+- Applies moderate status transition guard:
+  - completed milestones cannot move to another status
+  - terminal milestones cannot move back to open states
 - Recalculates and persists project `progressPercent` using milestone statuses.
+- Recomputes project `milestoneDate` from all milestones (earliest due date).
 - Updates project `updatedAt` and `lastActivityAt`.
 - Returns refreshed project detail payload.
 
@@ -1026,4 +1039,7 @@ Common supervisor mutation failures:
 - malformed UUID path parameters -> `404 NOT_FOUND`
 - project not owned by authenticated supervisor -> `404 NOT_FOUND`
 - invalid enum values (`lifecycleStatus`, milestone `status`) -> `400 VALIDATION_ERROR`
+- invalid milestone due-date rules (`dueDate`) -> `400 VALIDATION_ERROR`
+- invalid milestone chronology (`sequenceNo` relation) -> `400 VALIDATION_ERROR`
+- blocked milestone status regressions (`status`) -> `400 VALIDATION_ERROR`
 - duplicate/invalid student assignment payloads -> `400 VALIDATION_ERROR`

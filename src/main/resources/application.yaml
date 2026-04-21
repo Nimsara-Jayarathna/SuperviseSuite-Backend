@@ -55,6 +55,8 @@ app:
     # Set to false in local dev (HTTP). Must be true in production (HTTPS).
     # Browsers (except Chrome) block Secure cookies over plain HTTP even on localhost.
     secure: ${COOKIE_SECURE:true}
+  milestones:
+    backfill-on-startup: ${MILESTONES_BACKFILL_ON_STARTUP:false}
   system:
     cleanup:
       fixed-delay-ms: ${SYSTEM_CLEANUP_FIXED_DELAY_MS:900000}

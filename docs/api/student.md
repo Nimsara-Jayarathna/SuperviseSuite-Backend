@@ -103,7 +103,6 @@ The detail payload currently includes backend-backed fields only:
 - `milestoneDate`
 - `lastActivityAt`
 - `progressPercent`
-- `healthNote`
 - `github`
 - `jira`
 - `members[]`
@@ -176,7 +175,6 @@ The detail payload currently includes backend-backed fields only:
     "milestoneDate": "2026-03-21",
     "lastActivityAt": "2026-03-05T07:35:00Z",
     "progressPercent": 0,
-    "healthNote": null,
     "members": [
       {
         "id": "48dc174f-5957-498f-a10a-e0b5c7cebc28",

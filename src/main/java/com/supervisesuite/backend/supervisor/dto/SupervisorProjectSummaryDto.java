@@ -12,7 +12,6 @@ public class SupervisorProjectSummaryDto {
     private String semester;
     private LocalDate milestoneDate;
     private Integer progressPercent;
-    private String healthNote;
     private long memberCount;
 
     public SupervisorProjectSummaryDto() {
@@ -27,7 +26,6 @@ public class SupervisorProjectSummaryDto {
         String semester,
         LocalDate milestoneDate,
         Integer progressPercent,
-        String healthNote,
         long memberCount
     ) {
         this.id = id;
@@ -38,7 +36,6 @@ public class SupervisorProjectSummaryDto {
         this.semester = semester;
         this.milestoneDate = milestoneDate;
         this.progressPercent = progressPercent;
-        this.healthNote = healthNote;
         this.memberCount = memberCount;
     }
 
@@ -104,14 +101,6 @@ public class SupervisorProjectSummaryDto {
 
     public void setProgressPercent(Integer progressPercent) {
         this.progressPercent = progressPercent;
-    }
-
-    public String getHealthNote() {
-        return healthNote;
-    }
-
-    public void setHealthNote(String healthNote) {
-        this.healthNote = healthNote;
     }
 
     public long getMemberCount() {

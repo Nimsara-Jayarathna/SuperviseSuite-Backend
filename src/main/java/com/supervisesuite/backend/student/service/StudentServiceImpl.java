@@ -40,6 +40,7 @@ import com.supervisesuite.backend.meetings.dto.MeetingRecordDto;
 import com.supervisesuite.backend.meetings.service.MeetingChannelService;
 import com.supervisesuite.backend.meetings.service.MeetingRecordService;
 import jakarta.persistence.EntityNotFoundException;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -152,11 +153,12 @@ class StudentServiceImpl implements StudentService {
             .filter(member -> member != null)
             .toList();
 
-        List<StudentProjectDetailDto.Milestone> milestones = projectMilestoneRepository
-            .findByProjectIdOrderBySequenceNoAsc(project.getId())
-            .stream()
+        List<ProjectMilestone> projectMilestones = projectMilestoneRepository
+            .findByProjectIdOrderBySequenceNoAsc(project.getId());
+        List<StudentProjectDetailDto.Milestone> milestones = projectMilestones.stream()
             .map(this::toDetailMilestone)
             .toList();
+        LocalDate milestoneDate = project.getMilestoneDate();
 
         StudentProjectDetailDto.Leader leader = null;
         if (project.getLeaderUserId() != null) {
@@ -186,10 +188,9 @@ class StudentServiceImpl implements StudentService {
             project.getStatus(),
             project.getBatch(),
             project.getSemester(),
-            project.getMilestoneDate(),
+            milestoneDate,
             project.getLastActivityAt(),
             project.getProgressPercent(),
-            project.getHealthNote(),
             projectService.getGitHubPreview(project.getId(), effectiveUrl),
             githubRepositories,
             new StudentProjectDetailDto.JiraIntegration(
