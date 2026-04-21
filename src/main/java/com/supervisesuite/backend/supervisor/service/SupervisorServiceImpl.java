@@ -487,11 +487,9 @@ class SupervisorServiceImpl implements SupervisorService {
 
         List<ProjectMilestone> existingMilestones = projectMilestoneRepository
                 .findByProjectIdOrderBySequenceNoAsc(project.getId());
-        Integer nextSequenceNo = existingMilestones.stream()
-                .map(ProjectMilestone::getSequenceNo)
-                .max(Comparator.naturalOrder())
-                .map(sequenceNo -> sequenceNo + 1)
-                .orElse(1);
+        Integer nextSequenceNo = existingMilestones.isEmpty()
+                ? 1
+                : existingMilestones.get(existingMilestones.size() - 1).getSequenceNo() + 1;
 
         LocalDate dueDate = request.getDueDate();
         LocalDate today = LocalDate.now();

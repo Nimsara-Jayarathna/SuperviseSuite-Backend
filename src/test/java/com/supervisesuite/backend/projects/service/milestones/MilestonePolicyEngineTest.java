@@ -1,4 +1,4 @@
-package com.supervisesuite.backend.supervisor.service;
+package com.supervisesuite.backend.projects.service.milestones;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
