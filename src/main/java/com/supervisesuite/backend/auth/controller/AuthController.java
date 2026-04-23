@@ -23,6 +23,8 @@ import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.config.RegistrationProperties;
 import com.supervisesuite.backend.users.entity.User;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -48,6 +50,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/auth")
+@Tag(name = "Auth", description = "Authentication, registration, and password reset.")
 public class AuthController {
 
     private final AuthService authService;
@@ -83,6 +86,7 @@ public class AuthController {
     }
 
     @GetMapping("/register/config")
+    @Operation(summary = "Get registration configuration")
     public ResponseEntity<ApiResponse<RegisterConfigResponse>> registerConfig(
         HttpServletRequest httpRequest
     ) {
@@ -100,6 +104,7 @@ public class AuthController {
     }
 
     @PostMapping("/register/init")
+    @Operation(summary = "Start registration (send OTP)")
     public ResponseEntity<ApiResponse<Map<String, String>>> registerInit(
         @Valid @RequestBody RegisterInitRequest request,
         HttpServletRequest httpRequest
@@ -113,6 +118,7 @@ public class AuthController {
     }
 
     @PostMapping("/register/verify")
+    @Operation(summary = "Verify registration OTP")
     public ResponseEntity<ApiResponse<RegisterVerifyResponse>> registerVerify(
         @Valid @RequestBody RegisterVerifyRequest request,
         HttpServletRequest httpRequest
@@ -122,6 +128,7 @@ public class AuthController {
     }
 
     @PostMapping("/register/complete")
+    @Operation(summary = "Complete registration")
     public ResponseEntity<ApiResponse<LoginUserResponse>> registerComplete(
         @Valid @RequestBody RegisterCompleteRequest request,
         HttpServletRequest httpRequest,
@@ -160,6 +167,7 @@ public class AuthController {
      *         via {@code HttpOnly; Secure; SameSite=Strict} {@code Set-Cookie} headers
      */
     @PostMapping("/login")
+    @Operation(summary = "Login (issue access + refresh cookies)")
     public ResponseEntity<ApiResponse<LoginUserResponse>> login(
         @Valid @RequestBody LoginRequest request,
         HttpServletRequest httpRequest,
@@ -194,6 +202,7 @@ public class AuthController {
      *         or has already been revoked
      */
     @PostMapping("/refresh")
+    @Operation(summary = "Refresh access token (rotate refresh token)")
     public ResponseEntity<ApiResponse<LoginUserResponse>> refresh(
         HttpServletRequest httpRequest,
         HttpServletResponse httpResponse
@@ -247,6 +256,7 @@ public class AuthController {
      * @return {@code 204 No Content}
      */
     @PostMapping("/logout")
+    @Operation(summary = "Logout (revoke refresh token, clear cookies)")
     public ResponseEntity<Void> logout(
         HttpServletRequest httpRequest,
         HttpServletResponse httpResponse
@@ -265,6 +275,7 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
+    @Operation(summary = "Request a password reset email")
     public ResponseEntity<ApiResponse<Map<String, String>>> forgotPassword(
         @Valid @RequestBody ForgotPasswordRequest request,
         HttpServletRequest httpRequest
@@ -278,6 +289,7 @@ public class AuthController {
     }
 
     @GetMapping("/reset-password/validate")
+    @Operation(summary = "Validate password reset token")
     public ResponseEntity<ApiResponse<ValidateResetTokenResponse>> validateResetToken(
         @RequestParam("token") String token,
         HttpServletRequest httpRequest
@@ -291,6 +303,7 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
+    @Operation(summary = "Reset password using token")
     public ResponseEntity<ApiResponse<Map<String, String>>> resetPassword(
         @Valid @RequestBody ResetPasswordRequest request,
         HttpServletRequest httpRequest
