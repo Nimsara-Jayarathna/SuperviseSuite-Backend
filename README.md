@@ -14,6 +14,13 @@ Current API references:
 - `docs/api/github-app.md`
 - `docs/api-response-contract.md`
 
+Swagger / OpenAPI (dev profile only):
+
+- Swagger UI: `http://localhost:${APP_PORT}/swagger-ui/index.html`
+- OpenAPI JSON: `http://localhost:${APP_PORT}/v3/api-docs`
+
+Enable in local/dev by setting `SWAGGER_ENABLED=true` in `.env`.
+
 Backend fix documents:
 
 - `docs/backend/major-fixes-scrum-97-supervisor-workflow.md`
@@ -70,6 +77,7 @@ Current variable groups are:
 
 - Database: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `DB_MAX_POOL_SIZE`, `DB_MIN_IDLE`, `DB_CONNECTION_TIMEOUT_MS`, `DB_IDLE_TIMEOUT_MS`, `DB_MAX_LIFETIME_MS`, `DB_KEEPALIVE_TIME_MS`, `DB_VALIDATION_TIMEOUT_MS`
 - App/CORS: `APP_PORT`, `COOKIE_SECURE`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_BASE_URL`
+- Swagger/OpenAPI: `SWAGGER_ENABLED` (set `true` to enable `/swagger-ui/**` and `/v3/api-docs` in local/dev)
 - Registration policy: `REGISTRATION_DOMAIN_RESTRICTION_ENABLED`, `REGISTRATION_STUDENT_EMAIL_DOMAIN`, `REGISTRATION_SUPERVISOR_EMAIL_DOMAIN`, `REGISTRATION_STUDENT_EMAIL_PREFIX_RESTRICTION_ENABLED`, `REGISTRATION_STUDENT_EMAIL_PREFIX_REGEX`
 - Registration verification lifecycle: `REGISTRATION_OTP_EXPIRY_SECONDS`, `REGISTRATION_SESSION_EXPIRY_SECONDS`
 - Background Data Management: `SYSTEM_CLEANUP_FIXED_DELAY_MS`, `SYSTEM_SYNC_CRON`, `SYSTEM_SYNC_ZONE`

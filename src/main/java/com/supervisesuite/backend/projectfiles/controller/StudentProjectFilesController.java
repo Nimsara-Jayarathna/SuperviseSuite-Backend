@@ -9,6 +9,10 @@ import com.supervisesuite.backend.projectfiles.dto.UploadUrlRequest;
 import com.supervisesuite.backend.projectfiles.dto.UploadUrlResponse;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileAccessRole;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
+import com.supervisesuite.backend.config.OpenApiConfig;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +28,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/student/projects/{projectId}/files")
 @PreAuthorize("hasRole('STUDENT')")
+@Tag(name = "Project Files", description = "Student project file management.")
+@SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
 public class StudentProjectFilesController {
 
     private final ProjectFileService projectFileService;
@@ -35,6 +41,7 @@ public class StudentProjectFilesController {
     }
 
     @GetMapping
+    @Operation(summary = "List project files (student)")
     public ResponseEntity<ApiResponse<ProjectFileListDto>> list(
         Authentication authentication,
         @PathVariable String projectId,
@@ -49,6 +56,7 @@ public class StudentProjectFilesController {
     }
 
     @PostMapping("/upload-url")
+    @Operation(summary = "Create an upload URL (student)")
     public ResponseEntity<ApiResponse<UploadUrlResponse>> getUploadUrl(
         Authentication authentication,
         @PathVariable String projectId,
@@ -65,6 +73,7 @@ public class StudentProjectFilesController {
     }
 
     @PostMapping("/confirm")
+    @Operation(summary = "Confirm uploaded file (student)")
     public ResponseEntity<ApiResponse<ProjectFileDto>> confirmUpload(
         Authentication authentication,
         @PathVariable String projectId,
@@ -81,6 +90,7 @@ public class StudentProjectFilesController {
     }
 
     @GetMapping("/{fileId}/download-url")
+    @Operation(summary = "Create a download URL (student)")
     public ResponseEntity<ApiResponse<String>> getDownloadUrl(
         Authentication authentication,
         @PathVariable String projectId,

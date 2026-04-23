@@ -2,6 +2,7 @@ package com.supervisesuite.backend.common.error;
 
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
+import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -21,6 +22,7 @@ import org.springframework.web.context.request.ServletWebRequest;
  * fallback path (for example, unmapped routes not already handled by MVC advice).
  */
 @Controller
+@Hidden
 @RequestMapping("${server.error.path:${error.path:/error}}")
 public class ApiErrorController implements ErrorController {
 

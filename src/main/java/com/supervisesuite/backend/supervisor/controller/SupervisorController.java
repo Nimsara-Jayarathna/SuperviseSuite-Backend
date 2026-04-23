@@ -41,6 +41,9 @@ import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRe
 import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto;
 import com.supervisesuite.backend.supervisor.service.SupervisorService;
+import com.supervisesuite.backend.config.OpenApiConfig;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -62,6 +65,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/supervisor")
 @PreAuthorize("hasRole('SUPERVISOR')")
+@Tag(name = "Supervisor", description = "Supervisor-facing endpoints.")
+@SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
 public class SupervisorController {
 
     private final SupervisorService supervisorService;
