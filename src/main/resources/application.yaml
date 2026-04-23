@@ -7,7 +7,7 @@ spring:
     throw-exception-if-no-handler-found: true
   web:
     resources:
-      add-mappings: false
+      add-mappings: ${SWAGGER_ENABLED:false}
   devtools:
     restart:
       # Keep Flyway SQL migrations on the base classloader; avoids classpath
@@ -42,6 +42,11 @@ spring:
     enabled: true
     baseline-on-migrate: false
     validate-on-migrate: false
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
 server:
   port: ${APP_PORT}
 app:
