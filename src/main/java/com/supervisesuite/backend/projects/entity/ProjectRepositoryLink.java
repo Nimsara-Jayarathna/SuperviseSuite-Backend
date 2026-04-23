@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.Version;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
@@ -54,6 +55,8 @@ public class ProjectRepositoryLink {
 
     private Instant lastSyncedAt;
 
+    private Instant lastSyncAttemptedAt;
+
     private String syncStatus;
 
     @Column(columnDefinition = "TEXT")
@@ -68,4 +71,7 @@ public class ProjectRepositoryLink {
     private Instant createdAt;
 
     private Instant updatedAt;
+
+    @Version
+    private Long version;
 }

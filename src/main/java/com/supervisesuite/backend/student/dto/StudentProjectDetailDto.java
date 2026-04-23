@@ -1,5 +1,7 @@
 package com.supervisesuite.backend.student.dto;
 
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileDto;
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import java.time.Instant;
@@ -17,13 +19,13 @@ public class StudentProjectDetailDto {
     private LocalDate milestoneDate;
     private Instant lastActivityAt;
     private Integer progressPercent;
-    private String healthNote;
     private ProjectGitHubPreviewDto github;
     private ProjectGitHubRepositoriesDto githubRepositories;
     private JiraIntegration jira;
     private Leader leader;
     private List<Member> members;
     private List<Milestone> milestones;
+    private Files files;
 
     public StudentProjectDetailDto() {
     }
@@ -38,7 +40,6 @@ public class StudentProjectDetailDto {
         LocalDate milestoneDate,
         Instant lastActivityAt,
         Integer progressPercent,
-        String healthNote,
         ProjectGitHubPreviewDto github,
         ProjectGitHubRepositoriesDto githubRepositories,
         JiraIntegration jira,
@@ -55,7 +56,6 @@ public class StudentProjectDetailDto {
         this.milestoneDate = milestoneDate;
         this.lastActivityAt = lastActivityAt;
         this.progressPercent = progressPercent;
-        this.healthNote = healthNote;
         this.github = github;
         this.githubRepositories = githubRepositories;
         this.jira = jira;
@@ -136,16 +136,6 @@ public class StudentProjectDetailDto {
         this.progressPercent = progressPercent;
     }
 
-    public String getHealthNote() {
-        return healthNote;
-    }
-
-    public void setHealthNote(String healthNote) {
-        this.healthNote = healthNote;
-    }
-
-
-
     public ProjectGitHubPreviewDto getGithub() {
         return github;
     }
@@ -192,6 +182,43 @@ public class StudentProjectDetailDto {
 
     public void setMilestones(List<Milestone> milestones) {
         this.milestones = milestones;
+    }
+
+    public Files getFiles() {
+        return files;
+    }
+
+    public void setFiles(Files files) {
+        this.files = files;
+    }
+
+    public static class Files {
+        private List<ProjectFileDto> items;
+        private ProjectFileListDto.Config config;
+
+        public Files() {
+        }
+
+        public Files(List<ProjectFileDto> items, ProjectFileListDto.Config config) {
+            this.items = items;
+            this.config = config;
+        }
+
+        public List<ProjectFileDto> getItems() {
+            return items;
+        }
+
+        public void setItems(List<ProjectFileDto> items) {
+            this.items = items;
+        }
+
+        public ProjectFileListDto.Config getConfig() {
+            return config;
+        }
+
+        public void setConfig(ProjectFileListDto.Config config) {
+            this.config = config;
+        }
     }
 
     public static class Member {
@@ -416,15 +443,23 @@ public class StudentProjectDetailDto {
         private String workspaceName;
         private String workspaceUrl;
         private Instant lastSyncedAt;
+        private String syncStatus;
 
         public JiraIntegration() {
         }
 
-        public JiraIntegration(boolean connected, String workspaceName, String workspaceUrl, Instant lastSyncedAt) {
+        public JiraIntegration(
+            boolean connected,
+            String workspaceName,
+            String workspaceUrl,
+            Instant lastSyncedAt,
+            String syncStatus
+        ) {
             this.connected = connected;
             this.workspaceName = workspaceName;
             this.workspaceUrl = workspaceUrl;
             this.lastSyncedAt = lastSyncedAt;
+            this.syncStatus = syncStatus;
         }
 
         public boolean isConnected() {
@@ -457,6 +492,14 @@ public class StudentProjectDetailDto {
 
         public void setLastSyncedAt(Instant lastSyncedAt) {
             this.lastSyncedAt = lastSyncedAt;
+        }
+
+        public String getSyncStatus() {
+            return syncStatus;
+        }
+
+        public void setSyncStatus(String syncStatus) {
+            this.syncStatus = syncStatus;
         }
     }
 }

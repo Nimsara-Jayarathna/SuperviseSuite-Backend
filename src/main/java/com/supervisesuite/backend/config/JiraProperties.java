@@ -15,7 +15,7 @@ import java.util.List;
 public class JiraProperties {
     private String clientId;
     private String clientSecret;
-    private String scope = "read:jira-user read:jira-work";
+    private String scope = "read:jira-user read:jira-work offline_access";
     private String audience = "api.atlassian.com";
     private String authTargetUrl = "https://auth.atlassian.com/authorize";
     private String tokenTargetUrl = "https://auth.atlassian.com/oauth/token";
@@ -32,5 +32,21 @@ public class JiraProperties {
         private int backlogGrowingConsecutiveWeeks = 2;
         private List<String> highPriorityNames = new ArrayList<>(List.of("High", "Highest"));
         private List<String> bugTypeNames = new ArrayList<>(List.of("Bug"));
+    }
+
+    private Jobs jobs = new Jobs();
+
+    @Getter
+    @Setter
+    public static class Jobs {
+        private IssueSync issueSync = new IssueSync();
+
+        @Getter
+        @Setter
+        public static class IssueSync {
+            private boolean enabled = true;
+            private int batchSize = 50;
+            private int inProgressTimeoutSeconds = 900;
+        }
     }
 }

@@ -22,4 +22,8 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
 
     /** Used on logout to revoke all active tokens for a user. */
     void deleteAllByUser(User user);
+
+    void deleteAllByUserId(UUID userId);
+
+    void deleteAllByExpiresAtBeforeOrRevokedAtIsNotNull(java.time.Instant threshold);
 }

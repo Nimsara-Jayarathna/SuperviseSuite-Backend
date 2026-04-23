@@ -6,14 +6,19 @@ import static org.mockito.Mockito.when;
 
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
+import com.supervisesuite.backend.auth.dto.ChangePasswordRequest;
+import com.supervisesuite.backend.auth.service.AuthService;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.student.service.StudentService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +35,8 @@ class StudentControllerTest {
 
     @Mock
     private ApiResponseFactory apiResponseFactory;
+    @Mock
+    private AuthService authService;
 
     @Mock
     private Authentication authentication;
@@ -41,8 +48,23 @@ class StudentControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new StudentController(studentService, apiResponseFactory);
+        controller = new StudentController(studentService, authService, apiResponseFactory);
         when(authentication.getName()).thenReturn("student-id");
+    }
+
+    @Test
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    void changePassword_delegatesToAuthServiceAndFactory() {
+        ChangePasswordRequest body = new ChangePasswordRequest();
+        body.setCurrentPassword("Old1234!");
+        body.setNewPassword("New1234!");
+        ResponseEntity<ApiResponse<Void>> expected = ResponseEntity.ok(new ApiResponse<>());
+        when(apiResponseFactory.ok("Password updated successfully.", null, request)).thenReturn((ResponseEntity) expected);
+
+        ResponseEntity<ApiResponse<Void>> response = controller.changePassword(authentication, body, request);
+
+        assertThat(response).isSameAs(expected);
+        verify(authService).changePassword("student-id", body);
     }
 
     @Test
@@ -96,6 +118,79 @@ class StudentControllerTest {
 
         assertThat(response).isSameAs(expected);
         verify(apiResponseFactory).ok("GitHub dashboard loaded.", data, request);
+    }
+
+    @Test
+    void getProjectMeetingChannels_delegatesToServiceAndFactory() {
+        List<MeetingChannelDto> data = List.of(
+            new MeetingChannelDto(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "ZOOM",
+                "Weekly sync",
+                "https://example.com",
+                UUID.randomUUID(),
+                "Student",
+                "STUDENT",
+                "PENDING",
+                null,
+                null,
+                null,
+                null,
+                null
+            )
+        );
+        ResponseEntity<ApiResponse<List<MeetingChannelDto>>> expected = ResponseEntity.ok(new ApiResponse<>());
+
+        when(studentService.getProjectMeetingChannels("student-id", "project-1")).thenReturn(data);
+        when(apiResponseFactory.ok("Meeting channels loaded.", data, request)).thenReturn(expected);
+
+        ResponseEntity<ApiResponse<List<MeetingChannelDto>>> response = controller.getProjectMeetingChannels(
+            authentication,
+            "project-1",
+            request
+        );
+
+        assertThat(response).isSameAs(expected);
+        verify(studentService).getProjectMeetingChannels("student-id", "project-1");
+    }
+
+    @Test
+    void addProjectMeetingChannel_delegatesToServiceAndFactory() {
+        CreateMeetingChannelRequest body = new CreateMeetingChannelRequest();
+        body.setPlatform("WHATSAPP");
+        body.setChannelName("Group chat");
+        body.setLinkOrIdentifier("Group-123");
+        MeetingChannelDto data = new MeetingChannelDto(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            "WHATSAPP",
+            "Group chat",
+            "Group-123",
+            UUID.randomUUID(),
+            "Student",
+            "STUDENT",
+            "PENDING",
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+        ResponseEntity<ApiResponse<MeetingChannelDto>> expected = ResponseEntity.status(201).body(new ApiResponse<>());
+
+        when(studentService.addProjectMeetingChannel("student-id", "project-1", body)).thenReturn(data);
+        when(apiResponseFactory.created("Meeting channel submitted successfully.", data, request)).thenReturn(expected);
+
+        ResponseEntity<ApiResponse<MeetingChannelDto>> response = controller.addProjectMeetingChannel(
+            authentication,
+            "project-1",
+            body,
+            request
+        );
+
+        assertThat(response).isSameAs(expected);
+        verify(studentService).addProjectMeetingChannel("student-id", "project-1", body);
     }
 
     @Test

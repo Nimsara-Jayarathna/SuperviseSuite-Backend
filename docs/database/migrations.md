@@ -144,6 +144,89 @@ This log is aligned to migration files under `src/main/resources/db/migration`.
   - `refresh_token_encrypted`
   - `token_expires_at`
 
+## 2026-04-12 — Registration verification flow (SCRUM-106)
+
+### `V24__registration_sessions.sql`
+
+- Added `registration_sessions` table for short-lived registration continuation tokens.
+- Stores hashed token material and expiry metadata used after OTP verification.
+
+### `V25__email_otps.sql`
+
+- Added `email_otps` table for one-time password verification state.
+- Stores hashed OTP values with expiry and attempt lifecycle columns.
+- Supports cleanup and replay prevention for registration init/verify/complete flow.
+
+## 2026-04-13 — Password reset token persistence
+
+### `V26__password_reset_tokens.sql`
+
+- Added `password_reset_tokens` table for forgot-password / reset-password continuation flow.
+- Stores hashed reset token material, expiry, and usage/cleanup lifecycle fields.
+
+## 2026-04-13 — Sync/concurrency hardening
+
+### `V27__optimistic_locking_and_sync_indexes.sql`
+
+- Added optimistic-locking/version support and supporting indexes for high-frequency sync/update paths.
+- Focused on reducing stale-write collisions and improving query performance during background sync.
+
+### `V28__sync_in_progress_and_attempt_tracking.sql`
+
+- Added sync attempt/in-progress tracking fields used by background sync orchestration.
+- Supports safer retry behavior and clearer sync state visibility.
+
+## 2026-04-16 — Meetings channel schema
+
+### `V29__project_meeting_channels.sql`
+
+- Added `project_meeting_channels` table with:
+  - channel metadata (`platform`, `channel_name`, `link_or_identifier`)
+  - attribution (`added_by`, `added_by_name`, `added_by_role`)
+  - approval lifecycle (`status`, `approved_by`, `approved_by_name`, `approved_at`)
+  - audit fields (`created_at`, `updated_at`)
+- Added constraints:
+  - platform whitelist (`GOOGLE_MEET`, `ZOOM`, `TEAMS`, `WHATSAPP`, `OTHER`)
+  - role/status check constraints
+  - approval consistency check for pending vs approved rows
+- Added indexes:
+  - `(project_id, status, created_at DESC)` for pending-first listing
+  - `(project_id, created_at DESC)` for recency listing
+
+## 2026-04-18 — Meetings record schema
+
+### `V30__project_meeting_records.sql`
+
+- Added `project_meeting_records` table with:
+  - record metadata (`meeting_date`, `duration_minutes`)
+  - discussion fields (`discussion_summary`, `discussion_details`)
+  - optional linkage (`channel_id` nullable, `ON DELETE SET NULL`)
+  - attribution (`added_by`, `added_by_name`, `added_by_role`)
+  - approval lifecycle (`status`, `approved_by`, `approved_by_name`, `approved_at`)
+  - audit fields (`created_at`, `updated_at`)
+- Added constraints:
+  - duration must be positive (`duration_minutes > 0`)
+  - role/status check constraints
+  - approval consistency check for pending vs approved rows
+- Added indexes:
+  - `(project_id, status, meeting_date DESC, created_at DESC)` for pending-first listing
+  - `(project_id, meeting_date DESC, created_at DESC)` for recency listing
+## 2026-04 Project file attachments
+
+### `V23__project_files.sql`
+
+- Added `project_files` table with:
+  - linkage fields (`id`, `project_id`)
+  - storage pointer and metadata (`s3_key`, `file_name`, `file_type`, `file_size`)
+  - uploader and audit fields (`uploaded_by`, `uploaded_by_name`, `created_at`, `updated_at`, `deleted_at`)
+- Added constraints:
+  - FK to `projects` (`ON DELETE CASCADE`)
+  - FK to `users` (`uploaded_by`)
+  - check constraint `file_size > 0`
+- Added indexes:
+  - `(project_id, created_at DESC)` for ordered list queries
+  - `(project_id, deleted_at)` for active-row filtering
+
 ## Rules for Next Migrations
 
 - Use versioned files: `V{number}__{description}.sql`.

@@ -30,7 +30,17 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
 import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
 import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressService;
 import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
+import com.supervisesuite.backend.projectfiles.service.ProjectFileAccessRole;
+import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingRecordRequest;
+import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
+import com.supervisesuite.backend.meetings.dto.MeetingRecordDto;
+import com.supervisesuite.backend.meetings.service.MeetingChannelService;
+import com.supervisesuite.backend.meetings.service.MeetingRecordService;
 import jakarta.persistence.EntityNotFoundException;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -56,6 +66,9 @@ class StudentServiceImpl implements StudentService {
     private final JiraHealthService jiraHealthService;
     private final JiraSprintProgressService jiraSprintProgressService;
     private final JiraWorkloadService jiraWorkloadService;
+    private final ProjectFileService projectFileService;
+    private final MeetingChannelService meetingChannelService;
+    private final MeetingRecordService meetingRecordService;
 
     StudentServiceImpl(
          UserRepository userRepository,
@@ -68,7 +81,10 @@ class StudentServiceImpl implements StudentService {
          ProjectJiraIssueRepository projectJiraIssueRepository,
             JiraHealthService jiraHealthService,
             JiraSprintProgressService jiraSprintProgressService,
-            JiraWorkloadService jiraWorkloadService
+            JiraWorkloadService jiraWorkloadService,
+            ProjectFileService projectFileService,
+            MeetingChannelService meetingChannelService,
+            MeetingRecordService meetingRecordService
     ) {
          this.userRepository = userRepository;
          this.projectMemberRepository = projectMemberRepository;
@@ -80,7 +96,10 @@ class StudentServiceImpl implements StudentService {
          this.projectJiraIssueRepository = projectJiraIssueRepository;
          this.jiraHealthService = jiraHealthService;
          this.jiraSprintProgressService = jiraSprintProgressService;
-         this.jiraWorkloadService = jiraWorkloadService;
+            this.jiraWorkloadService = jiraWorkloadService;
+            this.projectFileService = projectFileService;
+            this.meetingChannelService = meetingChannelService;
+            this.meetingRecordService = meetingRecordService;
     }
 
     @Override
@@ -134,11 +153,12 @@ class StudentServiceImpl implements StudentService {
             .filter(member -> member != null)
             .toList();
 
-        List<StudentProjectDetailDto.Milestone> milestones = projectMilestoneRepository
-            .findByProjectIdOrderBySequenceNoAsc(project.getId())
-            .stream()
+        List<ProjectMilestone> projectMilestones = projectMilestoneRepository
+            .findByProjectIdOrderBySequenceNoAsc(project.getId());
+        List<StudentProjectDetailDto.Milestone> milestones = projectMilestones.stream()
             .map(this::toDetailMilestone)
             .toList();
+        LocalDate milestoneDate = project.getMilestoneDate();
 
         StudentProjectDetailDto.Leader leader = null;
         if (project.getLeaderUserId() != null) {
@@ -161,29 +181,40 @@ class StudentServiceImpl implements StudentService {
             .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
             .orElse(null);
 
-        return new StudentProjectDetailDto(
+        StudentProjectDetailDto detail = new StudentProjectDetailDto(
             project.getId(),
             project.getName(),
             project.getDescription(),
             project.getStatus(),
             project.getBatch(),
             project.getSemester(),
-            project.getMilestoneDate(),
+            milestoneDate,
             project.getLastActivityAt(),
             project.getProgressPercent(),
-            project.getHealthNote(),
             projectService.getGitHubPreview(project.getId(), effectiveUrl),
             githubRepositories,
             new StudentProjectDetailDto.JiraIntegration(
                 jiraIntegration != null,
                 jiraIntegration != null ? jiraIntegration.getWorkspaceName() : null,
                 jiraIntegration != null ? jiraIntegration.getWorkspaceUrl() : null,
-                jiraIntegration != null ? jiraIntegration.getConnectedAt() : null
+                jiraIntegration != null
+                    ? (jiraIntegration.getLastSyncedAt() != null
+                        ? jiraIntegration.getLastSyncedAt()
+                        : jiraIntegration.getConnectedAt())
+                    : null,
+                jiraIntegration != null ? jiraIntegration.getSyncStatus() : null
             ),
             leader,
             members,
             milestones
         );
+        ProjectFileListDto files = projectFileService.listFiles(
+            student.getId().toString(),
+            project.getId().toString(),
+            ProjectFileAccessRole.STUDENT
+        );
+        detail.setFiles(new StudentProjectDetailDto.Files(files.files(), files.config()));
+        return detail;
     }
 
     @Override
@@ -373,6 +404,38 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
         dto.setRoots(roots);
         dto.setOrphans(orphans);
         return dto;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MeetingChannelDto> getProjectMeetingChannels(String authenticatedUserId, String projectId) {
+        return meetingChannelService.listForStudent(authenticatedUserId, projectId);
+    }
+
+    @Override
+    @Transactional
+    public MeetingChannelDto addProjectMeetingChannel(
+        String authenticatedUserId,
+        String projectId,
+        CreateMeetingChannelRequest request
+    ) {
+        return meetingChannelService.createAsStudent(authenticatedUserId, projectId, request);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MeetingRecordDto> getProjectMeetingRecords(String authenticatedUserId, String projectId) {
+        return meetingRecordService.listForStudent(authenticatedUserId, projectId);
+    }
+
+    @Override
+    @Transactional
+    public MeetingRecordDto addProjectMeetingRecord(
+        String authenticatedUserId,
+        String projectId,
+        CreateMeetingRecordRequest request
+    ) {
+        return meetingRecordService.createAsStudent(authenticatedUserId, projectId, request);
     }
 
     private User resolveStudent(String authenticatedUserId) {

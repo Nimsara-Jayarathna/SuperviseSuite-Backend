@@ -1,6 +1,7 @@
 package com.supervisesuite.backend.auth.service;
 
 import com.supervisesuite.backend.users.entity.User;
+import java.util.UUID;
 
 /**
  * Contract for refresh token operations.
@@ -44,4 +45,10 @@ public interface RefreshTokenService {
      * @param rawToken the raw (unhashed) refresh token received from the client
      */
     void revoke(String rawToken);
+
+    void revokeAllForUser(User user);
+
+    void revokeAll(UUID userId);
+
+    void cleanupExpiredAndRevokedTokens();
 }

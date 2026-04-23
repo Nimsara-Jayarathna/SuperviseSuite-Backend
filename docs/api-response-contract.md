@@ -97,6 +97,20 @@ Spring Security failures are outside MVC advice and are standardized via:
 
 This ensures 401/403 security responses use the same envelope as MVC errors.
 
+### 5.3 Rate-limiting and temporary availability
+
+For throttled requests and transient backend unavailability, the API contract uses:
+
+- `TOO_MANY_REQUESTS` with HTTP `429`
+- `SERVICE_UNAVAILABLE` with HTTP `503`
+
+Rate-limited responses may include additional standard headers:
+
+- `Retry-After`
+- `X-RateLimit-Limit`
+- `X-RateLimit-Remaining`
+- `X-RateLimit-Reset`
+
 ## 6. Framework Fallback Handling
 To prevent default Spring `/error` response leakage for API paths:
 

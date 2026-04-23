@@ -1,31 +1,44 @@
 package com.supervisesuite.backend.auth.controller;
 
+import com.supervisesuite.backend.auth.dto.ForgotPasswordRequest;
 import com.supervisesuite.backend.auth.dto.LoginRequest;
 import com.supervisesuite.backend.auth.dto.LoginResponse;
 import com.supervisesuite.backend.auth.dto.LoginUserResponse;
-import com.supervisesuite.backend.auth.dto.RegisterRequest;
-import com.supervisesuite.backend.auth.dto.RegisterResponse;
-import com.supervisesuite.backend.auth.dto.SupervisorRegisterRequest;
+import com.supervisesuite.backend.auth.dto.RegisterConfigResponse;
+import com.supervisesuite.backend.auth.dto.RegisterCompleteRequest;
+import com.supervisesuite.backend.auth.dto.RegisterInitRequest;
+import com.supervisesuite.backend.auth.dto.RegisterVerifyRequest;
+import com.supervisesuite.backend.auth.dto.RegisterVerifyResponse;
+import com.supervisesuite.backend.auth.dto.ResetPasswordRequest;
+import com.supervisesuite.backend.auth.dto.ValidateResetTokenResponse;
 import com.supervisesuite.backend.auth.security.CookieService;
 import com.supervisesuite.backend.auth.security.TokenService;
 import com.supervisesuite.backend.auth.service.AuthService;
+import com.supervisesuite.backend.auth.service.PasswordResetService;
 import com.supervisesuite.backend.auth.service.RefreshTokenService;
 import com.supervisesuite.backend.auth.service.RefreshTokenValidator;
+import com.supervisesuite.backend.auth.service.RegistrationService;
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
+import com.supervisesuite.backend.config.RegistrationProperties;
 import com.supervisesuite.backend.users.entity.User;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -37,6 +50,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/auth")
+@Tag(name = "Auth", description = "Authentication, registration, and password reset.")
 public class AuthController {
 
     private final AuthService authService;
@@ -44,7 +58,10 @@ public class AuthController {
     private final TokenService tokenService;
     private final RefreshTokenService refreshTokenService;
     private final RefreshTokenValidator refreshTokenValidator;
+    private final RegistrationService registrationService;
+    private final RegistrationProperties registrationProperties;
     private final ApiResponseFactory apiResponseFactory;
+    private final PasswordResetService passwordResetService;
 
     public AuthController(
         AuthService authService,
@@ -52,62 +69,81 @@ public class AuthController {
         TokenService tokenService,
         RefreshTokenService refreshTokenService,
         RefreshTokenValidator refreshTokenValidator,
-        ApiResponseFactory apiResponseFactory
+        RegistrationService registrationService,
+        RegistrationProperties registrationProperties,
+        ApiResponseFactory apiResponseFactory,
+        PasswordResetService passwordResetService
     ) {
         this.authService = authService;
         this.cookieService = cookieService;
         this.tokenService = tokenService;
         this.refreshTokenService = refreshTokenService;
         this.refreshTokenValidator = refreshTokenValidator;
+        this.registrationService = registrationService;
+        this.registrationProperties = registrationProperties;
         this.apiResponseFactory = apiResponseFactory;
+        this.passwordResetService = passwordResetService;
     }
 
-    /**
-     * Registers a new student account.
-     *
-     * <pre>
-     * POST /api/auth/register
-     * </pre>
-     *
-     * <p>Request body is validated via Bean Validation. Any constraint violation
-     * produces a {@code 400 VALIDATION_ERROR} response with field-level details
-     * before the service layer is reached.
-     *
-     * @param request the registration payload; must pass all validation constraints
-     * @return {@code 201 Created} with an {@link ApiResponse} wrapping a
-     *         {@link RegisterResponse} on success
-     */
-    @PostMapping("/register")
-    public ResponseEntity<ApiResponse<RegisterResponse>> register(
-        @Valid @RequestBody RegisterRequest request,
+    @GetMapping("/register/config")
+    @Operation(summary = "Get registration configuration")
+    public ResponseEntity<ApiResponse<RegisterConfigResponse>> registerConfig(
         HttpServletRequest httpRequest
     ) {
-        RegisterResponse data = authService.registerStudent(request);
-        return apiResponseFactory.created("Registration successful.", data, httpRequest);
+        RegisterConfigResponse data = new RegisterConfigResponse(
+            registrationProperties.isDomainRestrictionEnabled(),
+            registrationProperties.hasStudentDomain()
+                ? registrationProperties.getStudentEmailDomain() : null,
+            registrationProperties.hasSupervisorDomain()
+                ? registrationProperties.getSupervisorEmailDomain() : null,
+            registrationProperties.isEffectiveStudentEmailPrefixRestrictionEnabled(),
+            registrationProperties.isEffectiveStudentEmailPrefixRestrictionEnabled()
+                ? registrationProperties.getStudentEmailPrefixRegex() : null
+        );
+        return apiResponseFactory.ok("Registration configuration", data, httpRequest);
     }
 
-    /**
-     * Registers a new supervisor account.
-     *
-     * <pre>
-     * POST /api/auth/register/supervisor
-     * </pre>
-     *
-     * <p>Request body is validated via Bean Validation. Any constraint violation
-     * produces a {@code 400 VALIDATION_ERROR} response with field-level details
-     * before the service layer is reached.
-     *
-     * @param request the registration payload; must pass all validation constraints
-     * @return {@code 201 Created} with an {@link ApiResponse} wrapping a
-     *         {@link RegisterResponse} on success
-     */
-    @PostMapping("/register/supervisor")
-    public ResponseEntity<ApiResponse<RegisterResponse>> registerSupervisor(
-        @Valid @RequestBody SupervisorRegisterRequest request,
+    @PostMapping("/register/init")
+    @Operation(summary = "Start registration (send OTP)")
+    public ResponseEntity<ApiResponse<Map<String, String>>> registerInit(
+        @Valid @RequestBody RegisterInitRequest request,
         HttpServletRequest httpRequest
     ) {
-        RegisterResponse data = authService.registerSupervisor(request);
-        return apiResponseFactory.created("Registration successful.", data, httpRequest);
+        registrationService.initRegistration(request.getEmail());
+        return apiResponseFactory.ok(
+            "Registration initiated",
+            Map.of("message", "OTP sent successfully"),
+            httpRequest
+        );
+    }
+
+    @PostMapping("/register/verify")
+    @Operation(summary = "Verify registration OTP")
+    public ResponseEntity<ApiResponse<RegisterVerifyResponse>> registerVerify(
+        @Valid @RequestBody RegisterVerifyRequest request,
+        HttpServletRequest httpRequest
+    ) {
+        RegisterVerifyResponse data = registrationService.verifyOtp(request.getEmail(), request.getOtp());
+        return apiResponseFactory.ok("OTP verified", data, httpRequest);
+    }
+
+    @PostMapping("/register/complete")
+    @Operation(summary = "Complete registration")
+    public ResponseEntity<ApiResponse<LoginUserResponse>> registerComplete(
+        @Valid @RequestBody RegisterCompleteRequest request,
+        HttpServletRequest httpRequest,
+        HttpServletResponse httpResponse
+    ) {
+        LoginResponse data = registrationService.completeRegistration(request);
+        httpResponse.addHeader(HttpHeaders.SET_COOKIE,
+            cookieService.buildAccessTokenCookie(data.getAccessToken()).toString());
+        httpResponse.addHeader(HttpHeaders.SET_COOKIE,
+            cookieService.buildRefreshTokenCookie(data.getRefreshToken()).toString());
+        return apiResponseFactory.created(
+            "Authentication successful",
+            new LoginUserResponse(data.getUser()),
+            httpRequest
+        );
     }
 
     /**
@@ -131,6 +167,7 @@ public class AuthController {
      *         via {@code HttpOnly; Secure; SameSite=Strict} {@code Set-Cookie} headers
      */
     @PostMapping("/login")
+    @Operation(summary = "Login (issue access + refresh cookies)")
     public ResponseEntity<ApiResponse<LoginUserResponse>> login(
         @Valid @RequestBody LoginRequest request,
         HttpServletRequest httpRequest,
@@ -165,6 +202,7 @@ public class AuthController {
      *         or has already been revoked
      */
     @PostMapping("/refresh")
+    @Operation(summary = "Refresh access token (rotate refresh token)")
     public ResponseEntity<ApiResponse<LoginUserResponse>> refresh(
         HttpServletRequest httpRequest,
         HttpServletResponse httpResponse
@@ -218,6 +256,7 @@ public class AuthController {
      * @return {@code 204 No Content}
      */
     @PostMapping("/logout")
+    @Operation(summary = "Logout (revoke refresh token, clear cookies)")
     public ResponseEntity<Void> logout(
         HttpServletRequest httpRequest,
         HttpServletResponse httpResponse
@@ -233,6 +272,48 @@ public class AuthController {
             cookieService.buildClearRefreshTokenCookie().toString());
 
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/forgot-password")
+    @Operation(summary = "Request a password reset email")
+    public ResponseEntity<ApiResponse<Map<String, String>>> forgotPassword(
+        @Valid @RequestBody ForgotPasswordRequest request,
+        HttpServletRequest httpRequest
+    ) {
+        passwordResetService.requestPasswordReset(request.getEmail());
+        return apiResponseFactory.ok(
+            "If the email is registered, a reset link has been sent.",
+            Map.of("message", "If the email is registered, a reset link has been sent."),
+            httpRequest
+        );
+    }
+
+    @GetMapping("/reset-password/validate")
+    @Operation(summary = "Validate password reset token")
+    public ResponseEntity<ApiResponse<ValidateResetTokenResponse>> validateResetToken(
+        @RequestParam("token") String token,
+        HttpServletRequest httpRequest
+    ) {
+        boolean isValid = passwordResetService.isResetTokenValid(token);
+        return apiResponseFactory.ok(
+            "Reset token validation completed.",
+            new ValidateResetTokenResponse(isValid),
+            httpRequest
+        );
+    }
+
+    @PostMapping("/reset-password")
+    @Operation(summary = "Reset password using token")
+    public ResponseEntity<ApiResponse<Map<String, String>>> resetPassword(
+        @Valid @RequestBody ResetPasswordRequest request,
+        HttpServletRequest httpRequest
+    ) {
+        passwordResetService.resetPassword(request.getToken(), request.getNewPassword());
+        return apiResponseFactory.ok(
+            "Password reset successful.",
+            Map.of("message", "Password reset successful."),
+            httpRequest
+        );
     }
 
     /**

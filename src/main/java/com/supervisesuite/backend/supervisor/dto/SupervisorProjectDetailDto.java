@@ -1,5 +1,7 @@
 package com.supervisesuite.backend.supervisor.dto;
 
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileDto;
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPreviewDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
 import java.time.Instant;
@@ -16,7 +18,6 @@ public class SupervisorProjectDetailDto {
     private String semester;
     private LocalDate milestoneDate;
     private Integer progressPercent;
-    private String healthNote;
     private ProjectGitHubPreviewDto github;
     private ProjectGitHubRepositoriesDto githubRepositories;
     private JiraIntegration jira;
@@ -24,6 +25,8 @@ public class SupervisorProjectDetailDto {
     private Leader leader;
     private List<Member> members;
     private List<Milestone> milestones;
+    private MilestoneInsights milestoneInsights;
+    private Files files;
 
     public SupervisorProjectDetailDto() {
     }
@@ -37,7 +40,6 @@ public class SupervisorProjectDetailDto {
             String semester,
             LocalDate milestoneDate,
             Integer progressPercent,
-            String healthNote,
             ProjectGitHubPreviewDto github,
             ProjectGitHubRepositoriesDto githubRepositories,
             JiraIntegration jira,
@@ -53,7 +55,6 @@ public class SupervisorProjectDetailDto {
         this.semester = semester;
         this.milestoneDate = milestoneDate;
         this.progressPercent = progressPercent;
-        this.healthNote = healthNote;
         this.github = github;
         this.githubRepositories = githubRepositories;
         this.jira = jira;
@@ -127,14 +128,6 @@ public class SupervisorProjectDetailDto {
         this.progressPercent = progressPercent;
     }
 
-    public String getHealthNote() {
-        return healthNote;
-    }
-
-    public void setHealthNote(String healthNote) {
-        this.healthNote = healthNote;
-    }
-
     public Instant getLastActivityAt() {
         return lastActivityAt;
     }
@@ -189,6 +182,51 @@ public class SupervisorProjectDetailDto {
 
     public void setMilestones(List<Milestone> milestones) {
         this.milestones = milestones;
+    }
+
+    public Files getFiles() {
+        return files;
+    }
+
+    public void setFiles(Files files) {
+        this.files = files;
+    }
+
+    public MilestoneInsights getMilestoneInsights() {
+        return milestoneInsights;
+    }
+
+    public void setMilestoneInsights(MilestoneInsights milestoneInsights) {
+        this.milestoneInsights = milestoneInsights;
+    }
+
+    public static class Files {
+        private List<ProjectFileDto> items;
+        private ProjectFileListDto.Config config;
+
+        public Files() {
+        }
+
+        public Files(List<ProjectFileDto> items, ProjectFileListDto.Config config) {
+            this.items = items;
+            this.config = config;
+        }
+
+        public List<ProjectFileDto> getItems() {
+            return items;
+        }
+
+        public void setItems(List<ProjectFileDto> items) {
+            this.items = items;
+        }
+
+        public ProjectFileListDto.Config getConfig() {
+            return config;
+        }
+
+        public void setConfig(ProjectFileListDto.Config config) {
+            this.config = config;
+        }
     }
 
     public static class Member {
@@ -337,6 +375,9 @@ public class SupervisorProjectDetailDto {
         private LocalDate dueDate;
         private String status;
         private Integer sequenceNo;
+        private Boolean isOverdue;
+        private Integer daysOverdue;
+        private Boolean isChronologyViolation;
 
         public Milestone() {
         }
@@ -403,6 +444,72 @@ public class SupervisorProjectDetailDto {
         public void setSequenceNo(Integer sequenceNo) {
             this.sequenceNo = sequenceNo;
         }
+
+        public Boolean getIsOverdue() {
+            return isOverdue;
+        }
+
+        public void setIsOverdue(Boolean isOverdue) {
+            this.isOverdue = isOverdue;
+        }
+
+        public Integer getDaysOverdue() {
+            return daysOverdue;
+        }
+
+        public void setDaysOverdue(Integer daysOverdue) {
+            this.daysOverdue = daysOverdue;
+        }
+
+        public Boolean getIsChronologyViolation() {
+            return isChronologyViolation;
+        }
+
+        public void setIsChronologyViolation(Boolean isChronologyViolation) {
+            this.isChronologyViolation = isChronologyViolation;
+        }
+    }
+
+    public static class MilestoneInsights {
+        private Integer overdueOpenMilestones;
+        private Integer dueSoonCount;
+        private String timelineRiskLevel;
+
+        public MilestoneInsights() {
+        }
+
+        public MilestoneInsights(
+                Integer overdueOpenMilestones,
+                Integer dueSoonCount,
+                String timelineRiskLevel) {
+            this.overdueOpenMilestones = overdueOpenMilestones;
+            this.dueSoonCount = dueSoonCount;
+            this.timelineRiskLevel = timelineRiskLevel;
+        }
+
+        public Integer getOverdueOpenMilestones() {
+            return overdueOpenMilestones;
+        }
+
+        public void setOverdueOpenMilestones(Integer overdueOpenMilestones) {
+            this.overdueOpenMilestones = overdueOpenMilestones;
+        }
+
+        public Integer getDueSoonCount() {
+            return dueSoonCount;
+        }
+
+        public void setDueSoonCount(Integer dueSoonCount) {
+            this.dueSoonCount = dueSoonCount;
+        }
+
+        public String getTimelineRiskLevel() {
+            return timelineRiskLevel;
+        }
+
+        public void setTimelineRiskLevel(String timelineRiskLevel) {
+            this.timelineRiskLevel = timelineRiskLevel;
+        }
     }
 
     public static class JiraIntegration {
@@ -410,15 +517,26 @@ public class SupervisorProjectDetailDto {
         private String workspaceName;
         private String workspaceUrl;
         private Instant lastSyncedAt;
+        private Instant tokenExpiresAt;
+        private String syncStatus;
 
         public JiraIntegration() {
         }
 
-        public JiraIntegration(boolean connected, String workspaceName, String workspaceUrl, Instant lastSyncedAt) {
+        public JiraIntegration(
+            boolean connected,
+            String workspaceName,
+            String workspaceUrl,
+            Instant lastSyncedAt,
+            Instant tokenExpiresAt,
+            String syncStatus
+        ) {
             this.connected = connected;
             this.workspaceName = workspaceName;
             this.workspaceUrl = workspaceUrl;
             this.lastSyncedAt = lastSyncedAt;
+            this.tokenExpiresAt = tokenExpiresAt;
+            this.syncStatus = syncStatus;
         }
 
         public boolean isConnected() {
@@ -451,6 +569,22 @@ public class SupervisorProjectDetailDto {
 
         public void setLastSyncedAt(Instant lastSyncedAt) {
             this.lastSyncedAt = lastSyncedAt;
+        }
+
+        public Instant getTokenExpiresAt() {
+            return tokenExpiresAt;
+        }
+
+        public void setTokenExpiresAt(Instant tokenExpiresAt) {
+            this.tokenExpiresAt = tokenExpiresAt;
+        }
+
+        public String getSyncStatus() {
+            return syncStatus;
+        }
+
+        public void setSyncStatus(String syncStatus) {
+            this.syncStatus = syncStatus;
         }
     }
 }

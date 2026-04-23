@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SuperviseSuite</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f3f4f6;" th:fragment="layout(content, emailTitle, ctaText, ctaUrl, ctaVariant)">
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse; background-color:#f3f4f6; margin:0; padding:0;">
+    <tr>
+        <td align="center" style="padding:24px 12px;">
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" style="border-collapse:collapse; width:100%; max-width:600px; background-color:#ffffff; border:1px solid #e5e7eb;">
+                <tr>
+                    <td align="center" style="padding:28px 24px; background-color:#0f172a;">
+                        <p style="margin:0; font-family:Arial, Helvetica, sans-serif; color:#ffffff; font-size:22px; line-height:28px; font-weight:700; letter-spacing:0.4px;">
+                            SuperviseSuite
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:32px 28px 12px 28px;">
+                        <h1 th:text="${emailTitle ?: 'Notification from SuperviseSuite'}" style="margin:0; font-family:Arial, Helvetica, sans-serif; color:#111827; font-size:24px; line-height:30px; font-weight:700;">
+                            Notification from SuperviseSuite
+                        </h1>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:8px 28px 0 28px; font-family:Arial, Helvetica, sans-serif; color:#374151; font-size:16px; line-height:24px;">
+                        <div th:replace="${content}"></div>
+                    </td>
+                </tr>
+                <tr th:if="${ctaText != null and ctaUrl != null}">
+                    <td align="center" style="padding:28px 28px 8px 28px;">
+                        <a th:href="${ctaUrl}" th:text="${ctaText}" target="_blank"
+                           th:style="${ctaVariant == 'danger'}
+                           ? 'display:inline-block; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:20px; font-weight:700; color:#ffffff; text-decoration:none; background-color:#dc2626; border:1px solid #dc2626; border-radius:6px; padding:12px 20px;'
+                           : 'display:inline-block; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:20px; font-weight:700; color:#ffffff; text-decoration:none; background-color:#2563eb; border:1px solid #2563eb; border-radius:6px; padding:12px 20px;'">
+                            View Details
+                        </a>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:20px 28px 8px 28px;">
+                        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                            <tr>
+                                <td style="border-top:1px solid #e5e7eb; font-size:0; line-height:0;">&nbsp;</td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:0 28px 24px 28px; font-family:Arial, Helvetica, sans-serif; color:#6b7280; font-size:14px; line-height:22px;">
+                        <p style="margin:0 0 10px 0;">
+                            If you have questions, reply to this email or visit the
+                            <a th:href="${frontendBaseUrl ?: '#'}" target="_blank" style="color:#2563eb; text-decoration:none;">Help Center</a>.
+                        </p>
+                        <p style="margin:0; color:#9ca3af;">
+                            &copy; <span th:text="${currentYear}">2026</span> SuperviseSuite. All rights reserved.
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

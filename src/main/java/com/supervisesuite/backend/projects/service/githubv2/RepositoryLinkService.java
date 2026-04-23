@@ -22,8 +22,10 @@ import com.supervisesuite.backend.projects.repository.ProjectGitHubInstallationA
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkCommitRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkContributorRepository;
 import com.supervisesuite.backend.projects.repository.ProjectRepositoryLinkRepository;
+import jakarta.persistence.EntityManager;
 import java.nio.charset.StandardCharsets;
 import java.net.URI;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,12 +34,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 public class RepositoryLinkService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RepositoryLinkService.class);
 
     private final GitHubIntegrationGuardService guardService;
     private final AccessSourceService accessSourceService;
@@ -51,6 +61,8 @@ public class RepositoryLinkService {
     private final GitHubSyncService gitHubSyncService;
     private final GitHubClient gitHubClient;
     private final GitHubProperties gitHubProperties;
+    private final EntityManager entityManager;
+    private final Executor userSyncExecutor;
 
     public RepositoryLinkService(
         GitHubIntegrationGuardService guardService,
@@ -64,7 +76,9 @@ public class RepositoryLinkService {
         ProjectRepositoryLinkContributorRepository projectRepositoryLinkContributorRepository,
         GitHubSyncService gitHubSyncService,
         GitHubClient gitHubClient,
-        GitHubProperties gitHubProperties
+        GitHubProperties gitHubProperties,
+        EntityManager entityManager,
+        @Qualifier("userSyncExecutor") Executor userSyncExecutor
     ) {
         this.guardService = guardService;
         this.accessSourceService = accessSourceService;
@@ -78,6 +92,8 @@ public class RepositoryLinkService {
         this.gitHubSyncService = gitHubSyncService;
         this.gitHubClient = gitHubClient;
         this.gitHubProperties = gitHubProperties;
+        this.entityManager = entityManager;
+        this.userSyncExecutor = userSyncExecutor;
     }
 
     @Transactional
@@ -194,13 +210,8 @@ public class RepositoryLinkService {
             }
 
             if (enableThisLink) {
-                try {
-                    gitHubSyncService.refreshRepository(link.getId());
-                } catch (RuntimeException ignored) {
-                    // Sync status is persisted in GitHubSyncService.
-                }
+                scheduleRepositoryRefresh(link.getId());
             }
-
         }
         if (selectedPrimaryLinkId != null) {
             setPrimary(projectId, selectedPrimaryLinkId);
@@ -223,14 +234,29 @@ public class RepositoryLinkService {
             .orElseThrow(() -> new ValidationException("repositoryId", "Linked repository not found."));
 
         guardService.requireOwnedProject(link.getProjectId(), userId);
+        ensureNotSyncingForDeletion(link);
+        enforceFailFastLocking();
+        lockLinkNowait(link.getProjectId(), link.getId(), "unlink");
 
         UUID projectId = link.getProjectId();
         UUID sourceId = gitHubRepositoryEntityRepository.findById(link.getGithubRepositoryId())
             .map(GitHubRepositoryEntity::getAccessSourceId)
             .orElse(null);
-        projectRepositoryLinkRepository.delete(link);
-        cleanupAccessSourceIfOrphaned(projectId, sourceId);
-        ensureSinglePrimaryRepository(projectId);
+        try {
+            projectRepositoryLinkRepository.delete(link);
+            cleanupAccessSourceIfOrphaned(projectId, sourceId);
+            ensureSinglePrimaryRepository(projectId);
+        } catch (RuntimeException exception) {
+            if (isLockContention(exception)) {
+                LOGGER.warn(
+                    "Blocked GitHub unlink projectId={} linkId={} reason=LOCK_BUSY source=MANUAL",
+                    projectId,
+                    link.getId()
+                );
+                throw new ConflictException("Cannot unlink while repository sync is in progress. Try again after sync completes.");
+            }
+            throw exception;
+        }
 
         return getProjectRepositories(projectId.toString(), authenticatedUserIdRaw);
     }
@@ -269,11 +295,7 @@ public class RepositoryLinkService {
             setPrimary(link.getProjectId(), link.getId());
         }
 
-        try {
-            gitHubSyncService.refreshRepository(link.getId());
-        } catch (RuntimeException ignored) {
-            // Sync status is persisted in GitHubSyncService.
-        }
+        scheduleRepositoryRefresh(link.getId());
 
         return getProjectRepositories(link.getProjectId().toString(), authenticatedUserIdRaw);
     }
@@ -323,14 +345,44 @@ public class RepositoryLinkService {
         guardService.requireOwnedProject(source.getProjectId(), userId);
 
         UUID projectId = source.getProjectId();
-        
+
         // Delete all repository links associated with this access source for this project
         List<UUID> repositoryIds = gitHubRepositoryEntityRepository.findByAccessSourceIdOrderByFullNameAsc(source.getId())
             .stream()
             .map(GitHubRepositoryEntity::getId)
             .toList();
         if (!repositoryIds.isEmpty()) {
-            projectRepositoryLinkRepository.deleteByProjectIdAndGithubRepositoryIdIn(projectId, repositoryIds);
+            List<ProjectRepositoryLink> linksForSource = projectRepositoryLinkRepository.findByProjectIdOrderByCreatedAtAsc(projectId)
+                .stream()
+                .filter(link -> repositoryIds.contains(link.getGithubRepositoryId()))
+                .toList();
+            boolean hasSyncInProgress = linksForSource.stream().anyMatch(this::isSyncInProgress);
+            if (hasSyncInProgress) {
+                LOGGER.warn(
+                    "Blocked GitHub source disconnect projectId={} sourceId={} reason=SYNC_IN_PROGRESS source=MANUAL",
+                    projectId,
+                    sourceId
+                );
+                throw new ConflictException("Cannot unlink while repository sync is in progress. Try again after sync completes.");
+            }
+            enforceFailFastLocking();
+            for (ProjectRepositoryLink link : linksForSource) {
+                lockLinkNowait(projectId, link.getId(), "disconnect_source");
+            }
+
+            try {
+                projectRepositoryLinkRepository.deleteByProjectIdAndGithubRepositoryIdIn(projectId, repositoryIds);
+            } catch (RuntimeException exception) {
+                if (isLockContention(exception)) {
+                    LOGGER.warn(
+                        "Blocked GitHub source disconnect projectId={} sourceId={} reason=LOCK_BUSY source=MANUAL",
+                        projectId,
+                        sourceId
+                    );
+                    throw new ConflictException("Cannot unlink while repository sync is in progress. Try again after sync completes.");
+                }
+                throw exception;
+            }
         }
         
         accessSourceRepository.delete(source);
@@ -370,8 +422,41 @@ public class RepositoryLinkService {
             throw new ConflictException("Disabled repositories cannot be refreshed.");
         }
 
-        gitHubSyncService.refreshRepository(linkedRepositoryId);
+        Instant now = Instant.now();
+        link.setSyncStatus(GitHubIntegrationV2Constants.SYNC_STATUS_PENDING);
+        link.setSyncError(null);
+        link.setLastSyncAttemptedAt(now);
+        link.setUpdatedAt(now);
+        projectRepositoryLinkRepository.save(link);
+        scheduleRepositoryRefresh(linkedRepositoryId);
         return getProjectRepositories(link.getProjectId().toString(), authenticatedUserIdRaw);
+    }
+
+    private void scheduleRepositoryRefresh(UUID linkId) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    submitRefreshTask(linkId);
+                }
+            });
+            return;
+        }
+        submitRefreshTask(linkId);
+    }
+
+    private void submitRefreshTask(UUID linkId) {
+        userSyncExecutor.execute(() -> {
+            try {
+                gitHubSyncService.refreshRepository(linkId);
+            } catch (RuntimeException exception) {
+                LOGGER.warn(
+                    "Asynchronous GitHub repository refresh failed for linkId={}: {}",
+                    linkId,
+                    exception.getMessage() == null ? "sync failed" : exception.getMessage()
+                );
+            }
+        });
     }
 
     @Transactional
@@ -898,10 +983,62 @@ public class RepositoryLinkService {
     @Transactional
     public void disconnectRepository(UUID linkId) {
         projectRepositoryLinkRepository.findById(linkId).ifPresent(link -> {
+            ensureNotSyncingForDeletion(link);
             projectRepositoryLinkCommitRepository.deleteByProjectRepositoryLinkId(link.getId());
             projectRepositoryLinkContributorRepository.deleteByProjectRepositoryLinkId(link.getId());
             projectRepositoryLinkRepository.delete(link);
         });
+    }
+
+    private void ensureNotSyncingForDeletion(ProjectRepositoryLink link) {
+        if (isSyncInProgress(link)) {
+            LOGGER.warn(
+                "Blocked GitHub unlink projectId={} linkId={} reason=SYNC_IN_PROGRESS source=MANUAL",
+                link.getProjectId(),
+                link.getId()
+            );
+            throw new ConflictException("Cannot unlink while repository sync is in progress. Try again after sync completes.");
+        }
+    }
+
+    private boolean isSyncInProgress(ProjectRepositoryLink link) {
+        return GitHubIntegrationV2Constants.SYNC_STATUS_IN_PROGRESS.equals(link.getSyncStatus());
+    }
+
+    private void lockLinkNowait(UUID projectId, UUID linkId, String operation) {
+        try {
+            projectRepositoryLinkRepository.lockByIdNowait(linkId);
+        } catch (RuntimeException exception) {
+            if (isLockContention(exception)) {
+                LOGGER.warn(
+                    "Blocked GitHub {} projectId={} linkId={} reason=LOCK_BUSY source=MANUAL",
+                    operation,
+                    projectId,
+                    linkId
+                );
+                throw new ConflictException("Cannot unlink while repository sync is in progress. Try again after sync completes.");
+            }
+            throw exception;
+        }
+    }
+
+    private void enforceFailFastLocking() {
+        entityManager.createNativeQuery("set local lock_timeout = '1ms'").executeUpdate();
+    }
+
+    private boolean isLockContention(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof SQLException sqlException && "55P03".equals(sqlException.getSQLState())) {
+                return true;
+            }
+            if (current instanceof DataAccessException dataAccessException && dataAccessException.getCause() != null) {
+                current = dataAccessException.getCause();
+                continue;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     public ProjectGitHubAccessMetadata resolveLink(UUID projectId) {

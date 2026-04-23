@@ -24,6 +24,11 @@ import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkServic
 import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
 import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressService;
 import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
+import com.supervisesuite.backend.projectfiles.service.ProjectFileAccessRole;
+import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
+import com.supervisesuite.backend.meetings.service.MeetingChannelService;
+import com.supervisesuite.backend.meetings.service.MeetingRecordService;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.users.entity.User;
@@ -69,6 +74,14 @@ class StudentServiceImplTest {
     private JiraSprintProgressService jiraSprintProgressService;
     @Mock
     private JiraWorkloadService jiraWorkloadService;
+    @Mock
+    private ProjectFileService projectFileService;
+
+    @Mock
+    private MeetingChannelService meetingChannelService;
+
+    @Mock
+    private MeetingRecordService meetingRecordService;
 
     private StudentServiceImpl studentService;
 
@@ -88,7 +101,10 @@ class StudentServiceImplTest {
             projectJiraIssueRepository,
             jiraHealthService,
             jiraSprintProgressService,
-            jiraWorkloadService
+            jiraWorkloadService,
+            projectFileService,
+            meetingChannelService,
+            meetingRecordService
         );
 
         studentId = UUID.randomUUID();
@@ -220,6 +236,8 @@ class StudentServiceImplTest {
         when(projectService.getGitHubPreview(projectId, null)).thenReturn(preview);
         when(projectJiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
             .thenReturn(Optional.of(jiraIntegration));
+        when(projectFileService.listFiles(studentId.toString(), projectId.toString(), ProjectFileAccessRole.STUDENT))
+            .thenReturn(new ProjectFileListDto(List.of(), new ProjectFileListDto.Config(10_485_760L, 100, List.of("pdf"), 300)));
 
         StudentProjectDetailDto result = studentService.getProjectById(studentId.toString(), projectId.toString());
 

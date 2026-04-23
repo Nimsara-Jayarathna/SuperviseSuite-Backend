@@ -1,5 +1,7 @@
 package com.supervisesuite.backend.supervisor.controller;
 
+import com.supervisesuite.backend.auth.dto.ChangePasswordRequest;
+import com.supervisesuite.backend.auth.service.AuthService;
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
@@ -19,6 +21,12 @@ import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteResultDto;
 import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
 import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingRecordRequest;
+import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
+import com.supervisesuite.backend.meetings.dto.MeetingRecordDto;
+import com.supervisesuite.backend.meetings.dto.UpdateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.UpdateMeetingRecordRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
@@ -33,6 +41,9 @@ import com.supervisesuite.backend.supervisor.dto.UpdateSupervisorProjectStatusRe
 import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedSummaryDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto;
 import com.supervisesuite.backend.supervisor.service.SupervisorService;
+import com.supervisesuite.backend.config.OpenApiConfig;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -42,6 +53,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -53,14 +65,32 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/supervisor")
 @PreAuthorize("hasRole('SUPERVISOR')")
+@Tag(name = "Supervisor", description = "Supervisor-facing endpoints.")
+@SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
 public class SupervisorController {
 
     private final SupervisorService supervisorService;
+    private final AuthService authService;
     private final ApiResponseFactory apiResponseFactory;
 
-    public SupervisorController(SupervisorService supervisorService, ApiResponseFactory apiResponseFactory) {
+    public SupervisorController(
+        SupervisorService supervisorService,
+        AuthService authService,
+        ApiResponseFactory apiResponseFactory
+    ) {
         this.supervisorService = supervisorService;
+        this.authService = authService;
         this.apiResponseFactory = apiResponseFactory;
+    }
+
+    @PatchMapping("/me/password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+        Authentication authentication,
+        HttpServletRequest request,
+        @Valid @RequestBody ChangePasswordRequest body
+    ) {
+        authService.changePassword(authentication.getName(), body);
+        return apiResponseFactory.ok("Password updated successfully.", null, request);
     }
 
     @GetMapping("/dashboard")
@@ -358,6 +388,148 @@ public class SupervisorController {
     ) {
         JiraHealthDto data = supervisorService.refreshProjectJiraData(authentication.getName(), projectId);
         return apiResponseFactory.ok("Jira data refreshed successfully.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/meeting-channels")
+    public ResponseEntity<ApiResponse<List<MeetingChannelDto>>> getProjectMeetingChannels(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        List<MeetingChannelDto> data = supervisorService.getProjectMeetingChannels(
+            authentication.getName(),
+            projectId
+        );
+        return apiResponseFactory.ok("Meeting channels loaded.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/meeting-channels")
+    public ResponseEntity<ApiResponse<MeetingChannelDto>> addProjectMeetingChannel(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @Valid @RequestBody CreateMeetingChannelRequest body
+    ) {
+        MeetingChannelDto data = supervisorService.addProjectMeetingChannel(
+            authentication.getName(),
+            projectId,
+            body
+        );
+        return apiResponseFactory.created("Meeting channel added successfully.", data, request);
+    }
+
+    @PatchMapping("/projects/{projectId}/meeting-channels/{channelId}")
+    public ResponseEntity<ApiResponse<MeetingChannelDto>> updateProjectMeetingChannel(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @PathVariable String channelId,
+        @Valid @RequestBody UpdateMeetingChannelRequest body
+    ) {
+        MeetingChannelDto data = supervisorService.updateProjectMeetingChannel(
+            authentication.getName(),
+            projectId,
+            channelId,
+            body
+        );
+        return apiResponseFactory.ok("Meeting channel updated successfully.", data, request);
+    }
+
+    @DeleteMapping("/projects/{projectId}/meeting-channels/{channelId}")
+    public ResponseEntity<ApiResponse<Void>> deleteProjectMeetingChannel(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @PathVariable String channelId
+    ) {
+        supervisorService.deleteProjectMeetingChannel(authentication.getName(), projectId, channelId);
+        return apiResponseFactory.ok("Meeting channel deleted successfully.", null, request);
+    }
+
+    @PostMapping("/projects/{projectId}/meeting-channels/{channelId}/approve")
+    public ResponseEntity<ApiResponse<MeetingChannelDto>> approveProjectMeetingChannel(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @PathVariable String channelId
+    ) {
+        MeetingChannelDto data = supervisorService.approveProjectMeetingChannel(
+            authentication.getName(),
+            projectId,
+            channelId
+        );
+        return apiResponseFactory.ok("Meeting channel approved successfully.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/meeting-records")
+    public ResponseEntity<ApiResponse<List<MeetingRecordDto>>> getProjectMeetingRecords(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId
+    ) {
+        List<MeetingRecordDto> data = supervisorService.getProjectMeetingRecords(
+            authentication.getName(),
+            projectId
+        );
+        return apiResponseFactory.ok("Meeting records loaded.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/meeting-records")
+    public ResponseEntity<ApiResponse<MeetingRecordDto>> addProjectMeetingRecord(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @Valid @RequestBody CreateMeetingRecordRequest body
+    ) {
+        MeetingRecordDto data = supervisorService.addProjectMeetingRecord(
+            authentication.getName(),
+            projectId,
+            body
+        );
+        return apiResponseFactory.created("Meeting record added successfully.", data, request);
+    }
+
+    @PatchMapping("/projects/{projectId}/meeting-records/{recordId}")
+    public ResponseEntity<ApiResponse<MeetingRecordDto>> updateProjectMeetingRecord(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @PathVariable String recordId,
+        @Valid @RequestBody UpdateMeetingRecordRequest body
+    ) {
+        MeetingRecordDto data = supervisorService.updateProjectMeetingRecord(
+            authentication.getName(),
+            projectId,
+            recordId,
+            body
+        );
+        return apiResponseFactory.ok("Meeting record updated successfully.", data, request);
+    }
+
+    @DeleteMapping("/projects/{projectId}/meeting-records/{recordId}")
+    public ResponseEntity<ApiResponse<Void>> deleteProjectMeetingRecord(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @PathVariable String recordId
+    ) {
+        supervisorService.deleteProjectMeetingRecord(authentication.getName(), projectId, recordId);
+        return apiResponseFactory.ok("Meeting record deleted successfully.", null, request);
+    }
+
+    @PostMapping("/projects/{projectId}/meeting-records/{recordId}/approve")
+    public ResponseEntity<ApiResponse<MeetingRecordDto>> approveProjectMeetingRecord(
+        Authentication authentication,
+        HttpServletRequest request,
+        @PathVariable String projectId,
+        @PathVariable String recordId
+    ) {
+        MeetingRecordDto data = supervisorService.approveProjectMeetingRecord(
+            authentication.getName(),
+            projectId,
+            recordId
+        );
+        return apiResponseFactory.ok("Meeting record approved successfully.", data, request);
     }
 
     @PostMapping("/projects")

@@ -28,12 +28,12 @@ class StrongPasswordValidatorTest {
 
     @Test
     void isValid_strongPassword_returnsTrue() {
-        assertThat(validator.isValid("Secure@123", context)).isTrue();
+        assertThat(validator.isValid("my dog loves eating pizza", context)).isTrue();
     }
 
     @Test
     void isValid_weakPassword_returnsFalseAndBuildsCombinedViolation() {
-        when(context.buildConstraintViolationWithTemplate(org.mockito.ArgumentMatchers.contains("Password must contain")))
+        when(context.buildConstraintViolationWithTemplate(org.mockito.ArgumentMatchers.contains("at least 12 characters")))
             .thenReturn(violationBuilder);
 
         boolean valid = validator.isValid("abc", context);

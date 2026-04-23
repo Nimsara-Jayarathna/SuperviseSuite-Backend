@@ -38,6 +38,21 @@ All endpoints in this document:
 - `GET /api/supervisor/projects/{projectId}/jira/workload`
 - `GET /api/supervisor/projects/{projectId}/jira/hierarchy`
 - `POST /api/supervisor/projects/{projectId}/jira/refresh`
+- `GET /api/supervisor/projects/{projectId}/meeting-channels`
+- `POST /api/supervisor/projects/{projectId}/meeting-channels`
+- `PATCH /api/supervisor/projects/{projectId}/meeting-channels/{channelId}`
+- `DELETE /api/supervisor/projects/{projectId}/meeting-channels/{channelId}`
+- `POST /api/supervisor/projects/{projectId}/meeting-channels/{channelId}/approve`
+- `GET /api/supervisor/projects/{projectId}/meeting-records`
+- `POST /api/supervisor/projects/{projectId}/meeting-records`
+- `PATCH /api/supervisor/projects/{projectId}/meeting-records/{recordId}`
+- `DELETE /api/supervisor/projects/{projectId}/meeting-records/{recordId}`
+- `POST /api/supervisor/projects/{projectId}/meeting-records/{recordId}/approve`
+- `GET /api/supervisor/projects/{projectId}/files`
+- `POST /api/supervisor/projects/{projectId}/files/upload-url`
+- `POST /api/supervisor/projects/{projectId}/files/confirm`
+- `GET /api/supervisor/projects/{projectId}/files/{fileId}/download-url`
+- `DELETE /api/supervisor/projects/{projectId}/files/{fileId}`
 - `POST /api/supervisor/projects/{projectId}/members`
 - `POST /api/supervisor/projects/{projectId}/milestones`
 - `PATCH /api/supervisor/projects/{projectId}/milestones/{milestoneId}`
@@ -66,7 +81,7 @@ Returns dashboard aggregates and lightweight project records for `/supervisor/da
 
 - Includes only supervisor-owned, non-deleted projects.
 - `projects[]` item fields:
-  - `id`, `title`, `summary`, `lifecycleStatus`, `milestoneDate`, `lastActivityAt`, `progressPercent`, `healthNote`, `jiraHealthIndicator`
+  - `id`, `title`, `summary`, `lifecycleStatus`, `milestoneDate`, `lastActivityAt`, `progressPercent`, `jiraHealthIndicator`
 
 ---
 
@@ -84,7 +99,6 @@ Returns supervisor-owned project list records for `/supervisor/projects`.
 - `semester`
 - `milestoneDate`
 - `progressPercent`
-- `healthNote`
 - `memberCount`
 
 ### Notes
@@ -101,7 +115,7 @@ Returns one supervisor-owned project detail record.
 ### Response fields
 
 - core fields:
-  - `id`, `title`, `summary`, `lifecycleStatus`, `batch`, `semester`, `milestoneDate`, `progressPercent`, `healthNote`, `repositoryUrl`, `lastActivityAt`
+  - `id`, `title`, `summary`, `lifecycleStatus`, `batch`, `semester`, `milestoneDate`, `progressPercent`, `repositoryUrl`, `lastActivityAt`
 - GitHub preview block:
   - `github.repositoryLinked`
   - `github.authorizedInstallationId`
@@ -121,6 +135,12 @@ Returns one supervisor-owned project detail record.
   - `id`, `firstName`, `lastName`, `email`, `registrationNumber`, `memberRole`
 - `milestones[]`:
   - `id`, `title`, `description`, `dueDate`, `status`, `sequenceNo`
+  - `isOverdue`, `daysOverdue`, `isChronologyViolation`
+- `milestoneInsights`:
+  - `overdueOpenMilestones`, `dueSoonCount`, `timelineRiskLevel` (`LOW|MEDIUM|HIGH`)
+- `files`:
+  - `items[]` (`id`, `fileName`, `fileType`, `fileSize`, `uploadedBy`, `uploadedByName`, `uploadedByRole`, `createdAt`, `updatedAt`)
+  - `config` (`maxFileSizeBytes`, `maxFileNameLength`, `allowedTypes[]`, `presignedUrlExpirySeconds`)
 
 ### 404 cases
 
@@ -174,11 +194,13 @@ Creates project + memberships + initial milestones in one transaction.
 
 - `lifecycleStatus = PLANNING`
 - `progressPercent = 0`
-- `healthNote = null`
 - each initial milestone:
   - `status = PLANNED`
   - `sequenceNo` starts at `1` and increments in request order
 - project `milestoneDate = earliest dueDate among milestones[]`
+- milestone policy:
+  - `PLANNED` and `IN_PROGRESS` due dates must be today or future
+  - due dates must be non-decreasing in milestone sequence order
 
 ### Response highlights
 
@@ -199,7 +221,6 @@ Updates core project fields used by overview edit.
 - `batch` (required)
 - `semester` (required)
 - `lifecycleStatus` (required, one of `PLANNING|ACTIVE|AT_RISK|BEHIND|COMPLETED`)
-- `healthNote` (optional nullable string)
 - `leaderStudentId` (optional nullable UUID)
   - when present, must refer to an already assigned project student member
 
@@ -629,6 +650,223 @@ Scope note:
 
 ---
 
+## GET /api/supervisor/projects/{projectId}/meeting-channels
+
+Returns all meeting channels for a supervisor-owned project.
+
+### Response fields
+
+Each item:
+
+- `id`
+- `projectId`
+- `platform` (`GOOGLE_MEET|ZOOM|TEAMS|WHATSAPP|OTHER`)
+- `channelName`
+- `linkOrIdentifier`
+- `addedBy`
+- `addedByName`
+- `addedByRole` (`SUPERVISOR|STUDENT`)
+- `status` (`PENDING|APPROVED`)
+- `approvedBy` (nullable)
+- `approvedByName` (nullable)
+- `approvedAt` (nullable)
+- `createdAt`
+- `updatedAt` (nullable)
+
+### Notes
+
+- Project must be owned by authenticated supervisor.
+- Results are returned pending-first to prioritize approval flow.
+
+---
+
+## POST /api/supervisor/projects/{projectId}/meeting-channels
+
+Creates a new meeting channel as supervisor.
+
+### Request fields
+
+- `platform` (required): `GOOGLE_MEET|ZOOM|TEAMS|WHATSAPP|OTHER`
+- `channelName` (required, max `120`)
+- `linkOrIdentifier` (required, max `1024`)
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Created channel is auto-approved:
+  - `addedByRole = SUPERVISOR`
+  - `status = APPROVED`
+  - `approvedBy = supervisor`
+  - `approvedAt = now`
+- Returns created `MeetingChannelDto`.
+
+---
+
+## PATCH /api/supervisor/projects/{projectId}/meeting-channels/{channelId}
+
+Updates an existing meeting channel.
+
+### Request fields
+
+- `platform` (required): `GOOGLE_MEET|ZOOM|TEAMS|WHATSAPP|OTHER`
+- `channelName` (required, max `120`)
+- `linkOrIdentifier` (required, max `1024`)
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Channel must exist under the same project.
+- Updates platform/name/link fields only.
+- Returns updated `MeetingChannelDto`.
+
+---
+
+## DELETE /api/supervisor/projects/{projectId}/meeting-channels/{channelId}
+
+Deletes a meeting channel from a supervisor-owned project.
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Channel must exist under the same project.
+- Permanently removes channel row (no soft-delete for meeting channels).
+- Returns success envelope with `data: null`.
+
+---
+
+## POST /api/supervisor/projects/{projectId}/meeting-channels/{channelId}/approve
+
+Approves a pending meeting channel submission.
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Channel must exist under the same project.
+- Only `PENDING` channels can be approved.
+- On success:
+  - `status = APPROVED`
+  - `approvedBy = supervisor`
+  - `approvedAt = now`
+- Returns updated `MeetingChannelDto`.
+
+### Validation error
+
+- `status`: `Only pending meeting channels can be approved.`
+
+---
+
+## GET /api/supervisor/projects/{projectId}/meeting-records
+
+Returns all meeting records for a supervisor-owned project.
+
+### Response fields
+
+Each item:
+
+- `id`
+- `projectId`
+- `meetingDate` (ISO date, `YYYY-MM-DD`)
+- `durationMinutes` (positive integer)
+- `discussionSummary` (max `1024`)
+- `discussionDetails` (nullable, max `5000`)
+- `channelId` (nullable, UUID of `project_meeting_channels`)
+- `addedBy`
+- `addedByName`
+- `addedByRole` (`SUPERVISOR|STUDENT`)
+- `status` (`PENDING|APPROVED`)
+- `approvedBy` (nullable)
+- `approvedByName` (nullable)
+- `approvedAt` (nullable)
+- `createdAt`
+- `updatedAt` (nullable)
+
+### Notes
+
+- Project must be owned by authenticated supervisor.
+- Results are returned pending-first to prioritize approval flow.
+- Within the same status rank, records are ordered by `meetingDate DESC`, then `createdAt DESC`.
+
+---
+
+## POST /api/supervisor/projects/{projectId}/meeting-records
+
+Creates a new meeting record as supervisor.
+
+### Request fields
+
+- `meetingDate` (required): ISO date `YYYY-MM-DD`
+- `durationMinutes` (required): must be `> 0`
+- `discussionSummary` (required, max `1024`)
+- `discussionDetails` (optional, max `5000`)
+- `channelId` (optional, UUID): must belong to the same project if provided
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Created record is auto-approved:
+  - `addedByRole = SUPERVISOR`
+  - `status = APPROVED`
+  - `approvedBy = supervisor`
+  - `approvedAt = now`
+- Returns created `MeetingRecordDto`.
+
+---
+
+## PATCH /api/supervisor/projects/{projectId}/meeting-records/{recordId}
+
+Updates an existing meeting record.
+
+### Request fields
+
+- `meetingDate` (required): ISO date `YYYY-MM-DD`
+- `durationMinutes` (required): must be `> 0`
+- `discussionSummary` (required, max `1024`)
+- `discussionDetails` (optional, max `5000`)
+- `channelId` (optional, UUID): must belong to the same project if provided
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Record must exist under the same project.
+- Updates meeting date/duration/summary/details/channel only (approval status is not auto-changed).
+- Returns updated `MeetingRecordDto`.
+
+---
+
+## DELETE /api/supervisor/projects/{projectId}/meeting-records/{recordId}
+
+Deletes a meeting record from a supervisor-owned project.
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Record must exist under the same project.
+- Permanently removes record row (no soft-delete for meeting records).
+- Returns success envelope with `data: null`.
+
+---
+
+## POST /api/supervisor/projects/{projectId}/meeting-records/{recordId}/approve
+
+Approves a pending meeting record submission.
+
+### Behavior
+
+- Project must be owned by authenticated supervisor.
+- Record must exist under the same project.
+- Only `PENDING` records can be approved.
+- On success:
+  - `status = APPROVED`
+  - `approvedBy = supervisor`
+  - `approvedAt = now`
+- Returns updated `MeetingRecordDto`.
+
+### Validation error
+
+- `status`: `Only pending meeting records can be approved.`
+
+---
+
 ## POST /api/supervisor/projects/{projectId}/members
 
 Adds one or more students to an existing project (add-only in current scope).
@@ -665,7 +903,9 @@ Adds a new project milestone.
 
 - `status` defaults to `PLANNED`.
 - `sequenceNo` is auto-assigned as `(max existing sequenceNo + 1)`; starts at `1`.
-- Updates project `milestoneDate` to the added milestone’s due date.
+- Rejects past due dates for open milestones (`PLANNED`, `IN_PROGRESS`).
+- Enforces chronology: new due date must be on/after the previous sequence milestone.
+- Recomputes project `milestoneDate` from all milestones (earliest due date).
 - Recalculates and persists project `progressPercent` using milestone statuses.
 - Updates `updatedAt` and `lastActivityAt`.
 - Returns refreshed project detail payload.
@@ -686,9 +926,109 @@ Updates one milestone.
 ### Behavior
 
 - Updates milestone `updatedAt`.
+- Applies conditional due-date policy:
+  - open milestones (`PLANNED`, `IN_PROGRESS`) cannot use past due dates
+  - terminal milestones (`COMPLETED`, `MISSED`, `CANCELLED`) may keep past due dates
+- Enforces chronology against neighboring sequence milestones when due date changes.
+- Applies moderate status transition guard:
+  - completed milestones cannot move to another status
+  - terminal milestones cannot move back to open states
 - Recalculates and persists project `progressPercent` using milestone statuses.
+- Recomputes project `milestoneDate` from all milestones (earliest due date).
 - Updates project `updatedAt` and `lastActivityAt`.
 - Returns refreshed project detail payload.
+
+---
+
+## GET /api/supervisor/projects/{projectId}/files
+
+Returns non-deleted project files + upload constraints for supervisor role.
+
+### Response fields
+
+- `files[]`:
+  - `id`, `fileName`, `fileType`, `fileSize`
+  - `uploadedBy`, `uploadedByName`, `uploadedByRole`
+  - `createdAt`, `updatedAt`
+- `config`:
+  - `maxFileSizeBytes`
+  - `maxFileNameLength`
+  - `allowedTypes[]`
+  - `presignedUrlExpirySeconds`
+
+### Notes
+
+- Excludes soft-deleted rows (`deleted_at IS NULL` only).
+- Only project owner supervisor can access.
+
+---
+
+## POST /api/supervisor/projects/{projectId}/files/upload-url
+
+Generates a pre-signed S3 upload URL.
+
+### Request fields
+
+- `fileName` (required)
+- `contentType` (required MIME)
+
+### Behavior
+
+- Validates file extension and MIME against configured `allowedTypes`.
+- Validates `fileName` length against configured `maxFileNameLength`.
+- Returns:
+  - `presignedUrl`
+  - `s3Key` (UUID-only opaque key)
+
+---
+
+## POST /api/supervisor/projects/{projectId}/files/confirm
+
+Persists uploaded file metadata after successful S3 PUT.
+
+### Request fields
+
+- `s3Key` (required, UUID format)
+- `fileName` (required)
+- `fileType` (required, MIME or extension)
+- `fileSize` (required, positive)
+
+### Validation rules
+
+- `fileName` length must be `<= maxFileNameLength`.
+- `fileType` must resolve to a configured allowed extension.
+- `fileName` extension and `fileType` must match.
+- `fileSize` must be `> 0` and `<= maxFileSizeBytes`.
+
+### Response
+
+- Returns normalized `ProjectFileDto` where `fileType` is stored as extension.
+
+---
+
+## GET /api/supervisor/projects/{projectId}/files/{fileId}/download-url
+
+Returns a pre-signed S3 download URL for one file.
+
+### Notes
+
+- Soft-deleted files return `404 NOT_FOUND`.
+
+---
+
+## DELETE /api/supervisor/projects/{projectId}/files/{fileId}
+
+Soft-deletes a file and deletes the object in storage.
+
+### Behavior
+
+- Sets `deletedAt` in `project_files`.
+- Calls storage delete (`StorageService.delete`) for the same `s3Key`.
+- Returns success envelope with `data: null`.
+
+### Notes
+
+- Students do not have a delete endpoint.
 
 ---
 
@@ -699,4 +1039,7 @@ Common supervisor mutation failures:
 - malformed UUID path parameters -> `404 NOT_FOUND`
 - project not owned by authenticated supervisor -> `404 NOT_FOUND`
 - invalid enum values (`lifecycleStatus`, milestone `status`) -> `400 VALIDATION_ERROR`
+- invalid milestone due-date rules (`dueDate`) -> `400 VALIDATION_ERROR`
+- invalid milestone chronology (`sequenceNo` relation) -> `400 VALIDATION_ERROR`
+- blocked milestone status regressions (`status`) -> `400 VALIDATION_ERROR`
 - duplicate/invalid student assignment payloads -> `400 VALIDATION_ERROR`

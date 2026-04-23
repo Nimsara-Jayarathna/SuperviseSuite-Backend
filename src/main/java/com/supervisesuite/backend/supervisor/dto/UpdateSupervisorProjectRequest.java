@@ -19,7 +19,6 @@ public class UpdateSupervisorProjectRequest {
     @NotBlank(message = "Lifecycle status is required.")
     private String lifecycleStatus;
 
-    private String healthNote;
     private UUID leaderStudentId;
 
     public String getTitle() {
@@ -60,14 +59,6 @@ public class UpdateSupervisorProjectRequest {
 
     public void setLifecycleStatus(String lifecycleStatus) {
         this.lifecycleStatus = lifecycleStatus;
-    }
-
-    public String getHealthNote() {
-        return healthNote;
-    }
-
-    public void setHealthNote(String healthNote) {
-        this.healthNote = healthNote;
     }
 
     public UUID getLeaderStudentId() {

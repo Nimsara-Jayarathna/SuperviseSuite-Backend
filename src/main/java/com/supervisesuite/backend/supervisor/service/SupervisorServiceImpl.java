@@ -2,6 +2,7 @@ package com.supervisesuite.backend.supervisor.service;
 
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.ApiErrorDetail;
+import com.supervisesuite.backend.common.error.ConflictException;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
@@ -99,6 +100,19 @@ import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
 import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
 import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressService;
 import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
+import com.supervisesuite.backend.projects.service.milestones.MilestonePolicyEngine;
+import com.supervisesuite.backend.projects.service.milestones.ProjectMilestoneAggregateService;
+import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
+import com.supervisesuite.backend.projectfiles.service.ProjectFileAccessRole;
+import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingRecordRequest;
+import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
+import com.supervisesuite.backend.meetings.dto.MeetingRecordDto;
+import com.supervisesuite.backend.meetings.dto.UpdateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.UpdateMeetingRecordRequest;
+import com.supervisesuite.backend.meetings.service.MeetingChannelService;
+import com.supervisesuite.backend.meetings.service.MeetingRecordService;
 
 @Service
 class SupervisorServiceImpl implements SupervisorService {
@@ -109,20 +123,14 @@ class SupervisorServiceImpl implements SupervisorService {
 
     private static final String DEFAULT_LIFECYCLE_STATUS = "PLANNING";
     private static final String DEFAULT_MILESTONE_STATUS = "PLANNED";
-    private static final String CANCELLED_MILESTONE_STATUS = "CANCELLED";
-    private static final String COMPLETED_MILESTONE_STATUS = "COMPLETED";
+    private static final String DEFAULT_JIRA_SCOPE = "read:jira-user read:jira-work offline_access";
+    private static final String REQUIRED_JIRA_SCOPE = "offline_access";
     private static final Set<String> ALLOWED_LIFECYCLE_STATUSES = Set.of(
             "PLANNING",
             "ACTIVE",
             "AT_RISK",
             "BEHIND",
             "COMPLETED");
-    private static final Set<String> ALLOWED_MILESTONE_STATUSES = Set.of(
-            "PLANNED",
-            "IN_PROGRESS",
-            "COMPLETED",
-            "MISSED",
-            "CANCELLED");
 
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;
@@ -143,7 +151,12 @@ class SupervisorServiceImpl implements SupervisorService {
     private final JiraHealthService jiraHealthService;
     private final JiraSprintProgressService jiraSprintProgressService;
     private final JiraWorkloadService jiraWorkloadService;
+    private final ProjectFileService projectFileService;
+    private final MeetingChannelService meetingChannelService;
+    private final MeetingRecordService meetingRecordService;
     private final RestClient restClient;
+    private final MilestonePolicyEngine milestonePolicyEngine;
+    private final ProjectMilestoneAggregateService projectMilestoneAggregateService;
     private final SecureRandom secureRandom = new SecureRandom();
     private final Map<String, PendingJiraWorkspaceSelection> pendingJiraWorkspaceSelections = new ConcurrentHashMap<>();
     private static final long JIRA_WORKSPACE_SELECTION_TTL_SECONDS = 600L;
@@ -168,7 +181,12 @@ class SupervisorServiceImpl implements SupervisorService {
             JiraHealthService jiraHealthService,
             JiraSprintProgressService jiraSprintProgressService,
             JiraWorkloadService jiraWorkloadService,
-            RestClient.Builder restClientBuilder) {
+            ProjectFileService projectFileService,
+            MeetingChannelService meetingChannelService,
+            MeetingRecordService meetingRecordService,
+            RestClient.Builder restClientBuilder,
+            MilestonePolicyEngine milestonePolicyEngine,
+            ProjectMilestoneAggregateService projectMilestoneAggregateService) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
@@ -188,7 +206,12 @@ class SupervisorServiceImpl implements SupervisorService {
         this.jiraHealthService = jiraHealthService;
         this.jiraSprintProgressService = jiraSprintProgressService;
         this.jiraWorkloadService = jiraWorkloadService;
+        this.projectFileService = projectFileService;
+        this.meetingChannelService = meetingChannelService;
+        this.meetingRecordService = meetingRecordService;
         this.restClient = restClientBuilder.build();
+        this.milestonePolicyEngine = milestonePolicyEngine;
+        this.projectMilestoneAggregateService = projectMilestoneAggregateService;
     }
 
     @Override
@@ -272,7 +295,10 @@ class SupervisorServiceImpl implements SupervisorService {
         }
 
         List<SupervisorDashboardDto.ProjectItem> dashboardProjects = projects.stream()
-                .map(p -> toDashboardProjectItem(p, jiraIndicators.getOrDefault(p.getId(), "NOT_CONNECTED")))
+                .map(p -> toDashboardProjectItem(
+                        p,
+                        p.getMilestoneDate(),
+                        jiraIndicators.getOrDefault(p.getId(), "NOT_CONNECTED")))
                 .toList();
 
         List<SupervisorDashboardDto.ProjectItem> recentProjects = projects.stream()
@@ -280,7 +306,10 @@ class SupervisorServiceImpl implements SupervisorService {
                         .comparing(Project::getLastActivityAt, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(Project::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(5)
-                .map(p -> toDashboardProjectItem(p, jiraIndicators.getOrDefault(p.getId(), "NOT_CONNECTED")))
+                .map(p -> toDashboardProjectItem(
+                        p,
+                        p.getMilestoneDate(),
+                        jiraIndicators.getOrDefault(p.getId(), "NOT_CONNECTED")))
                 .toList();
 
         SupervisorDashboardDto dashboard = new SupervisorDashboardDto(
@@ -319,7 +348,13 @@ class SupervisorServiceImpl implements SupervisorService {
                 .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
                 .orElseThrow(EntityNotFoundException::new);
 
-        return toProjectDetail(project);
+        SupervisorProjectDetailDto detail = toProjectDetail(project);
+        ProjectFileListDto files = projectFileService.listFiles(
+                supervisor.getId().toString(),
+                project.getId().toString(),
+                ProjectFileAccessRole.SUPERVISOR);
+        detail.setFiles(new SupervisorProjectDetailDto.Files(files.files(), files.config()));
+        return detail;
     }
 
     @Override
@@ -343,7 +378,6 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setBatch(request.getBatch().trim());
         project.setSemester(request.getSemester().trim());
         project.setStatus(lifecycleStatus);
-        project.setHealthNote(trimToNull(request.getHealthNote()));
         if (request.getLeaderStudentId() != null) {
             validateLeaderAssignment(project.getId(), request.getLeaderStudentId());
             project.setLeaderUserId(request.getLeaderStudentId());
@@ -451,25 +485,37 @@ class SupervisorServiceImpl implements SupervisorService {
                 .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
                 .orElseThrow(EntityNotFoundException::new);
 
-        Integer nextSequenceNo = projectMilestoneRepository.findTopByProjectIdOrderBySequenceNoDesc(project.getId())
-                .map(milestone -> milestone.getSequenceNo() + 1)
-                .orElse(1);
+        List<ProjectMilestone> existingMilestones = projectMilestoneRepository
+                .findByProjectIdOrderBySequenceNoAsc(project.getId());
+        Integer nextSequenceNo = existingMilestones.isEmpty()
+                ? 1
+                : existingMilestones.get(existingMilestones.size() - 1).getSequenceNo() + 1;
+
+        LocalDate dueDate = request.getDueDate();
+        LocalDate today = LocalDate.now();
+        milestonePolicyEngine.validateDueDateForStatus(dueDate, DEFAULT_MILESTONE_STATUS, today);
+        LocalDate previousDueDate = existingMilestones.isEmpty()
+                ? null
+                : existingMilestones.get(existingMilestones.size() - 1).getDueDate();
+        milestonePolicyEngine.validateChronologyWithPrevious(previousDueDate, dueDate);
 
         Instant now = Instant.now();
         ProjectMilestone milestone = new ProjectMilestone();
         milestone.setProjectId(project.getId());
         milestone.setTitle(request.getTitle().trim());
         milestone.setDescription(trimToNull(request.getDescription()));
-        milestone.setDueDate(request.getDueDate());
+        milestone.setDueDate(dueDate);
         milestone.setStatus(DEFAULT_MILESTONE_STATUS);
         milestone.setSequenceNo(nextSequenceNo);
         milestone.setCreatedBy(supervisor.getId());
         milestone.setCreatedAt(now);
         projectMilestoneRepository.save(milestone);
 
-        refreshProjectProgressPercent(project);
+        List<ProjectMilestone> milestonesForAggregates = new ArrayList<>(existingMilestones.size() + 1);
+        milestonesForAggregates.addAll(existingMilestones);
+        milestonesForAggregates.add(milestone);
+        projectMilestoneAggregateService.applyTo(project, milestonesForAggregates);
         project.setUpdatedAt(now);
-        project.setMilestoneDate(request.getDueDate());
         project.setLastActivityAt(now);
         projectRepository.save(project);
 
@@ -494,20 +540,49 @@ class SupervisorServiceImpl implements SupervisorService {
         ProjectMilestone milestone = projectMilestoneRepository.findByIdAndProjectId(parsedMilestoneId, project.getId())
                 .orElseThrow(EntityNotFoundException::new);
 
-        String milestoneStatus = request.getStatus().trim().toUpperCase();
-        if (!ALLOWED_MILESTONE_STATUSES.contains(milestoneStatus)) {
-            throw new ValidationException("status", "Milestone status is invalid.");
+        String milestoneStatus = milestonePolicyEngine.normalizeAndValidateStatus(request.getStatus());
+        LocalDate requestedDueDate = request.getDueDate();
+        String currentStatus = milestone.getStatus();
+        LocalDate currentDueDate = milestone.getDueDate();
+        boolean statusChanged = !Objects.equals(currentStatus, milestoneStatus);
+        boolean dueDateChanged = !Objects.equals(currentDueDate, requestedDueDate);
+
+        if (statusChanged) {
+            milestonePolicyEngine.validateStatusTransition(currentStatus, milestoneStatus);
+        }
+        if (statusChanged || dueDateChanged) {
+            milestonePolicyEngine.validateDueDateForStatus(requestedDueDate, milestoneStatus, LocalDate.now());
+        }
+
+        List<ProjectMilestone> milestonesForAggregates = null;
+        if (dueDateChanged) {
+            milestonesForAggregates = projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(project.getId());
+            milestonePolicyEngine.validateChronologyForUpdate(milestonesForAggregates, milestone.getId(), requestedDueDate);
         }
 
         Instant now = Instant.now();
         milestone.setTitle(request.getTitle().trim());
         milestone.setDescription(trimToNull(request.getDescription()));
-        milestone.setDueDate(request.getDueDate());
+        milestone.setDueDate(requestedDueDate);
         milestone.setStatus(milestoneStatus);
         milestone.setUpdatedAt(now);
         projectMilestoneRepository.save(milestone);
 
-        refreshProjectProgressPercent(project);
+        if (statusChanged || dueDateChanged) {
+            if (milestonesForAggregates != null) {
+                for (ProjectMilestone candidate : milestonesForAggregates) {
+                    if (Objects.equals(candidate.getId(), milestone.getId())) {
+                        candidate.setDueDate(requestedDueDate);
+                        candidate.setStatus(milestoneStatus);
+                        break;
+                    }
+                }
+            }
+            List<ProjectMilestone> orderedMilestones = milestonesForAggregates != null
+                    ? milestonesForAggregates
+                    : projectMilestoneAggregateService.loadOrderedMilestones(project.getId());
+            projectMilestoneAggregateService.applyTo(project, orderedMilestones);
+        }
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
         projectRepository.save(project);
@@ -538,6 +613,15 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         List<User> students = resolveStudents(request.getStudentIds());
         List<CreateSupervisorProjectRequest.InitialMilestone> requestedMilestones = request.getMilestones();
+        LocalDate today = LocalDate.now();
+
+        LocalDate previousDueDate = null;
+        for (CreateSupervisorProjectRequest.InitialMilestone requestedMilestone : requestedMilestones) {
+            LocalDate currentDueDate = requestedMilestone.getDueDate();
+            milestonePolicyEngine.validateDueDateForStatus(currentDueDate, DEFAULT_MILESTONE_STATUS, today);
+            milestonePolicyEngine.validateChronologyWithPrevious(previousDueDate, currentDueDate);
+            previousDueDate = currentDueDate;
+        }
 
         Instant now = Instant.now();
         LocalDate earliestMilestoneDate = requestedMilestones.stream()
@@ -553,7 +637,6 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setSemester(request.getSemester().trim());
         project.setStatus(DEFAULT_LIFECYCLE_STATUS);
         project.setProgressPercent(0);
-        project.setHealthNote(null);
         project.setLeaderUserId(resolveLeaderForCreate(request.getLeaderStudentId(), students));
         project.setMilestoneDate(earliestMilestoneDate);
         project.setLastActivityAt(now);
@@ -568,6 +651,7 @@ class SupervisorServiceImpl implements SupervisorService {
         }
 
         List<CreateSupervisorProjectResponse.Milestone> milestones = new ArrayList<>();
+        List<ProjectMilestone> createdMilestones = new ArrayList<>(requestedMilestones.size());
         int sequenceNo = 1;
         for (CreateSupervisorProjectRequest.InitialMilestone requestMilestone : requestedMilestones) {
             ProjectMilestone milestone = new ProjectMilestone();
@@ -581,10 +665,11 @@ class SupervisorServiceImpl implements SupervisorService {
             milestone.setCreatedAt(now);
 
             ProjectMilestone savedMilestone = projectMilestoneRepository.save(milestone);
+            createdMilestones.add(savedMilestone);
             milestones.add(toCreateMilestone(savedMilestone));
         }
 
-        refreshProjectProgressPercent(savedProject);
+        projectMilestoneAggregateService.applyTo(savedProject, createdMilestones);
         Project updatedProject = projectRepository.save(savedProject);
 
         return new CreateSupervisorProjectResponse(
@@ -836,27 +921,36 @@ class SupervisorServiceImpl implements SupervisorService {
                 .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
                 .orElse(null);
 
-        return new SupervisorProjectDetailDto(
+        MilestoneDetailView milestoneDetailView = buildMilestoneDetailView(project.getId());
+
+        SupervisorProjectDetailDto detailDto = new SupervisorProjectDetailDto(
                 project.getId(),
                 project.getName(),
                 project.getDescription(),
                 project.getStatus(),
                 project.getBatch(),
                 project.getSemester(),
-                project.getMilestoneDate(),
+                milestoneDetailView.milestoneDate(),
                 project.getProgressPercent(),
-                project.getHealthNote(),
                 projectService.getGitHubPreview(project.getId(), effectiveUrl),
                 githubRepositories,
                 new SupervisorProjectDetailDto.JiraIntegration(
                         jiraIntegration != null,
                         jiraIntegration != null ? jiraIntegration.getWorkspaceName() : null,
                     jiraIntegration != null ? jiraIntegration.getWorkspaceUrl() : null,
-                    jiraIntegration != null ? jiraIntegration.getConnectedAt() : null),
+                    jiraIntegration != null
+                        ? (jiraIntegration.getLastSyncedAt() != null
+                            ? jiraIntegration.getLastSyncedAt()
+                            : jiraIntegration.getConnectedAt())
+                        : null,
+                    jiraIntegration != null ? jiraIntegration.getTokenExpiresAt() : null,
+                    jiraIntegration != null ? jiraIntegration.getSyncStatus() : null),
                 project.getLastActivityAt(),
                 toDetailLeader(project.getLeaderUserId()),
                 getProjectMembers(project.getId()),
-                getProjectMilestones(project.getId()));
+                milestoneDetailView.milestones());
+        detailDto.setMilestoneInsights(milestoneDetailView.insights());
+        return detailDto;
     }
 
     private List<SupervisorProjectDetailDto.Member> getProjectMembers(UUID projectId) {
@@ -873,12 +967,24 @@ class SupervisorServiceImpl implements SupervisorService {
                 .toList();
     }
 
-    private List<SupervisorProjectDetailDto.Milestone> getProjectMilestones(UUID projectId) {
-        return projectMilestoneRepository
-                .findByProjectIdOrderBySequenceNoAsc(projectId)
-                .stream()
-                .map(this::toDetailMilestone)
+    private MilestoneDetailView buildMilestoneDetailView(UUID projectId) {
+        List<ProjectMilestone> projectMilestones = projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(projectId);
+        MilestonePolicyEngine.MilestoneInsightsSnapshot snapshot =
+                milestonePolicyEngine.computeInsights(projectMilestones, LocalDate.now());
+
+        List<SupervisorProjectDetailDto.Milestone> milestoneDtos = projectMilestones.stream()
+                .map(milestone -> toDetailMilestone(
+                        milestone,
+                        snapshot.signalsByMilestoneId().get(milestone.getId())))
                 .toList();
+        SupervisorProjectDetailDto.MilestoneInsights insights = new SupervisorProjectDetailDto.MilestoneInsights(
+                snapshot.overdueOpenMilestones(),
+                snapshot.dueSoonCount(),
+                snapshot.timelineRiskLevel());
+        return new MilestoneDetailView(
+                milestoneDtos,
+                insights,
+                milestonePolicyEngine.computeProjectMilestoneDate(projectMilestones));
     }
 
     private User resolveSupervisor(String authenticatedUserId) {
@@ -988,7 +1094,7 @@ class SupervisorServiceImpl implements SupervisorService {
         String url = authTargetUrl
             + "?audience=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getAudience()), "api.atlassian.com"))
             + "&client_id=" + urlencode(clientId)
-            + "&scope=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getScope()), "read:jira-user read:jira-work offline_access"))
+            + "&scope=" + urlencode(normalizeJiraScope(jiraProperties.getScope()))
             + "&redirect_uri=" + urlencode(redirectUri)
             + "&state=" + urlencode(state)
             + "&response_type=code&prompt=consent";
@@ -1340,6 +1446,9 @@ class SupervisorServiceImpl implements SupervisorService {
                     "Jira is not connected for this project.",
                     List.of(new ApiErrorDetail("jira", "Jira is not connected for this project.")));
         }
+        if ("IN_PROGRESS".equals(activeIntegration.getSyncStatus())) {
+            throw new ConflictException("Cannot disconnect Jira while sync is in progress.");
+        }
 
         Instant now = Instant.now();
         projectJiraIntegrationRepository.delete(activeIntegration);
@@ -1439,7 +1548,6 @@ class SupervisorServiceImpl implements SupervisorService {
     }
 
     @Override
-    @Transactional
     public JiraHealthDto refreshProjectJiraData(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
@@ -1458,76 +1566,6 @@ class SupervisorServiceImpl implements SupervisorService {
         }
 
         Instant now = Instant.now();
-        if (activeIntegration.getTokenExpiresAt() != null && now.isAfter(activeIntegration.getTokenExpiresAt().minusSeconds(60))) {
-            String refreshTokenEncrypted = activeIntegration.getRefreshTokenEncrypted();
-            if (refreshTokenEncrypted != null && !refreshTokenEncrypted.isBlank()) {
-                try {
-                    String refreshToken = jiraTokenEncryptionService.decrypt(refreshTokenEncrypted);
-                    String clientId = trimToNull(jiraProperties.getClientId());
-                    String clientSecret = trimToNull(jiraProperties.getClientSecret());
-                    String tokenTargetUrl = defaultIfBlank(
-                            trimToNull(jiraProperties.getTokenTargetUrl()),
-                            "https://auth.atlassian.com/oauth/token");
-
-                    if (clientId != null && clientSecret != null) {
-                        Map<String, Object> tokenRequest = new LinkedHashMap<>();
-                        tokenRequest.put("grant_type", "refresh_token");
-                        tokenRequest.put("client_id", clientId);
-                        tokenRequest.put("client_secret", clientSecret);
-                        tokenRequest.put("refresh_token", refreshToken);
-
-                        Map<?, ?> tokenResponse = restClient.post()
-                                .uri(tokenTargetUrl)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .accept(MediaType.APPLICATION_JSON)
-                                .body(tokenRequest)
-                                .retrieve()
-                                .body(Map.class);
-
-                        String newAccessToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("access_token")));
-                        String newRefreshToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("refresh_token")));
-                        Number expiresInSecs = tokenResponse == null || tokenResponse.get("expires_in") == null ? null : (Number) tokenResponse.get("expires_in");
-                        
-                        if (newAccessToken != null && !"null".equalsIgnoreCase(newAccessToken)) {
-                            activeIntegration.setAccessTokenEncrypted(jiraTokenEncryptionService.encrypt(newAccessToken));
-                            if (newRefreshToken != null && !"null".equalsIgnoreCase(newRefreshToken)) {
-                                activeIntegration.setRefreshTokenEncrypted(jiraTokenEncryptionService.encrypt(newRefreshToken));
-                            }
-                            if (expiresInSecs != null) {
-                                activeIntegration.setTokenExpiresAt(Instant.now().plusSeconds(expiresInSecs.longValue()));
-                            }
-                            projectJiraIntegrationRepository.saveAndFlush(activeIntegration);
-                        }
-                    }
-                } catch (RestClientResponseException ex) {
-                    // Atlassian explicitly rejected the refresh token (e.g. invalid_grant,
-                    // revoked token, expired refresh token). This is a permanent auth failure —
-                    // the only resolution is reconnecting Jira.
-                    log.warn("Jira token refresh rejected by Atlassian for project {}. "
-                                    + "Status: {}, Body: {}",
-                            project.getId(),
-                            ex.getStatusCode(),
-                            ex.getResponseBodyAsString());
-                    throw new ServiceUnavailableException(
-                            "Jira access token has expired and Atlassian rejected the refresh "
-                            + "request. Please reconnect Jira from the Integrations tab.");
-                } catch (ResourceAccessException ex) {
-                    // Transient network error reaching Atlassian token endpoint.
-                    // Fall through and attempt the sync with the existing token —
-                    // Atlassian may still honour it if it hasn't fully expired on their side.
-                    log.warn("Jira token refresh network error for project {} — "
-                                    + "proceeding with existing token. Error: {}",
-                            project.getId(), ex.getMessage());
-                } catch (Exception ex) {
-                    // Unexpected failure (e.g. decryption error, null pointer).
-                    log.warn("Jira token refresh unexpected error for project {}. Error: {}",
-                            project.getId(), ex.getMessage());
-                    throw new ServiceUnavailableException(
-                            "Jira access token has expired and could not be refreshed. "
-                            + "Please reconnect Jira from the Integrations tab.");
-                }
-            }
-        }
 
         jiraIssueSyncService.syncProjectIssues(project.getId());
 
@@ -1536,6 +1574,92 @@ class SupervisorServiceImpl implements SupervisorService {
         projectRepository.save(project);
 
         return jiraHealthService.getHealthOverview(project.getId());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MeetingChannelDto> getProjectMeetingChannels(String authenticatedUserId, String projectId) {
+        return meetingChannelService.listForSupervisor(authenticatedUserId, projectId);
+    }
+
+    @Override
+    @Transactional
+    public MeetingChannelDto addProjectMeetingChannel(
+        String authenticatedUserId,
+        String projectId,
+        CreateMeetingChannelRequest request
+    ) {
+        return meetingChannelService.createAsSupervisor(authenticatedUserId, projectId, request);
+    }
+
+    @Override
+    @Transactional
+    public MeetingChannelDto updateProjectMeetingChannel(
+        String authenticatedUserId,
+        String projectId,
+        String channelId,
+        UpdateMeetingChannelRequest request
+    ) {
+        return meetingChannelService.updateAsSupervisor(authenticatedUserId, projectId, channelId, request);
+    }
+
+    @Override
+    @Transactional
+    public void deleteProjectMeetingChannel(String authenticatedUserId, String projectId, String channelId) {
+        meetingChannelService.deleteAsSupervisor(authenticatedUserId, projectId, channelId);
+    }
+
+    @Override
+    @Transactional
+    public MeetingChannelDto approveProjectMeetingChannel(
+        String authenticatedUserId,
+        String projectId,
+        String channelId
+    ) {
+        return meetingChannelService.approveAsSupervisor(authenticatedUserId, projectId, channelId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MeetingRecordDto> getProjectMeetingRecords(String authenticatedUserId, String projectId) {
+        return meetingRecordService.listForSupervisor(authenticatedUserId, projectId);
+    }
+
+    @Override
+    @Transactional
+    public MeetingRecordDto addProjectMeetingRecord(
+        String authenticatedUserId,
+        String projectId,
+        CreateMeetingRecordRequest request
+    ) {
+        return meetingRecordService.createAsSupervisor(authenticatedUserId, projectId, request);
+    }
+
+    @Override
+    @Transactional
+    public MeetingRecordDto updateProjectMeetingRecord(
+        String authenticatedUserId,
+        String projectId,
+        String recordId,
+        UpdateMeetingRecordRequest request
+    ) {
+        return meetingRecordService.updateAsSupervisor(authenticatedUserId, projectId, recordId, request);
+    }
+
+    @Override
+    @Transactional
+    public void deleteProjectMeetingRecord(String authenticatedUserId, String projectId, String recordId) {
+        meetingRecordService.deleteAsSupervisor(authenticatedUserId, projectId, recordId);
+    }
+
+    @Override
+    @Transactional
+    public MeetingRecordDto approveProjectMeetingRecord(
+        String authenticatedUserId,
+        String projectId,
+        String recordId
+    ) {
+        return meetingRecordService.approveAsSupervisor(authenticatedUserId, projectId, recordId);
     }
 
     private ProjectMember buildProjectMember(
@@ -1598,20 +1722,21 @@ class SupervisorServiceImpl implements SupervisorService {
                 project.getSemester(),
                 project.getMilestoneDate(),
                 project.getProgressPercent(),
-                project.getHealthNote(),
                 projectMemberRepository.countByProjectId(project.getId()));
     }
 
-    private SupervisorDashboardDto.ProjectItem toDashboardProjectItem(Project project, String jiraHealthIndicator) {
+    private SupervisorDashboardDto.ProjectItem toDashboardProjectItem(
+            Project project,
+            LocalDate effectiveMilestoneDate,
+            String jiraHealthIndicator) {
         SupervisorDashboardDto.ProjectItem item = new SupervisorDashboardDto.ProjectItem(
                 project.getId(),
                 project.getName(),
                 project.getDescription(),
                 project.getStatus(),
-                project.getMilestoneDate(),
+                effectiveMilestoneDate,
                 project.getLastActivityAt(),
-                project.getProgressPercent(),
-                project.getHealthNote());
+                project.getProgressPercent());
         item.setJiraHealthIndicator(jiraHealthIndicator);
         return item;
     }
@@ -1648,14 +1773,20 @@ class SupervisorServiceImpl implements SupervisorService {
                 user.getRegistrationNumber());
     }
 
-    private SupervisorProjectDetailDto.Milestone toDetailMilestone(ProjectMilestone milestone) {
-        return new SupervisorProjectDetailDto.Milestone(
+    private SupervisorProjectDetailDto.Milestone toDetailMilestone(
+            ProjectMilestone milestone,
+            MilestonePolicyEngine.MilestoneSignal signal) {
+        SupervisorProjectDetailDto.Milestone milestoneDto = new SupervisorProjectDetailDto.Milestone(
                 milestone.getId(),
                 milestone.getTitle(),
                 milestone.getDescription(),
                 milestone.getDueDate(),
                 milestone.getStatus(),
                 milestone.getSequenceNo());
+        milestoneDto.setIsOverdue(signal != null && signal.isOverdue());
+        milestoneDto.setDaysOverdue(signal == null ? 0 : signal.daysOverdue());
+        milestoneDto.setIsChronologyViolation(signal != null && signal.isChronologyViolation());
+        return milestoneDto;
     }
 
     private UUID parseProjectId(String projectId) {
@@ -1698,6 +1829,19 @@ class SupervisorServiceImpl implements SupervisorService {
         return trimmed == null ? fallback : trimmed;
     }
 
+    private String normalizeJiraScope(String configuredScope) {
+        String scope = defaultIfBlank(trimToNull(configuredScope), DEFAULT_JIRA_SCOPE);
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        for (String token : scope.split("\\s+")) {
+            String trimmed = trimToNull(token);
+            if (trimmed != null) {
+                normalized.add(trimmed);
+            }
+        }
+        normalized.add(REQUIRED_JIRA_SCOPE);
+        return String.join(" ", normalized);
+    }
+
     private String urlencode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
@@ -1731,27 +1875,10 @@ class SupervisorServiceImpl implements SupervisorService {
         }
     }
 
-    private void refreshProjectProgressPercent(Project project) {
-        List<ProjectMilestone> milestones = projectMilestoneRepository
-                .findByProjectIdOrderBySequenceNoAsc(project.getId());
-        project.setProgressPercent(calculateProgressPercent(milestones));
-    }
-
-    private int calculateProgressPercent(List<ProjectMilestone> milestones) {
-        long activeMilestones = milestones.stream()
-                .filter(milestone -> !CANCELLED_MILESTONE_STATUS.equals(milestone.getStatus()))
-                .count();
-
-        if (activeMilestones == 0) {
-            return 0;
-        }
-
-        long completedMilestones = milestones.stream()
-                .filter(milestone -> !CANCELLED_MILESTONE_STATUS.equals(milestone.getStatus()))
-                .filter(milestone -> COMPLETED_MILESTONE_STATUS.equals(milestone.getStatus()))
-                .count();
-
-        return (int) Math.round((completedMilestones * 100.0) / activeMilestones);
+    private record MilestoneDetailView(
+            List<SupervisorProjectDetailDto.Milestone> milestones,
+            SupervisorProjectDetailDto.MilestoneInsights insights,
+            LocalDate milestoneDate) {
     }
 
     private String validateLifecycleStatus(String rawStatus) {

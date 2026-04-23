@@ -2,10 +2,16 @@
 
 ## Endpoints
 
-- [POST /api/auth/register](#post-apiauthregister)
+- [GET /api/auth/register/config](#get-apiauthregisterconfig)
+- [POST /api/auth/register/init](#post-apiauthregisterinit)
+- [POST /api/auth/register/verify](#post-apiauthregisterverify)
+- [POST /api/auth/register/complete](#post-apiauthregistercomplete)
 - [POST /api/auth/login](#post-apiauthlogin)
 - [POST /api/auth/refresh](#post-apiauthrefresh)
 - [POST /api/auth/logout](#post-apiauthlogout)
+- [POST /api/auth/forgot-password](#post-apiauthforgot-password)
+- [GET /api/auth/reset-password/validate](#get-apiauthreset-passwordvalidate)
+- [POST /api/auth/reset-password](#post-apiauthreset-password)
 
 ## Response Model
 
@@ -42,9 +48,139 @@ A request to a protected endpoint without a valid access token returns `401 UNAU
 
 ---
 
-## POST /api/auth/register
+## Registration Flow (Current)
 
-Registers a new student account. No authentication required.
+Registration is a three-step email-verified flow:
+
+1. `POST /api/auth/register/init` sends a one-time verification code.
+2. `POST /api/auth/register/verify` validates the OTP and returns a short-lived registration token.
+3. `POST /api/auth/register/complete` creates the account and issues auth cookies.
+
+The former single-step `POST /api/auth/register` path is no longer part of the active API contract.
+
+## GET /api/auth/register/config
+
+Returns registration restrictions consumed by the frontend before opening registration.
+
+### 200 OK
+
+```json
+{
+  "success": true,
+  "message": "Registration configuration",
+  "data": {
+    "domainRestrictionEnabled": true,
+    "studentDomain": "@my.sliit.lk",
+    "supervisorDomain": "@sliit.lk",
+    "studentEmailPrefixRestrictionEnabled": true,
+    "studentEmailPrefixRegex": "^IT(1[5-9]|[2-4][0-9]|50)\\d{6}$"
+  },
+  "error": null,
+  "meta": {
+    "timestamp": "2026-04-12T16:30:00Z",
+    "path": "/api/auth/register/config",
+    "traceId": null
+  }
+}
+```
+
+## POST /api/auth/register/init
+
+Sends an OTP to the requested email when policy checks pass.
+
+### Request
+
+```json
+{
+  "email": "it24100487@my.sliit.lk"
+}
+```
+
+### 200 OK
+
+```json
+{
+  "success": true,
+  "message": "Registration initiated",
+  "data": {
+    "message": "OTP sent successfully"
+  },
+  "error": null,
+  "meta": {
+    "timestamp": "2026-04-12T16:30:00Z",
+    "path": "/api/auth/register/init",
+    "traceId": null
+  }
+}
+```
+
+### Common errors
+
+- `400 VALIDATION_ERROR` for invalid email format/domain/prefix rules.
+- `409 CONFLICT` when account already exists for the email.
+
+## POST /api/auth/register/verify
+
+Verifies OTP and returns the registration token used by the complete step.
+
+### Request
+
+```json
+{
+  "email": "it24100487@my.sliit.lk",
+  "otp": "123456"
+}
+```
+
+### 200 OK
+
+```json
+{
+  "success": true,
+  "message": "OTP verified",
+  "data": {
+    "registrationToken": "token_xxx",
+    "requiresRoleSelection": false,
+    "role": "STUDENT"
+  },
+  "error": null,
+  "meta": {
+    "timestamp": "2026-04-12T16:30:00Z",
+    "path": "/api/auth/register/verify",
+    "traceId": null
+  }
+}
+```
+
+### Common errors
+
+- `400 VALIDATION_ERROR` for invalid/expired OTP.
+
+## POST /api/auth/register/complete
+
+Finalizes account creation with registration token + profile data.
+
+### Request
+
+```json
+{
+  "registrationToken": "token_xxx",
+  "fname": "Nimal",
+  "lname": "Perera",
+  "password": "Secure@123",
+  "name": "IT24100487",
+  "role": "STUDENT"
+}
+```
+
+### 201 Created
+
+Returns unified envelope and sets `ss_access_token` and `ss_refresh_token` cookies.
+
+### Common errors
+
+- `400 VALIDATION_ERROR` for expired/used token or payload rule failures.
+- `409 CONFLICT` for duplicate email/registration number.
 
 ### Request
 
@@ -177,7 +313,7 @@ Returned when a required field is missing, blank, fails format checks, or the pa
 
 - Assigned role is always `STUDENT`. Supervisor accounts are not self-registered.
 - Password is never returned in any response. BCrypt hash is stored server-side.
-- Email verification is out of scope — accounts are considered verified upon registration.
+- Email verification is mandatory and performed by `register/init` + `register/verify` before account completion.
 
 ---
 
@@ -417,3 +553,105 @@ This response is returned regardless of whether a valid refresh token cookie was
 
 - If the `ss_refresh_token` cookie is absent or its value is not found in the database, the call still returns `204` with cleared cookies. Clients can always trust that after this response the session is fully terminated.
 - If the access token is still valid when logout is called, it will remain technically valid until it naturally expires (15 min). The frontend discards it immediately by dropping the cookie.
+
+---
+
+## Password Reset Flow
+
+Password resets are handled in strict isolation as a guest flow via tokenized links sent via email. 
+The token uses a 32-byte secure random string stored hashed (SHA-256) inside the database.
+
+### `POST /api/auth/forgot-password`
+
+Initiates the password reset process by generating a token and emailing the user. 
+To prevent user enumeration, it always returns a generic success message so long as the request format is valid.
+
+**Request**
+```json
+{
+  "email": "student@my.sliit.lk"
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "status": "SUCCESS",
+  "message": "If the email is registered, a reset link has been sent.",
+  "data": {
+    "message": "If the email is registered, a reset link has been sent."
+  }
+}
+```
+
+### `GET /api/auth/reset-password/validate`
+
+Validates that the given token exists in the database and has not expired. Used by the frontend to show either the new-password form or an "expired token" modal before the user attempts to reset.
+
+**Request**
+```http
+GET /api/auth/reset-password/validate?token=c29tZS1yYW5kb2ItdG9rZW4=
+```
+
+**Response (200 OK)**
+```json
+{
+  "status": "SUCCESS",
+  "message": "Reset token validation completed.",
+  "data": {
+    "valid": true,
+    "email": "student@my.sliit.lk",
+    "expiresAt": "2026-04-14T10:00:00Z"
+  }
+}
+```
+
+**Response (400 Bad Request - Invalid/Expired)**
+```json
+{
+  "status": "VALIDATION_ERROR",
+  "message": "Invalid or expired reset token.",
+  "error": { "code": "VALIDATION_ERROR", "details": [] }
+}
+```
+
+### `POST /api/auth/reset-password`
+
+Processes the actual password update. The token is checked again before updating. Importantly, the service checks that the *new password is not the same as the current password*. Token is deleted upon a successful reset.
+
+**Request**
+```json
+{
+  "token": "c29tZS1yYW5kb2ItdG9rZW4=",
+  "newPassword": "SecretNewPassword123!",
+  "confirmNewPassword": "SecretNewPassword123!"
+}
+```
+
+**Response (200 OK - Success)**
+```json
+{
+  "status": "SUCCESS",
+  "message": "Password reset successful.",
+  "data": {
+    "message": "Password reset successful."
+  }
+}
+```
+
+**Response (400 Bad Request - Same Password)**
+```json
+{
+  "status": "VALIDATION_ERROR",
+  "message": "Validation failed",
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "details": [
+      {
+        "field": "newPassword",
+        "issue": "New password cannot be the same as the current password"
+      }
+    ]
+  }
+}
+```

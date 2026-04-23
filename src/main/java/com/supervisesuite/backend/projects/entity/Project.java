@@ -55,9 +55,6 @@ public class Project {
 
     private Integer progressPercent;
 
-    @Column(columnDefinition = "TEXT")
-    private String healthNote;
-
     private LocalDate milestoneDate;
 
     private Instant lastActivityAt;

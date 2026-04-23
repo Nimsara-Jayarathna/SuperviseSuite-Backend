@@ -26,6 +26,11 @@ import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
 import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressService;
 import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionService;
 import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
+import com.supervisesuite.backend.projects.service.milestones.MilestonePolicyEngine;
+import com.supervisesuite.backend.projects.service.milestones.ProjectMilestoneAggregateService;
+import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
+import com.supervisesuite.backend.meetings.service.MeetingChannelService;
+import com.supervisesuite.backend.meetings.service.MeetingRecordService;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import java.util.List;
@@ -80,6 +85,12 @@ class SupervisorJiraHierarchyServiceImplTest {
     @Mock
     private JiraWorkloadService jiraWorkloadService;
     @Mock
+    private ProjectFileService projectFileService;
+    @Mock
+    private MeetingChannelService meetingChannelService;
+    @Mock
+    private MeetingRecordService meetingRecordService;
+    @Mock
     private RestClient.Builder restClientBuilder;
     @Mock
     private RestClient restClient;
@@ -90,6 +101,9 @@ class SupervisorJiraHierarchyServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        MilestonePolicyEngine milestonePolicyEngine = new MilestonePolicyEngine();
+        ProjectMilestoneAggregateService projectMilestoneAggregateService =
+                new ProjectMilestoneAggregateService(projectMilestoneRepository, milestonePolicyEngine);
         service = new SupervisorServiceImpl(
                 userRepository,
                 projectRepository,
@@ -110,7 +124,12 @@ class SupervisorJiraHierarchyServiceImplTest {
                 jiraHealthService,
                 jiraSprintProgressService,
                 jiraWorkloadService,
-                restClientBuilder);
+                projectFileService,
+                meetingChannelService,
+                meetingRecordService,
+                restClientBuilder,
+                milestonePolicyEngine,
+                projectMilestoneAggregateService);
 
         supervisorId = UUID.randomUUID();
         projectId = UUID.randomUUID();

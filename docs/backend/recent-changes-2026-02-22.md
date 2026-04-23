@@ -152,7 +152,7 @@
 
 - Extended supervisor APIs with edit actions:
   - `PATCH /api/supervisor/projects/{projectId}`
-    - update core project fields (`title`, `summary`, `batch`, `semester`, `lifecycleStatus`, `healthNote`)
+    - update core project fields (`title`, `summary`, `batch`, `semester`, `lifecycleStatus`)
   - `PATCH /api/supervisor/projects/{projectId}/status`
     - focused lifecycle status update endpoint used by quick status controls
   - `POST /api/supervisor/projects/{projectId}/members`

@@ -1,0 +1,55 @@
+app:
+  rate-limiting:
+    enabled: false
+  project-files:
+    aws-region: ap-south-1
+    bucket-name: supervisesuite-files-test
+    aws-access-key-id: test-access-key
+    aws-secret-access-key: test-secret-key
+  test:
+    use-testcontainers: false
+  jwt:
+    # 256-bit safe dummy secret for tests
+    secret: dGhpcy1pcy1hLWxpLWxlYmVsLXNlY3JldC1mb3ItdGVzdHMtcHVycG9zZXMtb25seS1ub3QtZm9yLXByb2QtMSIK
+    access-token-expiry-seconds: 900
+    refresh-token-expiry-seconds: 604800
+  frontend:
+    base-url: http://localhost:5173
+  github:
+    api-base-url: https://api.github.com
+    token: dummy-token
+    app-id: "123456"
+    app-client-id: dummy-client-id
+    app-client-secret: dummy-client-secret
+    app-install-url: http://dummy-install-url
+    app-private-key: |
+      -----BEGIN PRIVATE KEY-----
+      dummy-key-content
+      -----END PRIVATE KEY-----
+    app-webhook-secret: dummy-webhook-secret
+    setup-state-secret: dummy-setup-secret
+  jira:
+    client-id: dummy-jira-id
+    client-secret: dummy-jira-secret
+    redirect-uri: http://dummy-redirect-uri
+    token-encryption-secret: dummy-encryption-secret
+
+server:
+  port: 0
+
+spring:
+  main:
+    allow-bean-definition-overriding: true
+  datasource:
+    url: jdbc:h2:mem:supervisesuite_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false

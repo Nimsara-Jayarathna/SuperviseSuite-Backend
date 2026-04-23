@@ -58,4 +58,30 @@ class ApiErrorControllerTest {
         assertThat(response.getBody().getError().getCode()).isEqualTo("BAD_REQUEST");
         assertThat(response.getBody().getMessage()).isEqualTo("HTTP method is not supported for this endpoint.");
     }
+
+    @Test
+    void error_tooManyRequests_mapsToTooManyRequestsCode() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/student/projects");
+        when(errorAttributes.getErrorAttributes(any(), any()))
+            .thenReturn(Map.of("status", 429, "path", "/api/student/projects"));
+
+        ResponseEntity<ApiResponse<Void>> response = controller.error(request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getError().getCode()).isEqualTo("TOO_MANY_REQUESTS");
+    }
+
+    @Test
+    void error_serviceUnavailable_mapsToServiceUnavailableCode() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/auth/register/config");
+        when(errorAttributes.getErrorAttributes(any(), any()))
+            .thenReturn(Map.of("status", 503, "path", "/api/auth/register/config"));
+
+        ResponseEntity<ApiResponse<Void>> response = controller.error(request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getError().getCode()).isEqualTo("SERVICE_UNAVAILABLE");
+    }
 }

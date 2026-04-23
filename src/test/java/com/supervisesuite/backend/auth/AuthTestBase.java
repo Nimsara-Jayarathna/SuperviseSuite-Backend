@@ -6,6 +6,7 @@ import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.ActiveProfiles;
 
 /**
  * Shared test cleanup for auth integration tests.
@@ -13,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
  * <p>Delete order is important to satisfy FK constraints:
  * project_milestones -> project_members -> projects -> refresh_tokens -> users.
  */
+@ActiveProfiles("test")
 public abstract class AuthTestBase {
 
     @Autowired

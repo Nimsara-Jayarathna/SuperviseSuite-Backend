@@ -1,5 +1,7 @@
 package com.supervisesuite.backend.student.controller;
 
+import com.supervisesuite.backend.auth.dto.ChangePasswordRequest;
+import com.supervisesuite.backend.auth.service.AuthService;
 import com.supervisesuite.backend.common.api.ApiResponse;
 import com.supervisesuite.backend.common.api.ApiResponseFactory;
 import com.supervisesuite.backend.projects.dto.JiraHealthDto;
@@ -8,16 +10,27 @@ import com.supervisesuite.backend.projects.dto.JiraSprintProgressDto;
 import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
+import com.supervisesuite.backend.meetings.dto.CreateMeetingRecordRequest;
+import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
+import com.supervisesuite.backend.meetings.dto.MeetingRecordDto;
 import com.supervisesuite.backend.student.dto.StudentProjectDetailDto;
 import com.supervisesuite.backend.student.dto.StudentProjectSummaryDto;
 import com.supervisesuite.backend.student.service.StudentService;
+import com.supervisesuite.backend.config.OpenApiConfig;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,14 +38,28 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/student")
 @PreAuthorize("hasRole('STUDENT')")
+@Tag(name = "Student", description = "Student-facing endpoints.")
+@SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
 public class StudentController {
 
     private final StudentService studentService;
+    private final AuthService authService;
     private final ApiResponseFactory apiResponseFactory;
 
-    public StudentController(StudentService studentService, ApiResponseFactory apiResponseFactory) {
+    public StudentController(StudentService studentService, AuthService authService, ApiResponseFactory apiResponseFactory) {
         this.studentService = studentService;
+        this.authService = authService;
         this.apiResponseFactory = apiResponseFactory;
+    }
+
+    @PatchMapping("/me/password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+        Authentication authentication,
+        @Valid @RequestBody ChangePasswordRequest body,
+        HttpServletRequest request
+    ) {
+        authService.changePassword(authentication.getName(), body);
+        return apiResponseFactory.ok("Password updated successfully.", null, request);
     }
 
     @GetMapping("/projects")
@@ -146,5 +173,47 @@ public class StudentController {
     ) {
         JiraHierarchyDto data = studentService.getJiraHierarchy(authentication.getName(), projectId);
         return apiResponseFactory.ok("Jira hierarchy loaded.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/meeting-channels")
+    public ResponseEntity<ApiResponse<List<MeetingChannelDto>>> getProjectMeetingChannels(
+        Authentication authentication,
+        @PathVariable String projectId,
+        HttpServletRequest request
+    ) {
+        List<MeetingChannelDto> data = studentService.getProjectMeetingChannels(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Meeting channels loaded.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/meeting-channels")
+    public ResponseEntity<ApiResponse<MeetingChannelDto>> addProjectMeetingChannel(
+        Authentication authentication,
+        @PathVariable String projectId,
+        @Valid @RequestBody CreateMeetingChannelRequest body,
+        HttpServletRequest request
+    ) {
+        MeetingChannelDto data = studentService.addProjectMeetingChannel(authentication.getName(), projectId, body);
+        return apiResponseFactory.created("Meeting channel submitted successfully.", data, request);
+    }
+
+    @GetMapping("/projects/{projectId}/meeting-records")
+    public ResponseEntity<ApiResponse<List<MeetingRecordDto>>> getProjectMeetingRecords(
+        Authentication authentication,
+        @PathVariable String projectId,
+        HttpServletRequest request
+    ) {
+        List<MeetingRecordDto> data = studentService.getProjectMeetingRecords(authentication.getName(), projectId);
+        return apiResponseFactory.ok("Meeting records loaded.", data, request);
+    }
+
+    @PostMapping("/projects/{projectId}/meeting-records")
+    public ResponseEntity<ApiResponse<MeetingRecordDto>> addProjectMeetingRecord(
+        Authentication authentication,
+        @PathVariable String projectId,
+        @Valid @RequestBody CreateMeetingRecordRequest body,
+        HttpServletRequest request
+    ) {
+        MeetingRecordDto data = studentService.addProjectMeetingRecord(authentication.getName(), projectId, body);
+        return apiResponseFactory.created("Meeting record submitted successfully.", data, request);
     }
 }

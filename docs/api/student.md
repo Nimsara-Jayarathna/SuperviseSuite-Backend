@@ -20,6 +20,14 @@ All endpoints in this document:
 - [GET /api/student/projects/{projectId}/jira/sprint-progress](#get-apistudentprojectsprojectidjirasprint-progress)
 - [GET /api/student/projects/{projectId}/jira/workload](#get-apistudentprojectsprojectidjiraworkload)
 - [GET /api/student/projects/{projectId}/jira/hierarchy](#get-apistudentprojectsprojectidjirahierarchy)
+- [GET /api/student/projects/{projectId}/meeting-channels](#get-apistudentprojectsprojectidmeeting-channels)
+- [POST /api/student/projects/{projectId}/meeting-channels](#post-apistudentprojectsprojectidmeeting-channels)
+- [GET /api/student/projects/{projectId}/meeting-records](#get-apistudentprojectsprojectidmeeting-records)
+- [POST /api/student/projects/{projectId}/meeting-records](#post-apistudentprojectsprojectidmeeting-records)
+- [GET /api/student/projects/{projectId}/files](#get-apistudentprojectsprojectidfiles)
+- [POST /api/student/projects/{projectId}/files/upload-url](#post-apistudentprojectsprojectidfilesupload-url)
+- [POST /api/student/projects/{projectId}/files/confirm](#post-apistudentprojectsprojectidfilesconfirm)
+- [GET /api/student/projects/{projectId}/files/{fileId}/download-url](#get-apistudentprojectsprojectidfilesfileiddownload-url)
 
 ---
 
@@ -95,11 +103,11 @@ The detail payload currently includes backend-backed fields only:
 - `milestoneDate`
 - `lastActivityAt`
 - `progressPercent`
-- `healthNote`
 - `github`
 - `jira`
 - `members[]`
 - `milestones[]`
+- `files` (embedded file list/config seed for Files tab)
 
 `members[]` item fields:
 
@@ -133,6 +141,24 @@ The detail payload currently includes backend-backed fields only:
 - `workspaceName`
 - `workspaceUrl`
 
+`files` fields:
+
+- `items[]`
+  - `id`
+  - `fileName`
+  - `fileType` (normalized extension, e.g. `pdf`, `docx`, `pptx`, `zip`)
+  - `fileSize`
+  - `uploadedBy`
+  - `uploadedByName`
+  - `uploadedByRole` (`SUPERVISOR` or `STUDENT`)
+  - `createdAt`
+  - `updatedAt`
+- `config`
+  - `maxFileSizeBytes`
+  - `maxFileNameLength`
+  - `allowedTypes[]`
+  - `presignedUrlExpirySeconds`
+
 ### 200 OK
 
 ```json
@@ -149,7 +175,6 @@ The detail payload currently includes backend-backed fields only:
     "milestoneDate": "2026-03-21",
     "lastActivityAt": "2026-03-05T07:35:00Z",
     "progressPercent": 0,
-    "healthNote": null,
     "members": [
       {
         "id": "48dc174f-5957-498f-a10a-e0b5c7cebc28",
@@ -315,3 +340,204 @@ Each node in `roots[]`, `orphans[]`, and every nested `children[]` array has:
 - Endpoint is read-only for students.
 - Data is served from DB-backed Jira issue cache; no live Jira API call is made.
 - If Jira is not connected or no issues are cached, `roots` and `orphans` are both empty arrays.
+
+---
+
+## GET /api/student/projects/{projectId}/meeting-channels
+
+Returns all meeting channels for a project where the authenticated student is a member.
+
+### Response fields
+
+Each item:
+
+- `id`
+- `projectId`
+- `platform` (`GOOGLE_MEET|ZOOM|TEAMS|WHATSAPP|OTHER`)
+- `channelName`
+- `linkOrIdentifier`
+- `addedBy`
+- `addedByName`
+- `addedByRole` (`SUPERVISOR|STUDENT`)
+- `status` (`PENDING|APPROVED`)
+- `approvedBy` (nullable)
+- `approvedByName` (nullable)
+- `approvedAt` (nullable)
+- `createdAt`
+- `updatedAt` (nullable)
+
+### Notes
+
+- Student must be assigned to project with `member_role = STUDENT`.
+- Results are returned pending-first to prioritize items requiring approval.
+- Data is role-safe and read-only for listing.
+
+---
+
+## POST /api/student/projects/{projectId}/meeting-channels
+
+Submits a new meeting channel for the project.
+
+### Request fields
+
+- `platform` (required): `GOOGLE_MEET|ZOOM|TEAMS|WHATSAPP|OTHER`
+- `channelName` (required, max `120`)
+- `linkOrIdentifier` (required, max `1024`)
+
+### Behavior
+
+- Student must be assigned to project with `member_role = STUDENT`.
+- Created channel is persisted with:
+  - `addedByRole = STUDENT`
+  - `status = PENDING`
+  - `approvedBy = null`
+  - `approvedAt = null`
+- Returns created `MeetingChannelDto`.
+
+### Common validation errors
+
+- `platform`: `Platform is required.` / `Unsupported meeting platform.`
+- `channelName`: required / max-length validation
+- `linkOrIdentifier`: required / max-length validation
+
+---
+
+## GET /api/student/projects/{projectId}/meeting-records
+
+Returns all meeting records for a project where the authenticated student is a member.
+
+### Response fields
+
+Each item:
+
+- `id`
+- `projectId`
+- `meetingDate` (ISO date, `YYYY-MM-DD`)
+- `durationMinutes` (positive integer)
+- `discussionSummary` (max `1024`)
+- `discussionDetails` (nullable, max `5000`)
+- `channelId` (nullable, UUID of `project_meeting_channels`)
+- `addedBy`
+- `addedByName`
+- `addedByRole` (`SUPERVISOR|STUDENT`)
+- `status` (`PENDING|APPROVED`)
+- `approvedBy` (nullable)
+- `approvedByName` (nullable)
+- `approvedAt` (nullable)
+- `createdAt`
+- `updatedAt` (nullable)
+
+### Notes
+
+- Student must be assigned to project with `member_role = STUDENT`.
+- Results are returned pending-first to prioritize items requiring approval.
+- Within the same status rank, records are ordered by `meetingDate DESC`, then `createdAt DESC`.
+
+---
+
+## POST /api/student/projects/{projectId}/meeting-records
+
+Submits a new meeting record for the project.
+
+### Request fields
+
+- `meetingDate` (required): ISO date `YYYY-MM-DD`
+- `durationMinutes` (required): must be `> 0`
+- `discussionSummary` (required, max `1024`)
+- `discussionDetails` (optional, max `5000`)
+- `channelId` (optional, UUID): must belong to the same project if provided
+
+### Behavior
+
+- Student must be assigned to project with `member_role = STUDENT`.
+- Created record is persisted with:
+  - `addedByRole = STUDENT`
+  - `status = PENDING`
+  - `approvedBy = null`
+  - `approvedAt = null`
+- Returns created `MeetingRecordDto`.
+
+### Common validation errors
+
+- `meetingDate`: `Meeting date is required.`
+- `durationMinutes`: `Duration is required.` / `Duration must be greater than 0 minutes.`
+- `discussionSummary`: required / max-length validation
+- `discussionDetails`: max-length validation
+- `channelId`: `Invalid channel selected.`
+
+---
+
+## GET /api/student/projects/{projectId}/files
+
+Returns non-deleted project files + upload constraints for student role.
+
+### Response fields
+
+- `files[]`:
+  - `id`, `fileName`, `fileType`, `fileSize`
+  - `uploadedBy`, `uploadedByName`, `uploadedByRole`
+  - `createdAt`, `updatedAt`
+- `config`:
+  - `maxFileSizeBytes`
+  - `maxFileNameLength`
+  - `allowedTypes[]`
+  - `presignedUrlExpirySeconds`
+
+### Notes
+
+- Excludes soft-deleted rows (`deleted_at IS NULL` only).
+- Students can list only projects where they are members (`member_role = STUDENT`).
+
+---
+
+## POST /api/student/projects/{projectId}/files/upload-url
+
+Generates a pre-signed S3 upload URL.
+
+### Request fields
+
+- `fileName` (required)
+- `contentType` (required MIME)
+
+### Behavior
+
+- Validates file extension and MIME against configured `allowedTypes`.
+- Validates `fileName` length against configured `maxFileNameLength`.
+- Returns:
+  - `presignedUrl`
+  - `s3Key` (UUID-only opaque key)
+
+---
+
+## POST /api/student/projects/{projectId}/files/confirm
+
+Persists uploaded file metadata after successful S3 PUT.
+
+### Request fields
+
+- `s3Key` (required, UUID format)
+- `fileName` (required)
+- `fileType` (required, MIME or extension)
+- `fileSize` (required, positive)
+
+### Validation rules
+
+- `fileName` length must be `<= maxFileNameLength`.
+- `fileType` must resolve to a configured allowed extension.
+- `fileName` extension and `fileType` must match.
+- `fileSize` must be `> 0` and `<= maxFileSizeBytes`.
+
+### Response
+
+- Returns normalized `ProjectFileDto` where `fileType` is stored as extension.
+
+---
+
+## GET /api/student/projects/{projectId}/files/{fileId}/download-url
+
+Returns a pre-signed S3 download URL for one file.
+
+### Notes
+
+- Student access is restricted to assigned projects.
+- Soft-deleted files return `404 NOT_FOUND`.

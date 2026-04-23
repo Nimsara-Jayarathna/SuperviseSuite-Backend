@@ -7,7 +7,7 @@ spring:
     throw-exception-if-no-handler-found: true
   web:
     resources:
-      add-mappings: false
+      add-mappings: ${SWAGGER_ENABLED:false}
   devtools:
     restart:
       # Keep Flyway SQL migrations on the base classloader; avoids classpath
@@ -18,6 +18,14 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_MAX_POOL_SIZE:10}
+      minimum-idle: ${DB_MIN_IDLE:5}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:30000}
+      idle-timeout: ${DB_IDLE_TIMEOUT_MS:600000}
+      max-lifetime: ${DB_MAX_LIFETIME_MS:1800000}
+      keepalive-time: ${DB_KEEPALIVE_TIME_MS:300000}
+      validation-timeout: ${DB_VALIDATION_TIMEOUT_MS:5000}
   jpa:
     open-in-view: false
     hibernate:
@@ -26,10 +34,19 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+          batch_size: 25
+          order_inserts: true
+          order_updates: true
+          batch_versioned_data: true
   flyway:
     enabled: true
     baseline-on-migrate: false
     validate-on-migrate: false
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
 server:
   port: ${APP_PORT}
 app:
@@ -43,8 +60,38 @@ app:
     # Set to false in local dev (HTTP). Must be true in production (HTTPS).
     # Browsers (except Chrome) block Secure cookies over plain HTTP even on localhost.
     secure: ${COOKIE_SECURE:true}
+  milestones:
+    backfill-on-startup: ${MILESTONES_BACKFILL_ON_STARTUP:false}
+  system:
+    cleanup:
+      fixed-delay-ms: ${SYSTEM_CLEANUP_FIXED_DELAY_MS:900000}
+    sync:
+      cron: ${SYSTEM_SYNC_CRON:0 0 0 * * *}
+      zone: ${SYSTEM_SYNC_ZONE:UTC}
+  auth:
+    password-reset:
+      token-expiry-minutes: ${PASSWORD_RESET_TOKEN_EXPIRY_MINUTES:15}
   frontend:
     base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+  registration:
+    domain-restriction-enabled: ${REGISTRATION_DOMAIN_RESTRICTION_ENABLED:true}
+    student-email-domain: ${REGISTRATION_STUDENT_EMAIL_DOMAIN:@my.sliit.lk}
+    supervisor-email-domain: ${REGISTRATION_SUPERVISOR_EMAIL_DOMAIN:@sliit.lk}
+    student-email-prefix-restriction-enabled: ${REGISTRATION_STUDENT_EMAIL_PREFIX_RESTRICTION_ENABLED:true}
+    student-email-prefix-regex: ${REGISTRATION_STUDENT_EMAIL_PREFIX_REGEX:^IT(1[5-9]|[2-4][0-9]|50)[0-9]{6}$}
+    otp-expiry-seconds: ${REGISTRATION_OTP_EXPIRY_SECONDS:600}
+    session-expiry-seconds: ${REGISTRATION_SESSION_EXPIRY_SECONDS:600}
+  rate-limiting:
+    enabled: ${RATE_LIMITING_ENABLED:true}
+    trust-forwarded-for: ${RATE_LIMITING_TRUST_FORWARDED_FOR:true}
+    auth:
+      enabled: ${RATE_LIMITING_AUTH_ENABLED:true}
+      window-seconds: ${RATE_LIMITING_AUTH_WINDOW_SECONDS:60}
+      max-requests: ${RATE_LIMITING_AUTH_MAX_REQUESTS:10}
+    authenticated:
+      enabled: ${RATE_LIMITING_AUTHENTICATED_ENABLED:true}
+      window-seconds: ${RATE_LIMITING_AUTHENTICATED_WINDOW_SECONDS:60}
+      max-requests: ${RATE_LIMITING_AUTHENTICATED_MAX_REQUESTS:240}
   github:
     api-base-url: ${GITHUB_API_BASE_URL:https://api.github.com}
     token: ${GITHUB_TOKEN:}
@@ -75,17 +122,14 @@ app:
     jobs:
       access-request-cleanup:
         enabled: ${GITHUB_ACCESS_REQUEST_CLEANUP_ENABLED:true}
-        initial-delay-ms: ${GITHUB_ACCESS_REQUEST_CLEANUP_INITIAL_DELAY_MS:120000}
-        fixed-delay-ms: ${GITHUB_ACCESS_REQUEST_CLEANUP_FIXED_DELAY_MS:900000}
       repository-refresh:
         enabled: ${GITHUB_REPOSITORY_REFRESH_JOB_ENABLED:true}
-        cron: ${GITHUB_REPOSITORY_REFRESH_CRON:0 0 0 * * *}
-        zone: ${GITHUB_REPOSITORY_REFRESH_ZONE:UTC}
         batch-size: ${GITHUB_REPOSITORY_REFRESH_BATCH_SIZE:50}
+        in-progress-timeout-seconds: ${GITHUB_REPOSITORY_SYNC_IN_PROGRESS_TIMEOUT_SECONDS:900}
   jira:
     client-id: ${ATLASSIAN_CLIENT_ID:}
     client-secret: ${ATLASSIAN_CLIENT_SECRET:}
-    scope: ${ATLASSIAN_SCOPE:read:jira-user read:jira-work}
+    scope: ${ATLASSIAN_SCOPE:read:jira-user read:jira-work offline_access}
     audience: ${ATLASSIAN_AUDIENCE:api.atlassian.com}
     auth-target-url: ${ATLASSIAN_AUTH_TARGET_URL:https://auth.atlassian.com/authorize}
     token-target-url: ${ATLASSIAN_TOKEN_TARGET_URL:https://auth.atlassian.com/oauth/token}
@@ -98,3 +142,21 @@ app:
       backlog-growing-consecutive-weeks: ${ATLASSIAN_ANALYTICS_BACKLOG_GROWING_CONSECUTIVE_WEEKS:2}
       high-priority-names: ${ATLASSIAN_ANALYTICS_HIGH_PRIORITY_NAMES:High,Highest}
       bug-type-names: ${ATLASSIAN_ANALYTICS_BUG_TYPE_NAMES:Bug}
+    jobs:
+      issue-sync:
+        enabled: ${JIRA_ISSUE_SYNC_JOB_ENABLED:true}
+        batch-size: ${JIRA_ISSUE_SYNC_BATCH_SIZE:50}
+        in-progress-timeout-seconds: ${JIRA_ISSUE_SYNC_IN_PROGRESS_TIMEOUT_SECONDS:900}
+  brevo:
+    api-key: ${BREVO_API_KEY:}
+    sender-email: ${BREVO_SENDER_EMAIL:no-reply@supervisesuite.xyz}
+    sender-name: ${BREVO_SENDER_NAME:SuperviseSuite}
+  project-files:
+    aws-region: ${PROJECT_FILES_AWS_REGION:ap-south-1}
+    bucket-name: ${PROJECT_FILES_BUCKET_NAME:supervisesuite-files-local}
+    aws-access-key-id: ${PROJECT_FILES_AWS_ACCESS_KEY_ID:}
+    aws-secret-access-key: ${PROJECT_FILES_AWS_SECRET_ACCESS_KEY:}
+    max-file-size-bytes: ${PROJECT_FILES_MAX_FILE_SIZE_BYTES:10485760}
+    max-file-name-length: ${PROJECT_FILES_MAX_FILE_NAME_LENGTH:50}
+    allowed-types: ${PROJECT_FILES_ALLOWED_TYPES:pdf,docx,pptx,zip}
+    presigned-url-expiry-seconds: ${PROJECT_FILES_PRESIGNED_URL_EXPIRY_SECONDS:300}

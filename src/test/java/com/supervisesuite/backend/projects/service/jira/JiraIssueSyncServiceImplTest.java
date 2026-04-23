@@ -1,15 +1,20 @@
 package com.supervisesuite.backend.projects.service.jira;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 
+import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.projects.dto.JiraIssueDto;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIntegration;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIssue;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
 import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
+import com.supervisesuite.backend.config.JiraProperties;
+import java.util.function.Consumer;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,6 +24,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class JiraIssueSyncServiceImplTest {
@@ -33,10 +40,16 @@ class JiraIssueSyncServiceImplTest {
     private JiraClient jiraClient;
 
     @Mock
-    private JiraTokenEncryptionService jiraTokenEncryptionService;
+    private JiraAuthManager jiraAuthManager;
 
     @Mock
     private JiraIssueMapper jiraIssueMapper;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
+    @Mock
+    private JiraProperties jiraProperties;
 
     private JiraIssueSyncServiceImpl service;
 
@@ -46,10 +59,28 @@ class JiraIssueSyncServiceImplTest {
             jiraIntegrationRepository,
             jiraIssueRepository,
             jiraClient,
-            jiraTokenEncryptionService,
+            jiraAuthManager,
             jiraIssueMapper,
-            new JiraIssueSyncProcessor()
+            new JiraIssueSyncProcessor(),
+            transactionTemplate,
+            jiraProperties
         );
+
+        JiraProperties.Jobs jobs = new JiraProperties.Jobs();
+        JiraProperties.Jobs.IssueSync issueSync = new JiraProperties.Jobs.IssueSync();
+        issueSync.setInProgressTimeoutSeconds(900);
+        jobs.setIssueSync(issueSync);
+        when(jiraProperties.getJobs()).thenReturn(jobs);
+
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        doAnswer(invocation -> {
+            Consumer<Object> callback = invocation.getArgument(0);
+            callback.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
     }
 
     @Test
@@ -67,7 +98,14 @@ class JiraIssueSyncServiceImplTest {
 
         when(jiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
             .thenReturn(Optional.of(integration));
-        when(jiraTokenEncryptionService.decrypt("encrypted-token")).thenReturn("access-token");
+        when(jiraIntegrationRepository.claimForSync(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        )).thenReturn(1);
+        when(jiraAuthManager.getOrRefreshAccessToken(integration)).thenReturn("access-token");
         when(jiraClient.fetchAllIssues("cloud-1", "access-token"))
             .thenReturn(List.of(duplicateA1, duplicateA2, uniqueB));
         when(jiraIssueRepository.findAllByProjectId(projectId)).thenReturn(List.of());
@@ -100,6 +138,35 @@ class JiraIssueSyncServiceImplTest {
         verify(jiraIssueRepository)
             .deleteAllByProjectIdAndIssueKeyNotIn(org.mockito.ArgumentMatchers.eq(projectId), staleKeysCaptor.capture());
         assertThat(staleKeysCaptor.getValue()).containsExactly("SCRUM-127", "SCRUM-128");
+    }
+
+    @Test
+    void syncProjectIssues_whenExpiredConnectionCannotRefresh_propagatesReconnectRequiredFailure() {
+        UUID projectId = UUID.randomUUID();
+
+        ProjectJiraIntegration integration = new ProjectJiraIntegration();
+        integration.setProjectId(projectId);
+        integration.setCloudId("cloud-1");
+
+        when(jiraIntegrationRepository.findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(projectId))
+            .thenReturn(Optional.of(integration));
+        when(jiraIntegrationRepository.claimForSync(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        )).thenReturn(1);
+        when(jiraAuthManager.getOrRefreshAccessToken(integration))
+            .thenThrow(new ServiceUnavailableException(
+                "Jira access token has expired and this Jira connection cannot be refreshed. "
+                    + "Please reconnect Jira from the Integrations tab."
+            ));
+
+        assertThatThrownBy(() -> service.syncProjectIssues(projectId))
+            .isInstanceOf(ServiceUnavailableException.class)
+            .hasMessageContaining("cannot be refreshed")
+            .hasMessageContaining("Please reconnect Jira");
     }
 
     private static JiraIssueDto issue(String key) {

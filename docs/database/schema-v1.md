@@ -1,6 +1,6 @@
-# Schema Reference (Current Through V22)
+# Schema Reference (Current Through V30)
 
-This document reflects the effective schema after applying migrations `V1` to `V22`.
+This document reflects the effective schema after applying migrations `V1` to `V30`.
 
 ## Core Tables
 
@@ -27,6 +27,85 @@ This document reflects the effective schema after applying migrations `V1` to `V
 ### `refresh_tokens`
 
 - Hashed refresh-token persistence for cookie-based auth sessions.
+
+### `registration_sessions`
+
+- Registration continuation token state used in OTP-verified registration flow.
+- Stores hashed token material, expiry, and usage timestamps.
+
+### `email_otps`
+
+- One-time password lifecycle table for email verification.
+- Stores hashed OTP values, expiry timestamps, and attempt counters.
+
+### `password_reset_tokens`
+
+- Password reset token state and expiry tracking.
+- Used by forgot-password / reset-password validation flows.
+
+### `project_files`
+
+- Project-scoped file metadata table for supervisor/student attachments.
+- Key columns:
+  - identity/linkage: `id`, `project_id`
+  - object pointer + metadata: `s3_key`, `file_name`, `file_type`, `file_size`
+  - uploader: `uploaded_by`, `uploaded_by_name`
+  - audit/soft-delete: `created_at`, `updated_at`, `deleted_at`
+- Soft-delete model:
+  - active rows use `deleted_at IS NULL`
+  - file listing and access operations exclude soft-deleted rows
+- Notable constraints:
+  - FK `project_id -> projects.id` with `ON DELETE CASCADE`
+  - FK `uploaded_by -> users.id`
+  - check: `file_size > 0`
+
+### `project_meeting_channels`
+
+- Project-scoped meeting channel registry used by Meetings tab channel management.
+- Key columns:
+  - identity/linkage: `id`, `project_id`
+  - channel metadata: `platform`, `channel_name`, `link_or_identifier`
+  - creator attribution: `added_by`, `added_by_name`, `added_by_role`
+  - approval lifecycle: `status`, `approved_by`, `approved_by_name`, `approved_at`
+  - audit: `created_at`, `updated_at`
+- Supported platforms: `GOOGLE_MEET`, `ZOOM`, `TEAMS`, `WHATSAPP`, `OTHER`.
+- Status model: `PENDING`, `APPROVED`.
+- Notable constraints:
+  - FK `project_id -> projects.id` with `ON DELETE CASCADE`
+  - FK `added_by -> users.id`
+  - FK `approved_by -> users.id`
+  - approval consistency check:
+    - `PENDING` requires `approved_by`/`approved_at` null
+    - `APPROVED` requires `approved_by`/`approved_at` non-null
+- Key indexes:
+  - `(project_id, status, created_at DESC)` for pending-first listing
+  - `(project_id, created_at DESC)` for default recency listing
+
+### `project_meeting_records`
+
+- Project-scoped meeting record registry used by Meetings tab records management.
+- Key columns:
+  - identity/linkage: `id`, `project_id`
+  - record metadata: `meeting_date`, `duration_minutes`
+  - discussion: `discussion_summary`, `discussion_details` (optional)
+  - optional linkage: `channel_id` (nullable)
+  - creator attribution: `added_by`, `added_by_name`, `added_by_role`
+  - approval lifecycle: `status`, `approved_by`, `approved_by_name`, `approved_at`
+  - audit: `created_at`, `updated_at`
+- Status model: `PENDING`, `APPROVED`.
+- Notable constraints:
+  - FK `project_id -> projects.id` with `ON DELETE CASCADE`
+  - FK `channel_id -> project_meeting_channels.id` with `ON DELETE SET NULL`
+  - FK `added_by -> users.id`
+  - FK `approved_by -> users.id`
+  - check: `duration_minutes > 0`
+  - role/status check constraints
+  - approval consistency check:
+    - `PENDING` requires `approved_by`/`approved_at` null
+    - `APPROVED` requires `approved_by`/`approved_at` non-null
+- Key indexes:
+  - `(project_id, status, meeting_date DESC, created_at DESC)` for pending-first listing
+  - `(project_id, meeting_date DESC, created_at DESC)` for default recency listing
 
 ## GitHub Integration (Current V2 Model)
 

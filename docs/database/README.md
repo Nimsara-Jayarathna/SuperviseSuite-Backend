@@ -4,7 +4,7 @@ This directory tracks database structure and migration history for the backend.
 
 ## Structure
 
-- `schema-v1.md`: schema reference updated through Jira token-refresh support migration (`V22`).
+- `schema-v1.md`: schema reference updated through meetings records schema migration (`V30`).
 - `migrations.md`: chronological migration log and rules for future schema changes.
 
 ## Source of Truth
@@ -36,6 +36,17 @@ This directory tracks database structure and migration history for the backend.
   - `V20__add_sprint_fields_to_jira_issues.sql`
   - `V21__add_parent_issue_type_to_jira_issues.sql`
   - `V22__add_refresh_token_to_jira_integrations.sql`
+- Project files and registration/credential lifecycle migrations:
+  - `V23__project_files.sql`
+  - `V24__registration_sessions.sql`
+  - `V25__email_otps.sql`
+  - `V26__password_reset_tokens.sql`
+  - `V27__optimistic_locking_and_sync_indexes.sql`
+  - `V28__sync_in_progress_and_attempt_tracking.sql`
+- Meetings channel migrations:
+  - `V29__project_meeting_channels.sql`
+- Meetings record migrations:
+  - `V30__project_meeting_records.sql`
 
 ## Change Workflow
 

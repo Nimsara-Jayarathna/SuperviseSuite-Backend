@@ -3,6 +3,7 @@ package com.supervisesuite.backend.projects.service.jira;
 import com.supervisesuite.backend.projects.dto.JiraWorkloadDto;
 import com.supervisesuite.backend.projects.entity.ProjectJiraIssue;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Comparator;
@@ -145,10 +146,14 @@ class JiraWorkloadCalculator {
 
         JiraWorkloadDto.MemberRow toMemberRow() {
             int openIssues = assigned - completed;
-            double completionRate = assigned == 0 ? 0.0 : (double) completed / assigned * 100.0;
+            double completionRate = assigned == 0 ? 0.0 : roundPercent((double) completed / assigned * 100.0);
             return new JiraWorkloadDto.MemberRow(accountId, displayName, assigned, completed, inProgress, overdue, openIssues,
                     storyPointsSeen ? storyPointsAssigned : null, storyPointsSeen ? storyPointsCompleted : null,
                     completionRate, lastActiveDate, Map.copyOf(issueTypeCounts));
+        }
+
+        private double roundPercent(double value) {
+            return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).doubleValue();
         }
     }
 }
