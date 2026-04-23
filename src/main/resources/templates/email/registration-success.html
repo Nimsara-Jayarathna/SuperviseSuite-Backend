@@ -1,11 +1,10 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" 
-      th:replace="~{email/base-layout :: layout(~{::body})}">
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{email/base-layout :: layout(~{::body}, 'Registration completed', null, null, null)}">
 <body>
-    <h2>Registration completed, <span th:text="${name}">User</span>!</h2>
-    <p>Your SuperviseSuite account has been created successfully.</p>
-    <p>You can now sign in and start using the platform.</p>
-
-    <p>Best regards,<br/>The SuperviseSuite Team</p>
+<p style="margin:0 0 16px 0;">Hello <strong th:text="${name}">User</strong>,</p>
+<p style="margin:0 0 16px 0;">Your SuperviseSuite account has been created successfully.</p>
+<p style="margin:0 0 16px 0;">You can now sign in and start using the platform.</p>
+<p style="margin:0;">Best regards,<br/>The SuperviseSuite Team</p>
 </body>
 </html>
