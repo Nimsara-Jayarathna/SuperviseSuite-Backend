@@ -20,6 +20,10 @@ import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
 import com.supervisesuite.backend.projects.service.githubv2.GitHubIntegrationV2Constants;
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService;
+import com.supervisesuite.backend.config.OpenApiConfig;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -41,6 +45,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 @RestController
 @RequestMapping("/api/github")
+@Tag(name = "GitHub", description = "GitHub access sources, installation callback flow, and repository linking.")
 public class GitHubAccessSourceController {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GitHubAccessSourceController.class);
@@ -69,6 +74,8 @@ public class GitHubAccessSourceController {
     }
 
     @PostMapping("/access-source/public")
+    @Operation(summary = "Create a public GitHub access source")
+    @SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
     public ResponseEntity<ApiResponse<GitHubAvailableRepositoriesDto>> createPublicAccessSource(
         Authentication authentication,
         @Valid @RequestBody CreatePublicGitHubAccessSourceRequest body,
@@ -84,6 +91,7 @@ public class GitHubAccessSourceController {
     }
 
     @PostMapping("/access-source/install/start")
+    @Operation(summary = "Start GitHub App install flow (direct or via request token)")
     public ResponseEntity<ApiResponse<GitHubInstallStartDto>> startInstallFlow(
         Authentication authentication,
         @RequestBody(required = false) StartGitHubAccessSourceInstallRequest body,
@@ -107,6 +115,7 @@ public class GitHubAccessSourceController {
     }
 
     @GetMapping({ "/access-source/callback", "/setup" })
+    @Operation(summary = "Handle GitHub App install callback (public redirect)")
     public ResponseEntity<Void> handleInstallCallback(
         @RequestParam(name = "installation_id") Long installationId,
         @RequestParam(name = "state") String state
@@ -149,6 +158,8 @@ public class GitHubAccessSourceController {
     }
 
     @PostMapping("/access-source/request")
+    @Operation(summary = "Create a GitHub access request")
+    @SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
     public ResponseEntity<ApiResponse<GitHubAccessRequestCreateV2Dto>> createAccessRequest(
         Authentication authentication,
         @Valid @RequestBody CreateGitHubAccessRequestRequest body,
@@ -160,6 +171,8 @@ public class GitHubAccessSourceController {
     }
 
     @DeleteMapping("/access-source/{id}")
+    @Operation(summary = "Disconnect GitHub access source from project")
+    @SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
     public ResponseEntity<ApiResponse<ProjectGitHubRepositoriesDto>> disconnectAccessSource(
         Authentication authentication,
         @PathVariable("id") String sourceId,
@@ -171,6 +184,8 @@ public class GitHubAccessSourceController {
     }
 
     @GetMapping("/repositories/available")
+    @Operation(summary = "List available repositories for a GitHub access source")
+    @SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
     public ResponseEntity<ApiResponse<GitHubAvailableRepositoriesDto>> getAvailableRepositories(
         Authentication authentication,
         @RequestParam(name = "sourceId") String sourceId,
@@ -182,6 +197,8 @@ public class GitHubAccessSourceController {
     }
 
     @PostMapping("/repositories/link")
+    @Operation(summary = "Link repositories to a project")
+    @SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
     public ResponseEntity<ApiResponse<ProjectGitHubRepositoriesDto>> linkRepositories(
         Authentication authentication,
         @Valid @RequestBody LinkGitHubRepositoriesRequest body,
@@ -193,6 +210,8 @@ public class GitHubAccessSourceController {
     }
 
     @DeleteMapping("/repositories/{id}")
+    @Operation(summary = "Unlink a linked repository from a project")
+    @SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
     public ResponseEntity<ApiResponse<ProjectGitHubRepositoriesDto>> unlinkRepository(
         Authentication authentication,
         @PathVariable("id") String linkedRepositoryId,
@@ -204,6 +223,8 @@ public class GitHubAccessSourceController {
     }
 
     @PostMapping("/repositories/{id}/enable")
+    @Operation(summary = "Enable a linked repository")
+    @SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
     public ResponseEntity<ApiResponse<ProjectGitHubRepositoriesDto>> enableRepository(
         Authentication authentication,
         @PathVariable("id") String linkedRepositoryId,
@@ -215,6 +236,8 @@ public class GitHubAccessSourceController {
     }
 
     @PostMapping("/repositories/{id}/disable")
+    @Operation(summary = "Disable a linked repository")
+    @SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
     public ResponseEntity<ApiResponse<ProjectGitHubRepositoriesDto>> disableRepository(
         Authentication authentication,
         @PathVariable("id") String linkedRepositoryId,
@@ -226,6 +249,8 @@ public class GitHubAccessSourceController {
     }
 
     @PostMapping("/repositories/{id}/refresh")
+    @Operation(summary = "Refresh a linked repository from GitHub")
+    @SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
     public ResponseEntity<ApiResponse<ProjectGitHubRepositoriesDto>> refreshRepository(
         Authentication authentication,
         @PathVariable("id") String linkedRepositoryId,
@@ -237,6 +262,8 @@ public class GitHubAccessSourceController {
     }
 
     @PostMapping("/repositories/{id}/select")
+    @Operation(summary = "Select the primary linked repository")
+    @SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
     public ResponseEntity<ApiResponse<ProjectGitHubRepositoriesDto>> selectPrimaryRepository(
         Authentication authentication,
         @PathVariable("id") String linkedRepositoryId,
@@ -248,6 +275,8 @@ public class GitHubAccessSourceController {
     }
 
     @PostMapping("/repositories/{id}/display-name")
+    @Operation(summary = "Update linked repository display name")
+    @SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH_SCHEME)
     public ResponseEntity<ApiResponse<ProjectGitHubRepositoriesDto>> updateRepositoryDisplayName(
         Authentication authentication,
         @PathVariable("id") String linkedRepositoryId,
