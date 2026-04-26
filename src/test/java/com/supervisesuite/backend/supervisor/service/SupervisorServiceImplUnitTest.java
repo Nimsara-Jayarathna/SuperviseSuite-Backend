@@ -43,6 +43,7 @@ import com.supervisesuite.backend.projectfiles.dto.ProjectFileListDto;
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
 import com.supervisesuite.backend.meetings.service.MeetingChannelService;
 import com.supervisesuite.backend.meetings.service.MeetingRecordService;
+import com.supervisesuite.backend.common.access.ProjectAccessGuard;
 import com.supervisesuite.backend.config.JiraProperties;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
@@ -66,9 +67,12 @@ import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.web.client.RestClient;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class SupervisorServiceImplUnitTest {
 
     @Mock
@@ -129,6 +133,8 @@ class SupervisorServiceImplUnitTest {
     private RestClient.Builder restClientBuilder;
     @Mock
     private RestClient restClient;
+    @Mock
+    private ProjectAccessGuard projectAccessGuard;
 
     private SupervisorServiceImpl service;
 
@@ -165,7 +171,8 @@ class SupervisorServiceImplUnitTest {
                 meetingRecordService,
                 restClientBuilder,
                 milestonePolicyEngine,
-                projectMilestoneAggregateService);
+                projectMilestoneAggregateService,
+                projectAccessGuard);
 
         supervisorId = UUID.randomUUID();
         supervisor = new User();
@@ -174,7 +181,25 @@ class SupervisorServiceImplUnitTest {
         supervisor.setEmail("supervisor@university.ac.lk");
         supervisor.setFirstName("Sup");
         supervisor.setLastName("User");
-        lenient().when(userRepository.findById(supervisorId)).thenReturn(Optional.of(supervisor));
+        lenient().when(projectAccessGuard.requireSupervisor(supervisorId.toString())).thenReturn(supervisor);
+        lenient().when(projectAccessGuard.requireSupervisorOwnsProject(
+                org.mockito.ArgumentMatchers.eq(supervisor),
+                org.mockito.ArgumentMatchers.any(UUID.class)))
+            .thenAnswer(invocation -> {
+                UUID projectId = invocation.getArgument(1);
+                Project project = new Project();
+                project.setId(projectId);
+                project.setSupervisor(supervisor);
+                project.setName("Project");
+                project.setDescription("Description");
+                project.setBatch("2025");
+                project.setSemester("Y3S2");
+                project.setStatus("PLANNING");
+                project.setProgressPercent(0);
+                project.setCreatedAt(Instant.now());
+                project.setLastActivityAt(Instant.now());
+                return project;
+            });
         lenient().when(restClientBuilder.build()).thenReturn(restClient);
     }
 
@@ -566,13 +591,13 @@ class SupervisorServiceImplUnitTest {
 
     @Test
     void createGitHubRepositoryAccessRequest_projectNotOwned_throwsNotFound() {
-        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(
-                UUID.fromString("00000000-0000-0000-0000-000000000001"), supervisorId))
-                .thenReturn(Optional.empty());
+        UUID projectId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(projectAccessGuard.requireSupervisorOwnsProject(supervisor, projectId))
+            .thenThrow(new EntityNotFoundException());
 
         assertThatThrownBy(() -> service.createGitHubRepositoryAccessRequest(
                 supervisorId.toString(),
-                "00000000-0000-0000-0000-000000000001")).isInstanceOf(EntityNotFoundException.class);
+                projectId.toString())).isInstanceOf(EntityNotFoundException.class);
     }
 
     @Test

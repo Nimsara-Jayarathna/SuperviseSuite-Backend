@@ -31,6 +31,7 @@ import com.supervisesuite.backend.projects.service.milestones.ProjectMilestoneAg
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
 import com.supervisesuite.backend.meetings.service.MeetingChannelService;
 import com.supervisesuite.backend.meetings.service.MeetingRecordService;
+import com.supervisesuite.backend.common.access.ProjectAccessGuard;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import java.util.List;
@@ -94,6 +95,8 @@ class SupervisorJiraHierarchyServiceImplTest {
     private RestClient.Builder restClientBuilder;
     @Mock
     private RestClient restClient;
+    @Mock
+    private ProjectAccessGuard projectAccessGuard;
 
     private SupervisorServiceImpl service;
     private UUID supervisorId;
@@ -129,7 +132,8 @@ class SupervisorJiraHierarchyServiceImplTest {
                 meetingRecordService,
                 restClientBuilder,
                 milestonePolicyEngine,
-                projectMilestoneAggregateService);
+                projectMilestoneAggregateService,
+                projectAccessGuard);
 
         supervisorId = UUID.randomUUID();
         projectId = UUID.randomUUID();
@@ -137,12 +141,12 @@ class SupervisorJiraHierarchyServiceImplTest {
         User supervisor = new User();
         supervisor.setId(supervisorId);
         supervisor.setRole(Roles.SUPERVISOR);
-        lenient().when(userRepository.findById(supervisorId)).thenReturn(Optional.of(supervisor));
+        lenient().when(projectAccessGuard.requireSupervisor(supervisorId.toString())).thenReturn(supervisor);
 
         Project project = new Project();
         project.setId(projectId);
-        lenient().when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
-                .thenReturn(Optional.of(project));
+        lenient().when(projectAccessGuard.requireSupervisorOwnsProject(supervisor, projectId))
+                .thenReturn(project);
     }
 
     @Test

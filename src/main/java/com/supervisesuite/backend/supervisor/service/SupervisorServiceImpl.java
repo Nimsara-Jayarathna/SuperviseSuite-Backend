@@ -6,6 +6,8 @@ import com.supervisesuite.backend.common.error.ConflictException;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.error.ServiceUnavailableException;
 import com.supervisesuite.backend.common.error.ValidationException;
+import com.supervisesuite.backend.common.access.ProjectAccessGuard;
+import com.supervisesuite.backend.common.util.EntityIdParser;
 import com.supervisesuite.backend.common.util.NormalizationUtils;
 import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
@@ -157,6 +159,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final RestClient restClient;
     private final MilestonePolicyEngine milestonePolicyEngine;
     private final ProjectMilestoneAggregateService projectMilestoneAggregateService;
+    private final ProjectAccessGuard projectAccessGuard;
     private final SecureRandom secureRandom = new SecureRandom();
     private final Map<String, PendingJiraWorkspaceSelection> pendingJiraWorkspaceSelections = new ConcurrentHashMap<>();
     private static final long JIRA_WORKSPACE_SELECTION_TTL_SECONDS = 600L;
@@ -186,7 +189,8 @@ class SupervisorServiceImpl implements SupervisorService {
             MeetingRecordService meetingRecordService,
             RestClient.Builder restClientBuilder,
             MilestonePolicyEngine milestonePolicyEngine,
-            ProjectMilestoneAggregateService projectMilestoneAggregateService) {
+            ProjectMilestoneAggregateService projectMilestoneAggregateService,
+            ProjectAccessGuard projectAccessGuard) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
@@ -212,6 +216,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.restClient = restClientBuilder.build();
         this.milestonePolicyEngine = milestonePolicyEngine;
         this.projectMilestoneAggregateService = projectMilestoneAggregateService;
+        this.projectAccessGuard = projectAccessGuard;
     }
 
     @Override
@@ -344,9 +349,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         SupervisorProjectDetailDto detail = toProjectDetail(project);
         ProjectFileListDto files = projectFileService.listFiles(
@@ -366,9 +369,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         String lifecycleStatus = validateLifecycleStatus(request.getLifecycleStatus());
 
@@ -398,9 +399,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         String lifecycleStatus = validateLifecycleStatus(request.getLifecycleStatus());
         Instant now = Instant.now();
@@ -422,12 +421,10 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         Instant now = Instant.now();
-        String normalizedRepositoryUrl = trimToNull(request.getRepositoryUrl());
+        String normalizedRepositoryUrl = NormalizationUtils.trimToNull(request.getRepositoryUrl());
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
 
@@ -449,9 +446,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         List<User> studentsToAdd = resolveStudents(request.getStudentIds());
         for (User student : studentsToAdd) {
@@ -481,9 +476,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         List<ProjectMilestone> existingMilestones = projectMilestoneRepository
                 .findByProjectIdOrderBySequenceNoAsc(project.getId());
@@ -503,7 +496,7 @@ class SupervisorServiceImpl implements SupervisorService {
         ProjectMilestone milestone = new ProjectMilestone();
         milestone.setProjectId(project.getId());
         milestone.setTitle(request.getTitle().trim());
-        milestone.setDescription(trimToNull(request.getDescription()));
+        milestone.setDescription(NormalizationUtils.trimToNull(request.getDescription()));
         milestone.setDueDate(dueDate);
         milestone.setStatus(DEFAULT_MILESTONE_STATUS);
         milestone.setSequenceNo(nextSequenceNo);
@@ -533,9 +526,7 @@ class SupervisorServiceImpl implements SupervisorService {
         UUID parsedProjectId = parseProjectId(projectId);
         UUID parsedMilestoneId = parseMilestoneId(milestoneId);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         ProjectMilestone milestone = projectMilestoneRepository.findByIdAndProjectId(parsedMilestoneId, project.getId())
                 .orElseThrow(EntityNotFoundException::new);
@@ -562,7 +553,7 @@ class SupervisorServiceImpl implements SupervisorService {
 
         Instant now = Instant.now();
         milestone.setTitle(request.getTitle().trim());
-        milestone.setDescription(trimToNull(request.getDescription()));
+        milestone.setDescription(NormalizationUtils.trimToNull(request.getDescription()));
         milestone.setDueDate(requestedDueDate);
         milestone.setStatus(milestoneStatus);
         milestone.setUpdatedAt(now);
@@ -657,7 +648,7 @@ class SupervisorServiceImpl implements SupervisorService {
             ProjectMilestone milestone = new ProjectMilestone();
             milestone.setProjectId(savedProject.getId());
             milestone.setTitle(requestMilestone.getTitle().trim());
-            milestone.setDescription(trimToNull(requestMilestone.getDescription()));
+            milestone.setDescription(NormalizationUtils.trimToNull(requestMilestone.getDescription()));
             milestone.setDueDate(requestMilestone.getDueDate());
             milestone.setStatus(DEFAULT_MILESTONE_STATUS);
             milestone.setSequenceNo(sequenceNo++);
@@ -695,9 +686,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
         UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
         return projectService.getGitHubDashboard(project.getId(), null, parsedLinkedRepositoryId);
     }
@@ -713,9 +702,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
         UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
         return projectService.getGitHubActivityPage(project.getId(), null, parsedLinkedRepositoryId, page, size);
     }
@@ -731,9 +718,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
         UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
         return projectService.getGitHubContributorsPage(project.getId(), null, parsedLinkedRepositoryId, page, size);
     }
@@ -748,9 +733,7 @@ class SupervisorServiceImpl implements SupervisorService {
             Integer size) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
         return projectService.getInstallationRepositories(project.getId(), installationId, supervisor.getId(), page,
                 size);
     }
@@ -763,9 +746,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
         
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
         
         List<com.supervisesuite.backend.projects.dto.GitHubAccessSourceDto> sources = accessSourceService.getProjectAccessSources(project.getId());
         
@@ -783,9 +764,7 @@ class SupervisorServiceImpl implements SupervisorService {
             String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-        projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
         return gitHubAppIntegrationService.createProjectAccessRequest(parsedProjectId, supervisor.getId());
     }
 
@@ -797,9 +776,7 @@ class SupervisorServiceImpl implements SupervisorService {
             String requestToken) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-        projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
         return gitHubAppIntegrationService.validateProjectAccessRequest(
                 parsedProjectId,
                 supervisor.getId(),
@@ -814,9 +791,7 @@ class SupervisorServiceImpl implements SupervisorService {
             String requestToken) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-        projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
         return gitHubAppIntegrationService.continueProjectAccessRequest(
                 parsedProjectId,
                 supervisor.getId(),
@@ -830,9 +805,7 @@ class SupervisorServiceImpl implements SupervisorService {
             String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-        projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         GitHubInstallStartDto setup = setupCallbackService.startDirectInstall(
                 parsedProjectId.toString(),
@@ -849,9 +822,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         ProjectGitHubRepositoryLinkDto linkedRepository = projectService.linkProjectToInstallationRepository(
                 project.getId(),
@@ -875,9 +846,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         Instant now = Instant.now();
         repositoryLinkService.disconnectAllLinks(project.getId());
@@ -894,9 +863,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
         String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
@@ -988,21 +955,7 @@ class SupervisorServiceImpl implements SupervisorService {
     }
 
     private User resolveSupervisor(String authenticatedUserId) {
-        UUID supervisorId;
-        try {
-            supervisorId = UUID.fromString(authenticatedUserId);
-        } catch (IllegalArgumentException exception) {
-            throw new UnauthorizedException("Authentication required.");
-        }
-
-        User supervisor = userRepository.findById(supervisorId)
-                .orElseThrow(() -> new UnauthorizedException("Authentication required."));
-
-        if (!Roles.SUPERVISOR.equals(supervisor.getRole())) {
-            throw new UnauthorizedException("Authentication required.");
-        }
-
-        return supervisor;
+        return projectAccessGuard.requireSupervisor(authenticatedUserId);
     }
 
     private List<User> resolveStudents(List<UUID> requestedStudentIds) {
@@ -1031,9 +984,7 @@ class SupervisorServiceImpl implements SupervisorService {
     public GitHubAccessUpdatedSummaryDto getGitHubAccessUpdatedSummary(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-        projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
         
         return accessRequestService.getPendingSummary(parsedProjectId);
     }
@@ -1043,9 +994,7 @@ class SupervisorServiceImpl implements SupervisorService {
     public GitHubAccessUpdatedAcknowledgeDto acknowledgeGitHubAccessUpdated(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-        projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
         
         accessRequestService.acknowledgePending(parsedProjectId);
         return new GitHubAccessUpdatedAcknowledgeDto(parsedProjectId);
@@ -1056,9 +1005,7 @@ class SupervisorServiceImpl implements SupervisorService {
     public JiraAuthUrlDto getProjectJiraAuthUrl(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-        Project project = projectRepository
-            .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-            .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         ProjectJiraIntegration activeIntegration = projectJiraIntegrationRepository
                 .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
@@ -1070,13 +1017,15 @@ class SupervisorServiceImpl implements SupervisorService {
                     List.of(new ApiErrorDetail("jira", issue)));
         }
 
-        String clientId = trimToNull(jiraProperties.getClientId());
-        String redirectUri = trimToNull(jiraProperties.getRedirectUri());
+        String clientId = NormalizationUtils.trimToNull(jiraProperties.getClientId());
+        String redirectUri = NormalizationUtils.trimToNull(jiraProperties.getRedirectUri());
         if (clientId == null || redirectUri == null) {
             throw new ValidationException("jiraConfig", "Jira OAuth is not fully configured.");
         }
 
-        String authTargetUrl = defaultIfBlank(trimToNull(jiraProperties.getAuthTargetUrl()), "https://auth.atlassian.com/authorize");
+        String authTargetUrl = NormalizationUtils.defaultIfBlank(
+                NormalizationUtils.trimToNull(jiraProperties.getAuthTargetUrl()),
+                "https://auth.atlassian.com/authorize");
         String nonce = generateOpaqueToken();
         String state = nonce + ":" + parsedProjectId;
         Instant now = Instant.now();
@@ -1092,7 +1041,9 @@ class SupervisorServiceImpl implements SupervisorService {
         projectJiraOAuthStateRepository.saveAndFlush(oauthState);
 
         String url = authTargetUrl
-            + "?audience=" + urlencode(defaultIfBlank(trimToNull(jiraProperties.getAudience()), "api.atlassian.com"))
+            + "?audience=" + urlencode(NormalizationUtils.defaultIfBlank(
+                NormalizationUtils.trimToNull(jiraProperties.getAudience()),
+                "api.atlassian.com"))
             + "&client_id=" + urlencode(clientId)
             + "&scope=" + urlencode(normalizeJiraScope(jiraProperties.getScope()))
             + "&redirect_uri=" + urlencode(redirectUri)
@@ -1107,19 +1058,21 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         cleanupExpiredPendingWorkspaceSelections(Instant.now());
 
-        String selectionToken = trimToNull(request.getSelectionToken());
+        String selectionToken = NormalizationUtils.trimToNull(request.getSelectionToken());
         if (selectionToken != null) {
             return completeJiraOAuthWithWorkspaceSelection(supervisor, request, selectionToken);
         }
 
-        String oauthError = trimToNull(request.getError());
-        String code = trimToNull(request.getCode());
-        String state = trimToNull(request.getState());
+        String oauthError = NormalizationUtils.trimToNull(request.getError());
+        String code = NormalizationUtils.trimToNull(request.getCode());
+        String state = NormalizationUtils.trimToNull(request.getState());
         if (oauthError != null) {
             String issue = "access_denied".equalsIgnoreCase(oauthError)
                 ? "Jira authorization was cancelled. No connection was saved."
                 : "Jira authorization was not completed. "
-                    + defaultIfBlank(trimToNull(request.getErrorDescription()), "Please try again.");
+                    + NormalizationUtils.defaultIfBlank(
+                        NormalizationUtils.trimToNull(request.getErrorDescription()),
+                        "Please try again.");
             throw new ValidationException(
                     issue,
                     List.of(new ApiErrorDetail("jiraOAuth", issue)));
@@ -1129,7 +1082,7 @@ class SupervisorServiceImpl implements SupervisorService {
             throw new ValidationException("jiraOAuth", "Missing OAuth code/state.");
         }
 
-        String nonce = trimToNull(state.split(":", 2)[0]);
+        String nonce = NormalizationUtils.trimToNull(state.split(":", 2)[0]);
         String projectIdRaw = state.contains(":") ? state.split(":", 2)[1] : null;
         if (nonce == null || projectIdRaw == null) {
             throw new ValidationException("state", "OAuth state format is invalid. Start Jira connection again.");
@@ -1164,19 +1117,17 @@ class SupervisorServiceImpl implements SupervisorService {
         persistedState.setUpdatedAt(now);
         projectJiraOAuthStateRepository.save(persistedState);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, projectId);
 
-        String clientId = trimToNull(jiraProperties.getClientId());
-        String clientSecret = trimToNull(jiraProperties.getClientSecret());
-        String redirectUri = trimToNull(jiraProperties.getRedirectUri());
+        String clientId = NormalizationUtils.trimToNull(jiraProperties.getClientId());
+        String clientSecret = NormalizationUtils.trimToNull(jiraProperties.getClientSecret());
+        String redirectUri = NormalizationUtils.trimToNull(jiraProperties.getRedirectUri());
         if (clientId == null || clientSecret == null || redirectUri == null) {
             throw new ValidationException("jiraConfig", "Jira OAuth is not fully configured.");
         }
 
-        String tokenTargetUrl = defaultIfBlank(
-                trimToNull(jiraProperties.getTokenTargetUrl()),
+        String tokenTargetUrl = NormalizationUtils.defaultIfBlank(
+                NormalizationUtils.trimToNull(jiraProperties.getTokenTargetUrl()),
                 "https://auth.atlassian.com/oauth/token");
 
         Map<String, Object> tokenRequest = new LinkedHashMap<>();
@@ -1203,12 +1154,18 @@ class SupervisorServiceImpl implements SupervisorService {
             throw new ValidationException("jiraOAuth", buildAtlassianTokenExchangeIssue(exception));
         }
 
-        String accessToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("access_token")));
+        String accessToken = tokenResponse == null
+                ? null
+                : NormalizationUtils.trimToNull(String.valueOf(tokenResponse.get("access_token")));
         if (accessToken == null || "null".equalsIgnoreCase(accessToken)) {
             throw new ValidationException("jiraOAuth", "Atlassian token exchange returned no access token.");
         }
-        String scopes = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("scope")));
-        String refreshToken = tokenResponse == null ? null : trimToNull(String.valueOf(tokenResponse.get("refresh_token")));
+        String scopes = tokenResponse == null
+                ? null
+                : NormalizationUtils.trimToNull(String.valueOf(tokenResponse.get("scope")));
+        String refreshToken = tokenResponse == null
+                ? null
+                : NormalizationUtils.trimToNull(String.valueOf(tokenResponse.get("refresh_token")));
         Number expiresInSecs = tokenResponse == null || tokenResponse.get("expires_in") == null ? null : (Number) tokenResponse.get("expires_in");
         Instant tokenExpiresAt = null;
         if (expiresInSecs != null) {
@@ -1284,7 +1241,7 @@ class SupervisorServiceImpl implements SupervisorService {
                     "Jira workspace selection has expired. Start Jira connection again.");
         }
 
-        String selectedCloudId = trimToNull(request.getSelectedCloudId());
+        String selectedCloudId = NormalizationUtils.trimToNull(request.getSelectedCloudId());
         if (selectedCloudId == null) {
             throw new ValidationException("jiraOAuth", "Select a Jira workspace to continue.");
         }
@@ -1296,9 +1253,7 @@ class SupervisorServiceImpl implements SupervisorService {
                         "jiraOAuth",
                         "Selected Jira workspace is invalid. Please choose from the provided list."));
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(pending.projectId(), supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, pending.projectId());
 
         Map<String, Object> workspace = new LinkedHashMap<>();
         workspace.put("id", selectedWorkspace.cloudId());
@@ -1326,9 +1281,9 @@ class SupervisorServiceImpl implements SupervisorService {
             Instant tokenExpiresAt,
             String scopes,
             Map<String, Object> workspace) {
-        String cloudId = trimToNull(workspace == null ? null : (String) workspace.get("id"));
-        String workspaceName = trimToNull(workspace == null ? null : (String) workspace.get("name"));
-        String workspaceUrl = trimToNull(workspace == null ? null : (String) workspace.get("url"));
+        String cloudId = NormalizationUtils.trimToNull(workspace == null ? null : (String) workspace.get("id"));
+        String workspaceName = NormalizationUtils.trimToNull(workspace == null ? null : (String) workspace.get("name"));
+        String workspaceUrl = NormalizationUtils.trimToNull(workspace == null ? null : (String) workspace.get("url"));
         if (cloudId == null || workspaceName == null) {
             throw new ValidationException("jiraOAuth", "Jira workspace details are incomplete.");
         }
@@ -1373,9 +1328,9 @@ class SupervisorServiceImpl implements SupervisorService {
     private List<JiraOAuthCompleteResultDto.WorkspaceOption> mapWorkspaceOptions(List<Map<String, Object>> resources) {
         List<JiraOAuthCompleteResultDto.WorkspaceOption> options = new ArrayList<>();
         for (Map<String, Object> resource : resources) {
-            String cloudId = trimToNull(resource == null ? null : (String) resource.get("id"));
-            String workspaceName = trimToNull(resource == null ? null : (String) resource.get("name"));
-            String workspaceUrl = trimToNull(resource == null ? null : (String) resource.get("url"));
+            String cloudId = NormalizationUtils.trimToNull(resource == null ? null : (String) resource.get("id"));
+            String workspaceName = NormalizationUtils.trimToNull(resource == null ? null : (String) resource.get("name"));
+            String workspaceUrl = NormalizationUtils.trimToNull(resource == null ? null : (String) resource.get("url"));
             if (cloudId == null || workspaceName == null) {
                 continue;
             }
@@ -1434,9 +1389,7 @@ class SupervisorServiceImpl implements SupervisorService {
     public SupervisorProjectDetailDto disconnectProjectJira(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         ProjectJiraIntegration activeIntegration = projectJiraIntegrationRepository
                 .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
@@ -1466,9 +1419,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         return jiraHealthService.getHealthOverview(parsedProjectId);
     }
@@ -1479,9 +1430,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         return jiraSprintProgressService.getSprintProgress(parsedProjectId);
     }
@@ -1492,9 +1441,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         return jiraWorkloadService.getWorkload(parsedProjectId);
     }
@@ -1505,9 +1452,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         List<ProjectJiraIssue> issues = projectJiraIssueRepository.findAllByProjectId(parsedProjectId);
 
@@ -1552,9 +1497,7 @@ class SupervisorServiceImpl implements SupervisorService {
         User supervisor = resolveSupervisor(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
 
-        Project project = projectRepository
-                .findByIdAndSupervisor_IdAndDeletedAtIsNull(parsedProjectId, supervisor.getId())
-                .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
         ProjectJiraIntegration activeIntegration = projectJiraIntegrationRepository
                 .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
@@ -1790,50 +1733,22 @@ class SupervisorServiceImpl implements SupervisorService {
     }
 
     private UUID parseProjectId(String projectId) {
-        try {
-            return UUID.fromString(projectId);
-        } catch (IllegalArgumentException exception) {
-            throw new EntityNotFoundException();
-        }
+        return EntityIdParser.parseOrNotFound(projectId);
     }
 
     private UUID parseLinkedRepositoryId(String linkedRepositoryId) {
-        if (linkedRepositoryId == null || linkedRepositoryId.isBlank()) {
-            return null;
-        }
-        try {
-            return UUID.fromString(linkedRepositoryId.trim());
-        } catch (IllegalArgumentException exception) {
-            throw new ValidationException("linkedRepositoryId", "linkedRepositoryId must be a valid UUID.");
-        }
+        return EntityIdParser.parseOrNull(linkedRepositoryId, "linkedRepositoryId");
     }
 
     private UUID parseMilestoneId(String milestoneId) {
-        try {
-            return UUID.fromString(milestoneId);
-        } catch (IllegalArgumentException exception) {
-            throw new EntityNotFoundException();
-        }
-    }
-
-    private String trimToNull(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private String defaultIfBlank(String value, String fallback) {
-        String trimmed = trimToNull(value);
-        return trimmed == null ? fallback : trimmed;
+        return EntityIdParser.parseOrNotFound(milestoneId);
     }
 
     private String normalizeJiraScope(String configuredScope) {
-        String scope = defaultIfBlank(trimToNull(configuredScope), DEFAULT_JIRA_SCOPE);
+        String scope = NormalizationUtils.defaultIfBlank(NormalizationUtils.trimToNull(configuredScope), DEFAULT_JIRA_SCOPE);
         LinkedHashSet<String> normalized = new LinkedHashSet<>();
         for (String token : scope.split("\\s+")) {
-            String trimmed = trimToNull(token);
+            String trimmed = NormalizationUtils.trimToNull(token);
             if (trimmed != null) {
                 normalized.add(trimmed);
             }
@@ -1890,12 +1805,12 @@ class SupervisorServiceImpl implements SupervisorService {
     }
 
     private String buildAtlassianTokenExchangeIssue(RestClientResponseException exception) {
-        String body = trimToNull(exception.getResponseBodyAsString());
+        String body = NormalizationUtils.trimToNull(exception.getResponseBodyAsString());
         if (body != null) {
             try {
                 JsonNode node = OBJECT_MAPPER.readTree(body);
-                String error = trimToNull(node.path("error").asText(null));
-                String errorDescription = trimToNull(node.path("error_description").asText(null));
+                String error = NormalizationUtils.trimToNull(node.path("error").asText(null));
+                String errorDescription = NormalizationUtils.trimToNull(node.path("error_description").asText(null));
                 if (error != null && errorDescription != null) {
                     return "Atlassian token exchange failed: " + error + " (" + errorDescription + ")";
                 }

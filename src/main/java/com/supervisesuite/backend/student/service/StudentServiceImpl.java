@@ -3,6 +3,8 @@ package com.supervisesuite.backend.student.service;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.error.ValidationException;
+import com.supervisesuite.backend.common.access.ProjectAccessGuard;
+import com.supervisesuite.backend.common.util.EntityIdParser;
 import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.entity.Project;
@@ -69,6 +71,7 @@ class StudentServiceImpl implements StudentService {
     private final ProjectFileService projectFileService;
     private final MeetingChannelService meetingChannelService;
     private final MeetingRecordService meetingRecordService;
+    private final ProjectAccessGuard projectAccessGuard;
 
     StudentServiceImpl(
          UserRepository userRepository,
@@ -84,7 +87,8 @@ class StudentServiceImpl implements StudentService {
             JiraWorkloadService jiraWorkloadService,
             ProjectFileService projectFileService,
             MeetingChannelService meetingChannelService,
-            MeetingRecordService meetingRecordService
+            MeetingRecordService meetingRecordService,
+            ProjectAccessGuard projectAccessGuard
     ) {
          this.userRepository = userRepository;
          this.projectMemberRepository = projectMemberRepository;
@@ -100,6 +104,7 @@ class StudentServiceImpl implements StudentService {
             this.projectFileService = projectFileService;
             this.meetingChannelService = meetingChannelService;
             this.meetingRecordService = meetingRecordService;
+            this.projectAccessGuard = projectAccessGuard;
     }
 
     @Override
@@ -128,18 +133,7 @@ class StudentServiceImpl implements StudentService {
     public StudentProjectDetailDto getProjectById(String authenticatedUserId, String projectId) {
         User student = resolveStudent(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-
-        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
-            student.getId(),
-            parsedProjectId,
-            Roles.STUDENT
-        );
-        if (!hasAccess) {
-            throw new EntityNotFoundException();
-        }
-
-        Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
-            .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireStudentIsMember(student, parsedProjectId);
 
         List<ProjectMember> projectMembers = projectMemberRepository.findByProjectIdOrderByCreatedAtAsc(project.getId());
         List<UUID> memberIds = projectMembers.stream()
@@ -226,18 +220,7 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
 ) {
     User student = resolveStudent(authenticatedUserId);
     UUID parsedProjectId = parseProjectId(projectId);
-
-    boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
-        student.getId(),
-        parsedProjectId,
-        Roles.STUDENT
-    );
-    if (!hasAccess) {
-        throw new EntityNotFoundException();
-    }
-
-    Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
-        .orElseThrow(EntityNotFoundException::new);
+    Project project = projectAccessGuard.requireStudentIsMember(student, parsedProjectId);
 
     UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
     return projectService.getGitHubDashboard(project.getId(), null, parsedLinkedRepositoryId);
@@ -254,18 +237,7 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
     ) {
         User student = resolveStudent(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-
-        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
-            student.getId(),
-            parsedProjectId,
-            Roles.STUDENT
-        );
-        if (!hasAccess) {
-            throw new EntityNotFoundException();
-        }
-
-        Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
-            .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireStudentIsMember(student, parsedProjectId);
 
         UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
         return projectService.getGitHubActivityPage(project.getId(), null, parsedLinkedRepositoryId, page, size);
@@ -282,18 +254,7 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
     ) {
         User student = resolveStudent(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-
-        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
-            student.getId(),
-            parsedProjectId,
-            Roles.STUDENT
-        );
-        if (!hasAccess) {
-            throw new EntityNotFoundException();
-        }
-
-        Project project = projectRepository.findByIdAndDeletedAtIsNull(parsedProjectId)
-            .orElseThrow(EntityNotFoundException::new);
+        Project project = projectAccessGuard.requireStudentIsMember(student, parsedProjectId);
 
         UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
         return projectService.getGitHubContributorsPage(project.getId(), null, parsedLinkedRepositoryId, page, size);
@@ -304,15 +265,7 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
     public JiraHealthDto getJiraHealthOverview(String authenticatedUserId, String projectId) {
         User student = resolveStudent(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-
-        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
-            student.getId(),
-            parsedProjectId,
-            Roles.STUDENT
-        );
-        if (!hasAccess) {
-            throw new EntityNotFoundException();
-        }
+        projectAccessGuard.requireStudentIsMember(student, parsedProjectId);
 
         return jiraHealthService.getHealthOverview(parsedProjectId);
     }
@@ -322,15 +275,7 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
     public JiraSprintProgressDto getJiraSprintProgress(String authenticatedUserId, String projectId) {
         User student = resolveStudent(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-
-        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
-            student.getId(),
-            parsedProjectId,
-            Roles.STUDENT
-        );
-        if (!hasAccess) {
-            throw new EntityNotFoundException();
-        }
+        projectAccessGuard.requireStudentIsMember(student, parsedProjectId);
 
         return jiraSprintProgressService.getSprintProgress(parsedProjectId);
     }
@@ -340,15 +285,7 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
     public JiraWorkloadDto getJiraWorkload(String authenticatedUserId, String projectId) {
         User student = resolveStudent(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-
-        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
-            student.getId(),
-            parsedProjectId,
-            Roles.STUDENT
-        );
-        if (!hasAccess) {
-            throw new EntityNotFoundException();
-        }
+        projectAccessGuard.requireStudentIsMember(student, parsedProjectId);
 
         return jiraWorkloadService.getWorkload(parsedProjectId);
     }
@@ -358,15 +295,7 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
     public JiraHierarchyDto getJiraHierarchy(String authenticatedUserId, String projectId) {
         User student = resolveStudent(authenticatedUserId);
         UUID parsedProjectId = parseProjectId(projectId);
-
-        boolean hasAccess = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
-            student.getId(),
-            parsedProjectId,
-            Roles.STUDENT
-        );
-        if (!hasAccess) {
-            throw new EntityNotFoundException();
-        }
+        projectAccessGuard.requireStudentIsMember(student, parsedProjectId);
 
         List<ProjectJiraIssue> issues = projectJiraIssueRepository.findAllByProjectId(parsedProjectId);
 
@@ -439,21 +368,7 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
     }
 
     private User resolveStudent(String authenticatedUserId) {
-        UUID studentId;
-        try {
-            studentId = UUID.fromString(authenticatedUserId);
-        } catch (IllegalArgumentException exception) {
-            throw new UnauthorizedException("Authentication required.");
-        }
-
-        User student = userRepository.findById(studentId)
-            .orElseThrow(() -> new UnauthorizedException("Authentication required."));
-
-        if (!Roles.STUDENT.equals(student.getRole())) {
-            throw new UnauthorizedException("Authentication required.");
-        }
-
-        return student;
+        return projectAccessGuard.requireStudent(authenticatedUserId);
     }
 
     private StudentProjectSummaryDto toProjectSummary(Project project) {
@@ -516,21 +431,10 @@ public ProjectGitHubDashboardDto getProjectGitHubDashboard(
     }
 
     private UUID parseProjectId(String projectId) {
-        try {
-            return UUID.fromString(projectId);
-        } catch (IllegalArgumentException exception) {
-            throw new EntityNotFoundException();
-        }
+        return EntityIdParser.parseOrNotFound(projectId);
     }
 
     private UUID parseLinkedRepositoryId(String linkedRepositoryId) {
-        if (linkedRepositoryId == null || linkedRepositoryId.isBlank()) {
-            return null;
-        }
-        try {
-            return UUID.fromString(linkedRepositoryId.trim());
-        } catch (IllegalArgumentException exception) {
-            throw new ValidationException("linkedRepositoryId", "linkedRepositoryId must be a valid UUID.");
-        }
+        return EntityIdParser.parseOrNull(linkedRepositoryId, "linkedRepositoryId");
     }
 }

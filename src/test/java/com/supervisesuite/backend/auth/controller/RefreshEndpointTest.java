@@ -1,6 +1,8 @@
 package com.supervisesuite.backend.auth.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.supervisesuite.backend.TestcontainersConfiguration;
 import com.supervisesuite.backend.auth.AuthTestBase;
@@ -9,6 +11,8 @@ import com.supervisesuite.backend.auth.security.CookieService;
 import com.supervisesuite.backend.auth.service.RefreshTokenService;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.users.entity.User;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -18,16 +22,13 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 /**
  * Integration tests for {@code POST /api/auth/refresh}.
@@ -40,20 +41,22 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * the login flow.
  */
 @SpringBootTest(
-    webEnvironment = WebEnvironment.RANDOM_PORT,
+    webEnvironment = WebEnvironment.MOCK,
     properties = {
         "APP_PORT=0",
         "JWT_SECRET=dGVzdC1zZWNyZXQtd2hpY2gtaXMtbG9uZy1lbm91Z2gtZm9yLXRlc3RpbmctcHVycG9zZXMtb25seQ=="
     }
 )
+@AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 class RefreshEndpointTest extends AuthTestBase {
 
     private static final String REFRESH_URL = "/api/auth/refresh";
 
-    @Autowired private TestRestTemplate restTemplate;
+    @Autowired private MockMvc mockMvc;
     @Autowired private RefreshTokenService refreshTokenService;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private ObjectMapper objectMapper;
 
     private User savedUser;
 
@@ -68,21 +71,20 @@ class RefreshEndpointTest extends AuthTestBase {
     // -------------------------------------------------------------------------
 
     @Test
-    void refresh_validCookie_returns200() {
+    void refresh_validCookie_returns200() throws Exception {
         String rawToken = refreshTokenService.issue(savedUser);
 
-        ResponseEntity<Map> response = postWithRefreshCookie(rawToken);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        mockMvc.perform(post(REFRESH_URL).cookie(refreshCookie(rawToken)))
+            .andExpect(status().isOk());
     }
 
     @Test
-    void refresh_validCookie_setsNewAccessTokenCookie() {
+    void refresh_validCookie_setsNewAccessTokenCookie() throws Exception {
         String rawToken = refreshTokenService.issue(savedUser);
 
-        ResponseEntity<Map> response = postWithRefreshCookie(rawToken);
+        MvcResult result = postWithRefreshCookie(rawToken);
 
-        List<String> setCookieHeaders = response.getHeaders().get("Set-Cookie");
+        List<String> setCookieHeaders = result.getResponse().getHeaders("Set-Cookie");
         assertThat(setCookieHeaders).isNotNull();
         assertThat(setCookieHeaders).anyMatch(h ->
             h.startsWith(CookieService.ACCESS_TOKEN_COOKIE + "=") && h.contains("HttpOnly")
@@ -90,12 +92,12 @@ class RefreshEndpointTest extends AuthTestBase {
     }
 
     @Test
-    void refresh_validCookie_setsNewRefreshTokenCookie() {
+    void refresh_validCookie_setsNewRefreshTokenCookie() throws Exception {
         String rawToken = refreshTokenService.issue(savedUser);
 
-        ResponseEntity<Map> response = postWithRefreshCookie(rawToken);
+        MvcResult result = postWithRefreshCookie(rawToken);
 
-        List<String> setCookieHeaders = response.getHeaders().get("Set-Cookie");
+        List<String> setCookieHeaders = result.getResponse().getHeaders("Set-Cookie");
         assertThat(setCookieHeaders).isNotNull();
         assertThat(setCookieHeaders).anyMatch(h ->
             h.startsWith(CookieService.REFRESH_TOKEN_COOKIE + "=") && h.contains("HttpOnly")
@@ -103,7 +105,7 @@ class RefreshEndpointTest extends AuthTestBase {
     }
 
     @Test
-    void refresh_validCookie_rotatesToken_oldTokenIsRevoked() {
+    void refresh_validCookie_rotatesToken_oldTokenIsRevoked() throws Exception {
         String rawToken = refreshTokenService.issue(savedUser);
 
         postWithRefreshCookie(rawToken);
@@ -116,7 +118,7 @@ class RefreshEndpointTest extends AuthTestBase {
     }
 
     @Test
-    void refresh_validCookie_rotatesToken_newTokenExistsInDatabase() {
+    void refresh_validCookie_rotatesToken_newTokenExistsInDatabase() throws Exception {
         String rawToken = refreshTokenService.issue(savedUser);
 
         postWithRefreshCookie(rawToken);
@@ -128,13 +130,14 @@ class RefreshEndpointTest extends AuthTestBase {
     }
 
     @Test
-    void refresh_validCookie_responseBodyContainsUserInfo() {
+    void refresh_validCookie_responseBodyContainsUserInfo() throws Exception {
         String rawToken = refreshTokenService.issue(savedUser);
 
-        ResponseEntity<Map> response = postWithRefreshCookie(rawToken);
+        MvcResult result = postWithRefreshCookie(rawToken);
+        Map<?, ?> responseBody = body(result);
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
         @SuppressWarnings("unchecked")
         Map<String, Object> user = (Map<String, Object>) data.get("user");
 
@@ -147,49 +150,50 @@ class RefreshEndpointTest extends AuthTestBase {
     // -------------------------------------------------------------------------
 
     @Test
-    void refresh_missingCookie_returns401() {
-        ResponseEntity<Map> response = restTemplate.postForEntity(
-            REFRESH_URL, null, Map.class
-        );
+    void refresh_missingCookie_returns401() throws Exception {
+        MvcResult result = mockMvc.perform(post(REFRESH_URL))
+            .andExpect(status().isUnauthorized())
+            .andReturn();
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(body(result)).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     @Test
-    void refresh_invalidToken_returns401() {
-        ResponseEntity<Map> response = postWithRefreshCookie("completely-invalid-token");
+    void refresh_invalidToken_returns401() throws Exception {
+        MvcResult result = mockMvc.perform(post(REFRESH_URL).cookie(refreshCookie("completely-invalid-token")))
+            .andExpect(status().isUnauthorized())
+            .andReturn();
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(body(result)).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     @Test
-    void refresh_alreadyRevokedToken_returns401() {
+    void refresh_alreadyRevokedToken_returns401() throws Exception {
         String rawToken = refreshTokenService.issue(savedUser);
         refreshTokenService.revoke(rawToken);
 
-        ResponseEntity<Map> response = postWithRefreshCookie(rawToken);
+        MvcResult result = mockMvc.perform(post(REFRESH_URL).cookie(refreshCookie(rawToken)))
+            .andExpect(status().isUnauthorized())
+            .andReturn();
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(body(result)).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     @Test
-    void refresh_reusedToken_returns401() {
+    void refresh_reusedToken_returns401() throws Exception {
         String rawToken = refreshTokenService.issue(savedUser);
 
         // First use succeeds
-        ResponseEntity<Map> first = postWithRefreshCookie(rawToken);
-        assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
+        mockMvc.perform(post(REFRESH_URL).cookie(refreshCookie(rawToken)))
+            .andExpect(status().isOk());
 
         // Second use must fail — token was rotated (revoked) on first use
-        ResponseEntity<Map> second = postWithRefreshCookie(rawToken);
-        assertThat(second.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        mockMvc.perform(post(REFRESH_URL).cookie(refreshCookie(rawToken)))
+            .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void refresh_expiredToken_returns401() {
+    void refresh_expiredToken_returns401() throws Exception {
         // Insert an expired token directly — RefreshTokenService.issue() always
         // sets a future expiry, so we must bypass it to test this path.
         String rawToken = "manually-crafted-expired-token";
@@ -201,22 +205,29 @@ class RefreshEndpointTest extends AuthTestBase {
         expired.setRevokedAt(null);
         refreshTokenRepository.save(expired);
 
-        ResponseEntity<Map> response = postWithRefreshCookie(rawToken);
+        MvcResult result = mockMvc.perform(post(REFRESH_URL).cookie(refreshCookie(rawToken)))
+            .andExpect(status().isUnauthorized())
+            .andReturn();
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(error(body(result)).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
-    private ResponseEntity<Map> postWithRefreshCookie(String rawToken) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.COOKIE, CookieService.REFRESH_TOKEN_COOKIE + "=" + rawToken);
-        return restTemplate.exchange(
-            REFRESH_URL, HttpMethod.POST, new HttpEntity<>(headers), Map.class
-        );
+    private MvcResult postWithRefreshCookie(String rawToken) throws Exception {
+        return mockMvc.perform(post(REFRESH_URL).cookie(refreshCookie(rawToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+    }
+
+    private Cookie refreshCookie(String rawToken) {
+        return new Cookie(CookieService.REFRESH_TOKEN_COOKIE, rawToken);
+    }
+
+    private Map<?, ?> body(MvcResult result) throws Exception {
+        return objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
     }
 
     private User persistUser(String email, String plainPassword) {
@@ -242,7 +253,7 @@ class RefreshEndpointTest extends AuthTestBase {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> error(ResponseEntity<Map> response) {
-        return (Map<String, Object>) response.getBody().get("error");
+    private Map<String, Object> error(Map<?, ?> body) {
+        return (Map<String, Object>) body.get("error");
     }
 }

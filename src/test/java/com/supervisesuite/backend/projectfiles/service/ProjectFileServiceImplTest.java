@@ -4,6 +4,7 @@ import com.supervisesuite.backend.config.ProjectFileProperties;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.error.ValidationException;
+import com.supervisesuite.backend.common.access.ProjectAccessGuard;
 import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projectfiles.dto.ConfirmUploadRequest;
@@ -63,6 +64,9 @@ class ProjectFileServiceImplTest {
     @Mock
     private ProjectFileProperties projectFileProperties;
 
+    @Mock
+    private ProjectAccessGuard projectAccessGuard;
+
     @Captor
     private ArgumentCaptor<ProjectFile> projectFileCaptor;
 
@@ -81,7 +85,8 @@ class ProjectFileServiceImplTest {
                 projectMemberRepository,
                 projectFileRepository,
                 storageService,
-                projectFileProperties);
+                projectFileProperties,
+                projectAccessGuard);
 
         projectId = UUID.randomUUID();
         project = new Project();
@@ -100,10 +105,11 @@ class ProjectFileServiceImplTest {
         student.setLastName("Dent");
 
         project.setSupervisor(supervisor);
-        lenient().when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId()))
-                .thenReturn(Optional.of(project));
-        lenient().when(projectRepository.findByIdAndDeletedAtIsNull(projectId)).thenReturn(Optional.of(project));
-        lenient().when(userRepository.findById(any())).thenReturn(Optional.of(supervisor));
+
+        lenient().when(projectAccessGuard.requireSupervisor(supervisor.getId().toString())).thenReturn(supervisor);
+        lenient().when(projectAccessGuard.requireStudent(student.getId().toString())).thenReturn(student);
+        lenient().when(projectAccessGuard.requireSupervisorOwnsProject(supervisor, projectId)).thenReturn(project);
+        lenient().when(projectAccessGuard.requireStudentIsMember(student, projectId)).thenReturn(project);
 
         lenient().when(projectFileProperties.getMaxFileSizeBytes()).thenReturn((long) (10 * 1024 * 1024)); // 10MB
         lenient().when(projectFileProperties.getMaxFileNameLength()).thenReturn(100);

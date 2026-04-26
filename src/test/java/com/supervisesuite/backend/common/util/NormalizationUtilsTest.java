@@ -7,6 +7,31 @@ import org.junit.jupiter.api.Test;
 class NormalizationUtilsTest {
 
     @Test
+    void trimToNull_null_returnsNull() {
+        assertThat(NormalizationUtils.trimToNull(null)).isNull();
+    }
+
+    @Test
+    void trimToNull_blank_returnsNull() {
+        assertThat(NormalizationUtils.trimToNull("   ")).isNull();
+    }
+
+    @Test
+    void trimToNull_trims() {
+        assertThat(NormalizationUtils.trimToNull("  hello  ")).isEqualTo("hello");
+    }
+
+    @Test
+    void defaultIfBlank_blank_returnsFallback() {
+        assertThat(NormalizationUtils.defaultIfBlank("   ", "fallback")).isEqualTo("fallback");
+    }
+
+    @Test
+    void defaultIfBlank_value_returnsTrimmedValue() {
+        assertThat(NormalizationUtils.defaultIfBlank("  value  ", "fallback")).isEqualTo("value");
+    }
+
+    @Test
     void normalizeRegistrationNumber_trimsAndUppercases() {
         assertThat(NormalizationUtils.normalizeRegistrationNumber("  it24100400  "))
             .isEqualTo("IT24100400");

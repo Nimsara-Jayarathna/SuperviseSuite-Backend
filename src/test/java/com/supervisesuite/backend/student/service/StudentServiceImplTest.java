@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.supervisesuite.backend.common.access.ProjectAccessGuard;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.memberships.entity.ProjectMember;
@@ -43,6 +44,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class StudentServiceImplTest {
@@ -83,6 +85,9 @@ class StudentServiceImplTest {
     @Mock
     private MeetingRecordService meetingRecordService;
 
+    @Mock
+    private ProjectAccessGuard projectAccessGuard;
+
     private StudentServiceImpl studentService;
 
     private UUID studentId;
@@ -104,7 +109,8 @@ class StudentServiceImplTest {
             jiraWorkloadService,
             projectFileService,
             meetingChannelService,
-            meetingRecordService
+            meetingRecordService,
+            projectAccessGuard
         );
 
         studentId = UUID.randomUUID();
@@ -114,6 +120,8 @@ class StudentServiceImplTest {
         student.setEmail("student@university.ac.lk");
         student.setFirstName("Nimal");
         student.setLastName("Perera");
+
+        lenient().when(projectAccessGuard.requireStudent(studentId.toString())).thenReturn(student);
     }
 
     @Test
@@ -162,9 +170,8 @@ class StudentServiceImplTest {
     void getProjectById_whenStudentNotMember_throwsEntityNotFound() {
         UUID projectId = UUID.randomUUID();
 
-        when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
-        when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(studentId, projectId, Roles.STUDENT))
-            .thenReturn(false);
+        when(projectAccessGuard.requireStudentIsMember(student, projectId))
+            .thenThrow(new EntityNotFoundException());
 
         assertThatThrownBy(() -> studentService.getProjectById(studentId.toString(), projectId.toString()))
             .isInstanceOf(EntityNotFoundException.class);
@@ -177,10 +184,7 @@ class StudentServiceImplTest {
         ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> page =
             new ProjectGitHubPageDto<>(List.of(), 1, 10, 0, false);
 
-        when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
-        when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(studentId, projectId, Roles.STUDENT))
-            .thenReturn(true);
-        when(projectRepository.findByIdAndDeletedAtIsNull(projectId)).thenReturn(Optional.of(project));
+        when(projectAccessGuard.requireStudentIsMember(student, projectId)).thenReturn(project);
         when(projectService.getGitHubActivityPage(projectId, null, null, 2, 25)).thenReturn(page);
 
         ProjectGitHubPageDto<ProjectGitHubDashboardDto.RecentCommit> result =
@@ -192,6 +196,9 @@ class StudentServiceImplTest {
 
     @Test
     void getProjects_invalidAuthenticatedUser_throwsUnauthorized() {
+        when(projectAccessGuard.requireStudent("not-a-uuid"))
+            .thenThrow(new UnauthorizedException("Authentication required."));
+
         assertThatThrownBy(() -> studentService.getProjects("not-a-uuid"))
             .isInstanceOf(UnauthorizedException.class)
             .hasMessageContaining("Authentication required");
@@ -221,10 +228,7 @@ class StudentServiceImplTest {
             List.of()
         );
 
-        when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
-        when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(studentId, projectId, Roles.STUDENT))
-            .thenReturn(true);
-        when(projectRepository.findByIdAndDeletedAtIsNull(projectId)).thenReturn(Optional.of(project));
+        when(projectAccessGuard.requireStudentIsMember(student, projectId)).thenReturn(project);
         when(projectMemberRepository.findByProjectIdOrderByCreatedAtAsc(projectId))
             .thenReturn(List.of(membership(studentId, projectId)));
         when(userRepository.findAllById(org.mockito.ArgumentMatchers.anyCollection()))
@@ -250,6 +254,7 @@ class StudentServiceImplTest {
     @Test
     void getJiraHealthOverview_whenMember_delegatesToHealthService() {
         UUID projectId = UUID.randomUUID();
+        Project project = project(projectId, "Project");
         JiraHealthDto health = new JiraHealthDto(
             55.0,
             9,
@@ -261,9 +266,7 @@ class StudentServiceImplTest {
             Instant.now()
         );
 
-        when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
-        when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(studentId, projectId, Roles.STUDENT))
-            .thenReturn(true);
+        when(projectAccessGuard.requireStudentIsMember(student, projectId)).thenReturn(project);
         when(jiraHealthService.getHealthOverview(projectId)).thenReturn(health);
 
         JiraHealthDto result = studentService.getJiraHealthOverview(studentId.toString(), projectId.toString());
@@ -276,14 +279,12 @@ class StudentServiceImplTest {
     void getJiraHealthOverview_whenNotMember_throwsEntityNotFound() {
         UUID projectId = UUID.randomUUID();
 
-        when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
-        when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(studentId, projectId, Roles.STUDENT))
-            .thenReturn(false);
+        when(projectAccessGuard.requireStudentIsMember(student, projectId))
+            .thenThrow(new EntityNotFoundException());
 
         assertThatThrownBy(() -> studentService.getJiraHealthOverview(studentId.toString(), projectId.toString()))
             .isInstanceOf(EntityNotFoundException.class);
-
-        verify(projectMemberRepository).existsByUserIdAndProjectIdAndMemberRole(studentId, projectId, Roles.STUDENT);
+        verify(projectAccessGuard).requireStudentIsMember(student, projectId);
     }
 
     private static ProjectMember membership(UUID userId, UUID projectId) {
