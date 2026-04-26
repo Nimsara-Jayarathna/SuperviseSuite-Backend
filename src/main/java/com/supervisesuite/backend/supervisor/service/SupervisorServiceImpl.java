@@ -1,8 +1,6 @@
 package com.supervisesuite.backend.supervisor.service;
 
 import com.supervisesuite.backend.common.access.ProjectAccessGuard;
-import com.supervisesuite.backend.config.JiraProperties;
-import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
@@ -22,25 +20,6 @@ import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryListingDto;
 import com.supervisesuite.backend.projects.dto.UpdateRepositoryRequest;
-import com.supervisesuite.backend.projects.repository.ProjectJiraIntegrationRepository;
-import com.supervisesuite.backend.projects.repository.ProjectJiraIssueRepository;
-import com.supervisesuite.backend.projects.repository.ProjectJiraOAuthStateRepository;
-import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository;
-import com.supervisesuite.backend.projects.repository.ProjectRepository;
-import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
-import com.supervisesuite.backend.projects.service.ProjectService;
-import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
-import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
-import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
-import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService;
-import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
-import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
-import com.supervisesuite.backend.projects.service.jira.JiraSprintProgressService;
-import com.supervisesuite.backend.projects.service.jira.JiraTokenEncryptionService;
-import com.supervisesuite.backend.projects.service.jira.JiraWorkloadService;
-import com.supervisesuite.backend.projects.service.milestones.MilestonePolicyEngine;
-import com.supervisesuite.backend.projects.service.milestones.ProjectMilestoneAggregateService;
-import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMembersRequest;
 import com.supervisesuite.backend.supervisor.dto.AddSupervisorProjectMilestoneRequest;
 import com.supervisesuite.backend.supervisor.dto.CreateSupervisorProjectRequest;
@@ -58,14 +37,9 @@ import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
 import com.supervisesuite.backend.meetings.dto.MeetingRecordDto;
 import com.supervisesuite.backend.meetings.dto.UpdateMeetingChannelRequest;
 import com.supervisesuite.backend.meetings.dto.UpdateMeetingRecordRequest;
-import com.supervisesuite.backend.meetings.service.MeetingChannelService;
-import com.supervisesuite.backend.meetings.service.MeetingRecordService;
 import com.supervisesuite.backend.users.entity.User;
-import com.supervisesuite.backend.users.repository.UserRepository;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 
 @Service
 class SupervisorServiceImpl implements SupervisorService {
@@ -80,7 +54,6 @@ class SupervisorServiceImpl implements SupervisorService {
     private final SupervisorJiraReadService jiraReadService;
     private final SupervisorMeetingDelegate meetingDelegate;
 
-    @Autowired
     SupervisorServiceImpl(
             ProjectAccessGuard projectAccessGuard,
             SupervisorProjectQueryService projectQueryService,
@@ -100,193 +73,6 @@ class SupervisorServiceImpl implements SupervisorService {
         this.jiraConnectionService = jiraConnectionService;
         this.jiraReadService = jiraReadService;
         this.meetingDelegate = meetingDelegate;
-    }
-
-    SupervisorServiceImpl(
-            UserRepository userRepository,
-            ProjectRepository projectRepository,
-            ProjectMemberRepository projectMemberRepository,
-            ProjectMilestoneRepository projectMilestoneRepository,
-            ProjectService projectService,
-            GitHubAppIntegrationService gitHubAppIntegrationService,
-            SetupCallbackService setupCallbackService,
-            RepositoryLinkService repositoryLinkService,
-            AccessSourceService accessSourceService,
-            AccessRequestService accessRequestService,
-            JiraProperties jiraProperties,
-            ProjectJiraIntegrationRepository projectJiraIntegrationRepository,
-            ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository,
-            JiraTokenEncryptionService jiraTokenEncryptionService,
-            ProjectJiraIssueRepository projectJiraIssueRepository,
-            JiraIssueSyncService jiraIssueSyncService,
-            JiraHealthService jiraHealthService,
-            JiraSprintProgressService jiraSprintProgressService,
-            JiraWorkloadService jiraWorkloadService,
-            ProjectFileService projectFileService,
-            MeetingChannelService meetingChannelService,
-            MeetingRecordService meetingRecordService,
-            RestClient.Builder restClientBuilder,
-            MilestonePolicyEngine milestonePolicyEngine,
-            ProjectMilestoneAggregateService projectMilestoneAggregateService,
-            ProjectAccessGuard projectAccessGuard) {
-        this(
-                projectAccessGuard,
-                new SupervisorProjectQueryService(
-                        projectRepository,
-                        projectJiraIntegrationRepository,
-                        projectJiraIssueRepository,
-                        projectFileService,
-                        projectAccessGuard,
-                        new SupervisorProjectDtoMapper(
-                                userRepository,
-                                projectMemberRepository,
-                                projectMilestoneRepository,
-                                projectService,
-                                repositoryLinkService,
-                                projectJiraIntegrationRepository,
-                                milestonePolicyEngine)),
-                buildProjectCommandService(
-                        userRepository,
-                        projectRepository,
-                        projectMemberRepository,
-                        projectMilestoneRepository,
-                        repositoryLinkService,
-                        milestonePolicyEngine,
-                        projectMilestoneAggregateService,
-                        projectAccessGuard,
-                        projectService,
-                        projectJiraIntegrationRepository),
-                buildProjectMemberService(
-                        userRepository,
-                        projectMemberRepository,
-                        projectRepository,
-                        projectAccessGuard,
-                        projectMilestoneRepository,
-                        projectService,
-                        repositoryLinkService,
-                        projectJiraIntegrationRepository,
-                        milestonePolicyEngine),
-                new SupervisorProjectMilestoneService(
-                        projectRepository,
-                        projectMilestoneRepository,
-                        milestonePolicyEngine,
-                        projectMilestoneAggregateService,
-                        projectAccessGuard,
-                        new SupervisorProjectDtoMapper(
-                                userRepository,
-                                projectMemberRepository,
-                                projectMilestoneRepository,
-                                projectService,
-                                repositoryLinkService,
-                                projectJiraIntegrationRepository,
-                                milestonePolicyEngine)),
-                new SupervisorGitHubDelegate(
-                        projectAccessGuard,
-                        projectService,
-                        gitHubAppIntegrationService,
-                        setupCallbackService,
-                        repositoryLinkService,
-                        accessSourceService,
-                        accessRequestService,
-                        projectRepository,
-                        new SupervisorProjectDtoMapper(
-                                userRepository,
-                                projectMemberRepository,
-                                projectMilestoneRepository,
-                                projectService,
-                                repositoryLinkService,
-                                projectJiraIntegrationRepository,
-                                milestonePolicyEngine)),
-                new SupervisorJiraConnectionService(
-                        jiraProperties,
-                        projectRepository,
-                        projectJiraIntegrationRepository,
-                        projectJiraOAuthStateRepository,
-                        jiraTokenEncryptionService,
-                        projectJiraIssueRepository,
-                        jiraIssueSyncService,
-                        projectAccessGuard,
-                        new SupervisorProjectDtoMapper(
-                                userRepository,
-                                projectMemberRepository,
-                                projectMilestoneRepository,
-                                projectService,
-                                repositoryLinkService,
-                                projectJiraIntegrationRepository,
-                                milestonePolicyEngine),
-                        restClientBuilder),
-                new SupervisorJiraReadService(
-                        projectRepository,
-                        projectJiraIntegrationRepository,
-                        projectJiraIssueRepository,
-                        jiraIssueSyncService,
-                        jiraHealthService,
-                        jiraSprintProgressService,
-                        jiraWorkloadService,
-                        projectAccessGuard),
-                new SupervisorMeetingDelegate(meetingChannelService, meetingRecordService));
-    }
-
-    private static SupervisorProjectMemberService buildProjectMemberService(
-            UserRepository userRepository,
-            ProjectMemberRepository projectMemberRepository,
-            ProjectRepository projectRepository,
-            ProjectAccessGuard projectAccessGuard,
-            ProjectMilestoneRepository projectMilestoneRepository,
-            ProjectService projectService,
-            RepositoryLinkService repositoryLinkService,
-            ProjectJiraIntegrationRepository projectJiraIntegrationRepository,
-            MilestonePolicyEngine milestonePolicyEngine) {
-        return new SupervisorProjectMemberService(
-                userRepository,
-                projectMemberRepository,
-                projectRepository,
-                projectAccessGuard,
-                new SupervisorProjectDtoMapper(
-                        userRepository,
-                        projectMemberRepository,
-                        projectMilestoneRepository,
-                        projectService,
-                        repositoryLinkService,
-                        projectJiraIntegrationRepository,
-                        milestonePolicyEngine));
-    }
-
-    private static SupervisorProjectCommandService buildProjectCommandService(
-            UserRepository userRepository,
-            ProjectRepository projectRepository,
-            ProjectMemberRepository projectMemberRepository,
-            ProjectMilestoneRepository projectMilestoneRepository,
-            RepositoryLinkService repositoryLinkService,
-            MilestonePolicyEngine milestonePolicyEngine,
-            ProjectMilestoneAggregateService projectMilestoneAggregateService,
-            ProjectAccessGuard projectAccessGuard,
-            ProjectService projectService,
-            ProjectJiraIntegrationRepository projectJiraIntegrationRepository) {
-        SupervisorProjectDtoMapper mapper = new SupervisorProjectDtoMapper(
-                userRepository,
-                projectMemberRepository,
-                projectMilestoneRepository,
-                projectService,
-                repositoryLinkService,
-                projectJiraIntegrationRepository,
-                milestonePolicyEngine);
-        SupervisorProjectMemberService memberService = new SupervisorProjectMemberService(
-                userRepository,
-                projectMemberRepository,
-                projectRepository,
-                projectAccessGuard,
-                mapper);
-        return new SupervisorProjectCommandService(
-                projectRepository,
-                projectMemberRepository,
-                projectMilestoneRepository,
-                repositoryLinkService,
-                milestonePolicyEngine,
-                projectMilestoneAggregateService,
-                projectAccessGuard,
-                mapper,
-                memberService);
     }
 
     @Override
