@@ -96,10 +96,21 @@ class ProjectGitHubDashboardMapper {
 
     private List<ProjectGitHubDashboardDto.Contributor> mapContributors(List<ProjectCommitDto> commits) {
         Map<String, Integer> commitsByAuthor = new LinkedHashMap<>();
+        Map<String, ContributorIdentity> identityByAuthor = new LinkedHashMap<>();
         for (ProjectCommitDto commit : commits) {
             String author = trimToNull(commit.getAuthor());
             String normalizedAuthor = author == null ? UNKNOWN_AUTHOR : author;
             commitsByAuthor.put(normalizedAuthor, commitsByAuthor.getOrDefault(normalizedAuthor, 0) + 1);
+            ContributorIdentity existing = identityByAuthor.get(normalizedAuthor);
+            if (existing == null || hasBetterIdentity(commit, existing)) {
+                identityByAuthor.put(
+                    normalizedAuthor,
+                    new ContributorIdentity(
+                        trimToNull(commit.getGithubUsername()),
+                        trimToNull(commit.getGithubAvatarUrl())
+                    )
+                );
+            }
         }
 
         return commitsByAuthor.entrySet().stream()
@@ -111,7 +122,15 @@ class ProjectGitHubDashboardMapper {
                 return left.getKey().compareToIgnoreCase(right.getKey());
             })
             .limit(dashboardContributorsLimit())
-            .map(entry -> new ProjectGitHubDashboardDto.Contributor(entry.getKey(), entry.getValue()))
+            .map(entry -> {
+                ContributorIdentity identity = identityByAuthor.get(entry.getKey());
+                return new ProjectGitHubDashboardDto.Contributor(
+                    entry.getKey(),
+                    entry.getValue(),
+                    identity == null ? null : identity.githubUsername(),
+                    identity == null ? null : identity.githubAvatarUrl()
+                );
+            })
             .toList();
     }
 
@@ -121,6 +140,8 @@ class ProjectGitHubDashboardMapper {
                 commit.getSha(),
                 commit.getMessage(),
                 commit.getAuthor(),
+                commit.getGithubUsername(),
+                commit.getGithubAvatarUrl(),
                 commit.getCommittedAt()
             ))
             .toList();
@@ -199,5 +220,17 @@ class ProjectGitHubDashboardMapper {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private boolean hasBetterIdentity(ProjectCommitDto commit, ContributorIdentity existing) {
+        boolean commitHasAvatar = trimToNull(commit.getGithubAvatarUrl()) != null;
+        boolean existingHasAvatar = existing.githubAvatarUrl() != null;
+        if (commitHasAvatar != existingHasAvatar) {
+            return commitHasAvatar;
+        }
+        return trimToNull(commit.getGithubUsername()) != null && existing.githubUsername() == null;
+    }
+
+    private record ContributorIdentity(String githubUsername, String githubAvatarUrl) {
     }
 }
