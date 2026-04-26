@@ -28,6 +28,10 @@ public class ProjectRepositoryLinkContributor {
     @Column(nullable = false)
     private String contributorName;
 
+    private String githubUsername;
+
+    private String githubAvatarUrl;
+
     @Column(nullable = false)
     private Integer commitCount;
 

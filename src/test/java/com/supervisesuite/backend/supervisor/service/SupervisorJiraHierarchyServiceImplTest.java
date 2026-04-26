@@ -31,6 +31,7 @@ import com.supervisesuite.backend.projects.service.milestones.ProjectMilestoneAg
 import com.supervisesuite.backend.projectfiles.service.ProjectFileService;
 import com.supervisesuite.backend.meetings.service.MeetingChannelService;
 import com.supervisesuite.backend.meetings.service.MeetingRecordService;
+import com.supervisesuite.backend.common.access.ProjectAccessGuard;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
 import java.util.List;
@@ -94,6 +95,8 @@ class SupervisorJiraHierarchyServiceImplTest {
     private RestClient.Builder restClientBuilder;
     @Mock
     private RestClient restClient;
+    @Mock
+    private ProjectAccessGuard projectAccessGuard;
 
     private SupervisorServiceImpl service;
     private UUID supervisorId;
@@ -104,32 +107,95 @@ class SupervisorJiraHierarchyServiceImplTest {
         MilestonePolicyEngine milestonePolicyEngine = new MilestonePolicyEngine();
         ProjectMilestoneAggregateService projectMilestoneAggregateService =
                 new ProjectMilestoneAggregateService(projectMilestoneRepository, milestonePolicyEngine);
-        service = new SupervisorServiceImpl(
+        SupervisorProjectDtoMapper projectDtoMapper = new SupervisorProjectDtoMapper(
                 userRepository,
-                projectRepository,
                 projectMemberRepository,
                 projectMilestoneRepository,
                 projectService,
-                gitHubAppIntegrationService,
-                setupCallbackService,
                 repositoryLinkService,
-                accessSourceService,
-                accessRequestService,
-                jiraProperties,
                 projectJiraIntegrationRepository,
-                projectJiraOAuthStateRepository,
-                jiraTokenEncryptionService,
-                projectJiraIssueRepository,
-                jiraIssueSyncService,
-                jiraHealthService,
-                jiraSprintProgressService,
-                jiraWorkloadService,
-                projectFileService,
-                meetingChannelService,
-                meetingRecordService,
-                restClientBuilder,
-                milestonePolicyEngine,
-                projectMilestoneAggregateService);
+                milestonePolicyEngine);
+        SupervisorProjectMemberService projectMemberService = new SupervisorProjectMemberService(
+                userRepository,
+                projectMemberRepository,
+                projectRepository,
+                projectAccessGuard,
+                projectDtoMapper);
+        service = new SupervisorServiceImpl(
+                projectAccessGuard,
+                new SupervisorProjectQueryService(
+                        projectRepository,
+                        projectJiraIntegrationRepository,
+                        projectJiraIssueRepository,
+                        projectFileService,
+                        projectAccessGuard,
+                        projectDtoMapper),
+                new SupervisorProjectCommandService(
+                        projectRepository,
+                        projectMemberRepository,
+                        projectMilestoneRepository,
+                        repositoryLinkService,
+                        milestonePolicyEngine,
+                        projectMilestoneAggregateService,
+                        projectAccessGuard,
+                        projectDtoMapper,
+                        projectMemberService),
+                projectMemberService,
+                new SupervisorProjectMilestoneService(
+                        projectRepository,
+                        projectMilestoneRepository,
+                        milestonePolicyEngine,
+                        projectMilestoneAggregateService,
+                        projectAccessGuard,
+                        projectDtoMapper),
+                new SupervisorGitHubDelegate(
+                        projectAccessGuard,
+                        projectService,
+                        gitHubAppIntegrationService,
+                        setupCallbackService,
+                        repositoryLinkService,
+                        accessSourceService,
+                        accessRequestService,
+                        projectRepository,
+                        projectDtoMapper),
+                new SupervisorJiraConnectionService(
+                        projectAccessGuard,
+                        new SupervisorJiraOAuthStartService(
+                                jiraProperties,
+                                projectJiraIntegrationRepository,
+                                projectJiraOAuthStateRepository,
+                                new SecureTokenService()),
+                        new SupervisorJiraOAuthCompletionService(
+                                jiraProperties,
+                                projectJiraOAuthStateRepository,
+                                projectAccessGuard,
+                                new SecureTokenService(),
+                                new AtlassianOAuthClient(restClientBuilder),
+                                new SupervisorJiraWorkspaceSelectionStore(),
+                                new SupervisorJiraIntegrationWriter(
+                                        projectRepository,
+                                        projectJiraIntegrationRepository,
+                                        jiraTokenEncryptionService,
+                                        projectJiraIssueRepository,
+                                        jiraIssueSyncService,
+                                        projectDtoMapper)),
+                        new SupervisorJiraIntegrationWriter(
+                                projectRepository,
+                                projectJiraIntegrationRepository,
+                                jiraTokenEncryptionService,
+                                projectJiraIssueRepository,
+                                jiraIssueSyncService,
+                                projectDtoMapper)),
+                new SupervisorJiraReadService(
+                        projectRepository,
+                        projectJiraIntegrationRepository,
+                        projectJiraIssueRepository,
+                        jiraIssueSyncService,
+                        jiraHealthService,
+                        jiraSprintProgressService,
+                        jiraWorkloadService,
+                        projectAccessGuard),
+                new SupervisorMeetingDelegate(meetingChannelService, meetingRecordService));
 
         supervisorId = UUID.randomUUID();
         projectId = UUID.randomUUID();
@@ -137,12 +203,12 @@ class SupervisorJiraHierarchyServiceImplTest {
         User supervisor = new User();
         supervisor.setId(supervisorId);
         supervisor.setRole(Roles.SUPERVISOR);
-        lenient().when(userRepository.findById(supervisorId)).thenReturn(Optional.of(supervisor));
+        lenient().when(projectAccessGuard.requireSupervisor(supervisorId.toString())).thenReturn(supervisor);
 
         Project project = new Project();
         project.setId(projectId);
-        lenient().when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisorId))
-                .thenReturn(Optional.of(project));
+        lenient().when(projectAccessGuard.requireSupervisorOwnsProject(supervisor, projectId))
+                .thenReturn(project);
     }
 
     @Test

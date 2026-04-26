@@ -1,6 +1,7 @@
 package com.supervisesuite.backend.student.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import com.supervisesuite.backend.TestcontainersConfiguration;
 import com.supervisesuite.backend.auth.security.CookieService;
@@ -16,6 +17,8 @@ import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -23,31 +26,33 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest(
-    webEnvironment = WebEnvironment.RANDOM_PORT,
+    webEnvironment = WebEnvironment.MOCK,
     properties = {
         "APP_PORT=0",
         "JWT_SECRET=dGVzdC1zZWNyZXQtd2hpY2gtaXMtbG9uZy1lbm91Z2gtZm9yLXRlc3RpbmctcHVycG9zZXMtb25seQ=="
     }
 )
+@AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 class StudentJiraControllerIntegrationTest {
 
     @Autowired
-    private TestRestTemplate restTemplate;
+    private MockMvc mockMvc;
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired
     private UserRepository userRepository;
@@ -86,14 +91,15 @@ class StudentJiraControllerIntegrationTest {
 
         String token = jwtService.generateAccessToken(student);
 
-        ResponseEntity<Map> response = getProjectJiraHealth(project.getId(), token);
+        MvcResult response = getProjectJiraHealth(project.getId(), token);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("success")).isEqualTo(true);
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.OK.value());
+        Map<?, ?> body = body(response);
+        assertThat(body).isNotNull();
+        assertThat(body.get("success")).isEqualTo(true);
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        Map<String, Object> data = (Map<String, Object>) body.get("data");
         assertThat(data).isNotNull();
         assertThat(data).containsKeys("completionPercent", "openIssues", "statusBreakdown", "bugRatio");
     }
@@ -106,11 +112,12 @@ class StudentJiraControllerIntegrationTest {
 
         String token = jwtService.generateAccessToken(student);
 
-        ResponseEntity<Map> response = getProjectJiraHealth(project.getId(), token);
+        MvcResult response = getProjectJiraHealth(project.getId(), token);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("success")).isEqualTo(false);
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
+        Map<?, ?> body = body(response);
+        assertThat(body).isNotNull();
+        assertThat(body.get("success")).isEqualTo(false);
     }
 
     @Test
@@ -125,14 +132,15 @@ class StudentJiraControllerIntegrationTest {
 
         String token = jwtService.generateAccessToken(student);
 
-        ResponseEntity<Map> response = getProjectJiraHierarchy(project.getId(), token);
+        MvcResult response = getProjectJiraHierarchy(project.getId(), token);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("success")).isEqualTo(true);
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.OK.value());
+        Map<?, ?> body = body(response);
+        assertThat(body).isNotNull();
+        assertThat(body.get("success")).isEqualTo(true);
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        Map<String, Object> data = (Map<String, Object>) body.get("data");
         assertThat(data).containsKeys("roots", "orphans");
     }
 
@@ -145,38 +153,47 @@ class StudentJiraControllerIntegrationTest {
 
         String token = jwtService.generateAccessToken(student);
 
-        ResponseEntity<Map> response = getProjectJiraHierarchy(project.getId(), token);
+        MvcResult response = getProjectJiraHierarchy(project.getId(), token);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.OK.value());
+        Map<?, ?> body = body(response);
+        assertThat(body).isNotNull();
         @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        Map<String, Object> data = (Map<String, Object>) body.get("data");
         assertThat(data).containsEntry("roots", List.of());
         assertThat(data).containsEntry("orphans", List.of());
     }
 
-    private ResponseEntity<Map> getProjectJiraHealth(UUID projectId, String accessToken) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + accessToken);
-
-        return restTemplate.exchange(
-            "/api/student/projects/" + projectId + "/jira/health",
-            HttpMethod.GET,
-            new HttpEntity<>(headers),
-            Map.class
-        );
+    private MvcResult getProjectJiraHealth(UUID projectId, String accessToken) {
+        try {
+            return mockMvc.perform(get("/api/student/projects/" + projectId + "/jira/health")
+                .cookie(accessCookie(accessToken)))
+                .andReturn();
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
-    private ResponseEntity<Map> getProjectJiraHierarchy(UUID projectId, String accessToken) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + accessToken);
+    private MvcResult getProjectJiraHierarchy(UUID projectId, String accessToken) {
+        try {
+            return mockMvc.perform(get("/api/student/projects/" + projectId + "/jira/hierarchy")
+                .cookie(accessCookie(accessToken)))
+                .andReturn();
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+    }
 
-        return restTemplate.exchange(
-            "/api/student/projects/" + projectId + "/jira/hierarchy",
-            HttpMethod.GET,
-            new HttpEntity<>(headers),
-            Map.class
-        );
+    private Cookie accessCookie(String accessToken) {
+        return new Cookie(CookieService.ACCESS_TOKEN_COOKIE, accessToken);
+    }
+
+    private Map<?, ?> body(MvcResult result) {
+        try {
+            return objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
     private User persistUser(String role, String email) {

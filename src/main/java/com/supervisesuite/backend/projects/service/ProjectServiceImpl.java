@@ -125,7 +125,9 @@ public class ProjectServiceImpl implements ProjectService {
         List<ProjectGitHubDashboardDto.Contributor> contributors = preview.getContributorsPreview().stream()
             .map(contributor -> new ProjectGitHubDashboardDto.Contributor(
                 contributor.getName(),
-                contributor.getCommitCount()
+                contributor.getCommitCount(),
+                contributor.getGithubUsername(),
+                contributor.getAvatarUrl()
             ))
             .toList();
 
@@ -134,6 +136,8 @@ public class ProjectServiceImpl implements ProjectService {
                 commit.getSha(),
                 commit.getMessage(),
                 commit.getAuthor(),
+                commit.getGithubUsername(),
+                commit.getAvatarUrl(),
                 commit.getCommittedAt()
             ))
             .toList();
@@ -197,7 +201,9 @@ public class ProjectServiceImpl implements ProjectService {
             .stream()
             .map(contributor -> new ProjectGitHubPreviewDto.ContributorPreviewItem(
                 contributor.getContributorName(),
-                contributor.getCommitCount()
+                contributor.getCommitCount(),
+                contributor.getGithubUsername(),
+                contributor.getGithubAvatarUrl()
             ))
             .toList();
 
@@ -212,6 +218,8 @@ public class ProjectServiceImpl implements ProjectService {
                 commit.getSha(),
                 commit.getMessage(),
                 commit.getAuthor(),
+                commit.getGithubUsername(),
+                commit.getGithubAvatarUrl(),
                 commit.getCommittedAt(),
                 commit.getCommitType()
             ))
@@ -283,6 +291,8 @@ public class ProjectServiceImpl implements ProjectService {
                 commit.getSha(),
                 commit.getMessage(),
                 commit.getAuthor(),
+                commit.getGithubUsername(),
+                commit.getGithubAvatarUrl(),
                 commit.getCommittedAt()
             ))
             .toList();
@@ -336,7 +346,9 @@ public class ProjectServiceImpl implements ProjectService {
         List<ProjectGitHubDashboardDto.Contributor> items = data.getContent().stream()
             .map(contributor -> new ProjectGitHubDashboardDto.Contributor(
                 contributor.getContributorName(),
-                contributor.getCommitCount()
+                contributor.getCommitCount(),
+                contributor.getGithubUsername(),
+                contributor.getGithubAvatarUrl()
             ))
             .toList();
 

@@ -4,6 +4,9 @@ import com.supervisesuite.backend.config.ProjectFileProperties;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.error.ValidationException;
+import com.supervisesuite.backend.common.access.ProjectAccessGuard;
+import com.supervisesuite.backend.common.util.EntityIdParser;
+import com.supervisesuite.backend.common.util.UserDisplayNameFormatter;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projectfiles.dto.ConfirmUploadRequest;
 import com.supervisesuite.backend.projectfiles.dto.ProjectFileDto;
@@ -44,6 +47,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
     private final ProjectFileRepository projectFileRepository;
     private final StorageService storageService;
     private final ProjectFileProperties projectFileProperties;
+    private final ProjectAccessGuard projectAccessGuard;
 
     ProjectFileServiceImpl(
         UserRepository userRepository,
@@ -51,7 +55,8 @@ class ProjectFileServiceImpl implements ProjectFileService {
         ProjectMemberRepository projectMemberRepository,
         ProjectFileRepository projectFileRepository,
         StorageService storageService,
-        ProjectFileProperties projectFileProperties
+        ProjectFileProperties projectFileProperties,
+        ProjectAccessGuard projectAccessGuard
     ) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
@@ -59,12 +64,13 @@ class ProjectFileServiceImpl implements ProjectFileService {
         this.projectFileRepository = projectFileRepository;
         this.storageService = storageService;
         this.projectFileProperties = projectFileProperties;
+        this.projectAccessGuard = projectAccessGuard;
     }
 
     @Override
     @Transactional(readOnly = true)
     public ProjectFileListDto listFiles(String authenticatedUserId, String projectId, ProjectFileAccessRole accessRole) {
-        User user = resolveAuthenticatedUser(authenticatedUserId, accessRole);
+        User user = requireAuthenticatedUser(authenticatedUserId, accessRole);
         UUID parsedProjectId = parseProjectId(projectId);
         requireProjectAccess(user, parsedProjectId, accessRole);
 
@@ -94,7 +100,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
         ProjectFileAccessRole accessRole,
         UploadUrlRequest request
     ) {
-        User user = resolveAuthenticatedUser(authenticatedUserId, accessRole);
+        User user = requireAuthenticatedUser(authenticatedUserId, accessRole);
         UUID parsedProjectId = parseProjectId(projectId);
         requireProjectAccess(user, parsedProjectId, accessRole);
 
@@ -115,7 +121,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
         ProjectFileAccessRole accessRole,
         ConfirmUploadRequest request
     ) {
-        User user = resolveAuthenticatedUser(authenticatedUserId, accessRole);
+        User user = requireAuthenticatedUser(authenticatedUserId, accessRole);
         UUID parsedProjectId = parseProjectId(projectId);
         requireProjectAccess(user, parsedProjectId, accessRole);
 
@@ -157,7 +163,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
         String fileId,
         ProjectFileAccessRole accessRole
     ) {
-        User user = resolveAuthenticatedUser(authenticatedUserId, accessRole);
+        User user = requireAuthenticatedUser(authenticatedUserId, accessRole);
         UUID parsedProjectId = parseProjectId(projectId);
         requireProjectAccess(user, parsedProjectId, accessRole);
         UUID parsedFileId = parseFileId(fileId);
@@ -172,7 +178,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
     @Override
     @Transactional
     public void deleteFile(String authenticatedUserId, String projectId, String fileId) {
-        User supervisor = resolveAuthenticatedUser(authenticatedUserId, ProjectFileAccessRole.SUPERVISOR);
+        User supervisor = requireAuthenticatedUser(authenticatedUserId, ProjectFileAccessRole.SUPERVISOR);
         UUID parsedProjectId = parseProjectId(projectId);
         requireProjectAccess(supervisor, parsedProjectId, ProjectFileAccessRole.SUPERVISOR);
         UUID parsedFileId = parseFileId(fileId);
@@ -186,58 +192,24 @@ class ProjectFileServiceImpl implements ProjectFileService {
         projectFileRepository.save(projectFile);
     }
 
-    private User resolveAuthenticatedUser(String authenticatedUserId, ProjectFileAccessRole accessRole) {
-        UUID userId;
-        try {
-            userId = UUID.fromString(authenticatedUserId);
-        } catch (IllegalArgumentException exception) {
-            throw new UnauthorizedException("Authentication required.");
-        }
-
-        User user = userRepository.findById(userId)
-            .orElseThrow(() -> new UnauthorizedException("Authentication required."));
-
-        String expectedRole = accessRole == ProjectFileAccessRole.SUPERVISOR ? Roles.SUPERVISOR : Roles.STUDENT;
-        if (!expectedRole.equals(user.getRole())) {
-            throw new UnauthorizedException("Authentication required.");
-        }
-
-        return user;
+    private User requireAuthenticatedUser(String authenticatedUserId, ProjectFileAccessRole accessRole) {
+        return accessRole == ProjectFileAccessRole.SUPERVISOR
+                ? projectAccessGuard.requireSupervisor(authenticatedUserId)
+                : projectAccessGuard.requireStudent(authenticatedUserId);
     }
 
     private Project requireProjectAccess(User user, UUID projectId, ProjectFileAccessRole accessRole) {
-        if (accessRole == ProjectFileAccessRole.SUPERVISOR) {
-            return projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, user.getId())
-                .orElseThrow(EntityNotFoundException::new);
-        }
-
-        boolean hasMembership = projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(
-            user.getId(),
-            projectId,
-            Roles.STUDENT
-        );
-        if (!hasMembership) {
-            throw new EntityNotFoundException();
-        }
-
-        return projectRepository.findByIdAndDeletedAtIsNull(projectId)
-            .orElseThrow(EntityNotFoundException::new);
+        return accessRole == ProjectFileAccessRole.SUPERVISOR
+                ? projectAccessGuard.requireSupervisorOwnsProject(user, projectId)
+                : projectAccessGuard.requireStudentIsMember(user, projectId);
     }
 
     private UUID parseProjectId(String projectId) {
-        try {
-            return UUID.fromString(projectId);
-        } catch (IllegalArgumentException exception) {
-            throw new EntityNotFoundException();
-        }
+        return EntityIdParser.parseOrNotFound(projectId);
     }
 
     private UUID parseFileId(String fileId) {
-        try {
-            return UUID.fromString(fileId);
-        } catch (IllegalArgumentException exception) {
-            throw new EntityNotFoundException();
-        }
+        return EntityIdParser.parseOrNotFound(fileId);
     }
 
     private String requireTrimmed(String value, String field) {
@@ -342,9 +314,7 @@ class ProjectFileServiceImpl implements ProjectFileService {
     }
 
     private String resolveUserDisplayName(User user) {
-        String fullName = ((user.getFirstName() == null ? "" : user.getFirstName()) + " "
-            + (user.getLastName() == null ? "" : user.getLastName())).trim();
-        return fullName.isEmpty() ? user.getEmail() : fullName;
+        return UserDisplayNameFormatter.format(user);
     }
 
     private ProjectFileDto toDto(ProjectFile projectFile, String uploadedByRole) {

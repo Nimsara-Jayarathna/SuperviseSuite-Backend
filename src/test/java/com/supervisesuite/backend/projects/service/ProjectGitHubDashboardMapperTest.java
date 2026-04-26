@@ -38,7 +38,14 @@ class ProjectGitHubDashboardMapperTest {
     void toDashboard_mapsCommitsAndContributorCounts() {
         Instant now = Instant.now();
         List<ProjectCommitDto> commits = List.of(
-            new ProjectCommitDto("1", "feat: add", "Alice", now.minusSeconds(10)),
+            new ProjectCommitDto(
+                "1",
+                "feat: add",
+                "Alice",
+                "alice-dev",
+                "https://avatars.githubusercontent.com/u/1?v=4",
+                now.minusSeconds(10)
+            ),
             new ProjectCommitDto("2", "fix: bug", "Bob", now.minusSeconds(20)),
             new ProjectCommitDto("3", "chore", "Alice", now.minusSeconds(30))
         );
@@ -57,5 +64,9 @@ class ProjectGitHubDashboardMapperTest {
         assertThat(dto.getContributors()).hasSize(2);
         assertThat(dto.getContributors().get(0).getName()).isEqualTo("Alice");
         assertThat(dto.getContributors().get(0).getCommitCount()).isEqualTo(2);
+        assertThat(dto.getContributors().get(0).getGithubUsername()).isEqualTo("alice-dev");
+        assertThat(dto.getContributors().get(0).getAvatarUrl()).isEqualTo("https://avatars.githubusercontent.com/u/1?v=4");
+        assertThat(dto.getRecentCommits().get(0).getGithubUsername()).isEqualTo("alice-dev");
+        assertThat(dto.getRecentCommits().get(0).getAvatarUrl()).isEqualTo("https://avatars.githubusercontent.com/u/1?v=4");
     }
 }

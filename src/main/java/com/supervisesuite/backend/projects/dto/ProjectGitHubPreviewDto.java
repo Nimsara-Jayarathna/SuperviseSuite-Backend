@@ -233,13 +233,21 @@ public class ProjectGitHubPreviewDto {
     public static class ContributorPreviewItem {
         private String name;
         private int commitCount;
+        private String githubUsername;
+        private String avatarUrl;
 
         public ContributorPreviewItem() {
         }
 
         public ContributorPreviewItem(String name, int commitCount) {
+            this(name, commitCount, null, null);
+        }
+
+        public ContributorPreviewItem(String name, int commitCount, String githubUsername, String avatarUrl) {
             this.name = name;
             this.commitCount = commitCount;
+            this.githubUsername = githubUsername;
+            this.avatarUrl = avatarUrl;
         }
 
         public String getName() {
@@ -257,12 +265,30 @@ public class ProjectGitHubPreviewDto {
         public void setCommitCount(int commitCount) {
             this.commitCount = commitCount;
         }
+
+        public String getGithubUsername() {
+            return githubUsername;
+        }
+
+        public void setGithubUsername(String githubUsername) {
+            this.githubUsername = githubUsername;
+        }
+
+        public String getAvatarUrl() {
+            return avatarUrl;
+        }
+
+        public void setAvatarUrl(String avatarUrl) {
+            this.avatarUrl = avatarUrl;
+        }
     }
 
     public static class RecentCommitPreviewItem {
         private String sha;
         private String message;
         private String author;
+        private String githubUsername;
+        private String avatarUrl;
         private Instant committedAt;
         private String type;
 
@@ -276,9 +302,23 @@ public class ProjectGitHubPreviewDto {
             Instant committedAt,
             String type
         ) {
+            this(sha, message, author, null, null, committedAt, type);
+        }
+
+        public RecentCommitPreviewItem(
+            String sha,
+            String message,
+            String author,
+            String githubUsername,
+            String avatarUrl,
+            Instant committedAt,
+            String type
+        ) {
             this.sha = sha;
             this.message = message;
             this.author = author;
+            this.githubUsername = githubUsername;
+            this.avatarUrl = avatarUrl;
             this.committedAt = committedAt;
             this.type = type;
         }
@@ -305,6 +345,22 @@ public class ProjectGitHubPreviewDto {
 
         public void setAuthor(String author) {
             this.author = author;
+        }
+
+        public String getGithubUsername() {
+            return githubUsername;
+        }
+
+        public void setGithubUsername(String githubUsername) {
+            this.githubUsername = githubUsername;
+        }
+
+        public String getAvatarUrl() {
+            return avatarUrl;
+        }
+
+        public void setAvatarUrl(String avatarUrl) {
+            this.avatarUrl = avatarUrl;
         }
 
         public Instant getCommittedAt() {

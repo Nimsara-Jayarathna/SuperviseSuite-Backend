@@ -33,6 +33,10 @@ public class ProjectRepositoryLinkCommit {
 
     private String author;
 
+    private String githubUsername;
+
+    private String githubAvatarUrl;
+
     private Instant committedAt;
 
     private String commitType;

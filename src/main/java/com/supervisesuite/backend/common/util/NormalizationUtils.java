@@ -15,6 +15,28 @@ public final class NormalizationUtils {
     }
 
     /**
+     * Trims a string and returns {@code null} if it becomes blank.
+     *
+     * @param input raw user input; may be {@code null}
+     * @return trimmed input, or {@code null} if blank
+     */
+    public static String trimToNull(String input) {
+        if (input == null) {
+            return null;
+        }
+        String trimmed = input.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
+     * Returns {@code fallback} if {@code input} is {@code null} or blank; otherwise returns the trimmed input.
+     */
+    public static String defaultIfBlank(String input, String fallback) {
+        String trimmed = trimToNull(input);
+        return trimmed == null ? fallback : trimmed;
+    }
+
+    /**
      * Returns the canonical form of a student registration number.
      *
      * <p>Rules:
@@ -35,10 +57,8 @@ public final class NormalizationUtils {
      * @return the normalized registration number, or {@code null} if {@code input} is {@code null}
      */
     public static String normalizeRegistrationNumber(String input) {
-        if (input == null) {
-            return null;
-        }
-        return input.trim().toUpperCase(Locale.ROOT);
+        String trimmed = trimToNull(input);
+        return trimmed == null ? null : trimmed.toUpperCase(Locale.ROOT);
     }
 
     /**
@@ -61,9 +81,7 @@ public final class NormalizationUtils {
      * @return the normalized email address, or {@code null} if {@code input} is {@code null}
      */
     public static String normalizeEmail(String input) {
-        if (input == null) {
-            return null;
-        }
-        return input.trim().toLowerCase(Locale.ROOT);
+        String trimmed = trimToNull(input);
+        return trimmed == null ? null : trimmed.toLowerCase(Locale.ROOT);
     }
 }

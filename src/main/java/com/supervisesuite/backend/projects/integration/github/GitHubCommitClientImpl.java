@@ -199,13 +199,22 @@ class GitHubCommitClientImpl implements GitHubCommitClient {
 
         String sha = textOrNull(node.path("sha"));
         String message = textOrEmpty(commitNode.path("message"));
-        String author = resolveAuthor(node, commitNode);
+        String authorName = resolveAuthorName(node, commitNode);
+        String githubUsername = textOrNull(node.path("author").path("login"));
+        String githubAvatarUrl = textOrNull(node.path("author").path("avatar_url"));
         Instant committedAt = parseInstantOrNull(textOrNull(commitNode.path("author").path("date")));
 
-        return new ProjectCommitDto(sha, message, author, committedAt);
+        return new ProjectCommitDto(
+            sha,
+            message,
+            authorName,
+            hasText(githubUsername) ? githubUsername.trim() : null,
+            hasText(githubAvatarUrl) ? githubAvatarUrl.trim() : null,
+            committedAt
+        );
     }
 
-    private String resolveAuthor(JsonNode rootNode, JsonNode commitNode) {
+    private String resolveAuthorName(JsonNode rootNode, JsonNode commitNode) {
         String commitAuthorName = textOrNull(commitNode.path("author").path("name"));
         if (hasText(commitAuthorName)) {
             return commitAuthorName.trim();
