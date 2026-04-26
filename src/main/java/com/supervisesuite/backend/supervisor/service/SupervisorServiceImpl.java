@@ -18,13 +18,11 @@ import com.supervisesuite.backend.projects.dto.GitHubAccessUpdatedAcknowledgeDto
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestContinueDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestCreateDto;
 import com.supervisesuite.backend.projects.dto.GitHubAccessRequestValidationDto;
-import com.supervisesuite.backend.projects.dto.GitHubInstallStartDto;
 import com.supervisesuite.backend.projects.dto.GitHubInstallationRepositoryPageDto;
 import com.supervisesuite.backend.projects.dto.LinkProjectGitHubRepositoryRequest;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubDashboardDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubPageDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryListingDto;
-import com.supervisesuite.backend.projects.dto.GitHubAvailableRepositoriesDto;
 import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoryLinkDto;
 import com.supervisesuite.backend.projects.dto.JiraAuthUrlDto;
 import com.supervisesuite.backend.projects.dto.JiraOAuthCompleteRequestDto;
@@ -95,8 +93,6 @@ import com.supervisesuite.backend.projects.service.GitHubAppIntegrationService;
 import com.supervisesuite.backend.projects.service.githubv2.SetupCallbackService;
 import com.supervisesuite.backend.projects.service.githubv2.RepositoryLinkService;
 import com.supervisesuite.backend.projects.service.githubv2.AccessSourceService;
-import com.supervisesuite.backend.projects.dto.ProjectGitHubRepositoriesDto;
-import com.supervisesuite.backend.projects.dto.ProjectGitHubAccessMetadata;
 import com.supervisesuite.backend.projects.service.githubv2.AccessRequestService;
 import com.supervisesuite.backend.projects.service.jira.JiraHealthService;
 import com.supervisesuite.backend.projects.service.jira.JiraIssueSyncService;
@@ -138,12 +134,7 @@ class SupervisorServiceImpl implements SupervisorService {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectMilestoneRepository projectMilestoneRepository;
-    private final ProjectService projectService;
-    private final GitHubAppIntegrationService gitHubAppIntegrationService;
-    private final SetupCallbackService setupCallbackService;
     private final RepositoryLinkService repositoryLinkService;
-    private final AccessSourceService accessSourceService;
-    private final AccessRequestService accessRequestService;
     private final JiraProperties jiraProperties;
     private final ProjectJiraIntegrationRepository projectJiraIntegrationRepository;
     private final ProjectJiraOAuthStateRepository projectJiraOAuthStateRepository;
@@ -154,12 +145,13 @@ class SupervisorServiceImpl implements SupervisorService {
     private final JiraSprintProgressService jiraSprintProgressService;
     private final JiraWorkloadService jiraWorkloadService;
     private final ProjectFileService projectFileService;
-    private final MeetingChannelService meetingChannelService;
-    private final MeetingRecordService meetingRecordService;
     private final RestClient restClient;
     private final MilestonePolicyEngine milestonePolicyEngine;
     private final ProjectMilestoneAggregateService projectMilestoneAggregateService;
     private final ProjectAccessGuard projectAccessGuard;
+    private final SupervisorProjectDtoMapper projectDtoMapper;
+    private final SupervisorMeetingDelegate meetingDelegate;
+    private final SupervisorGitHubDelegate gitHubDelegate;
     private final SecureRandom secureRandom = new SecureRandom();
     private final Map<String, PendingJiraWorkspaceSelection> pendingJiraWorkspaceSelections = new ConcurrentHashMap<>();
     private static final long JIRA_WORKSPACE_SELECTION_TTL_SECONDS = 600L;
@@ -195,12 +187,7 @@ class SupervisorServiceImpl implements SupervisorService {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.projectMilestoneRepository = projectMilestoneRepository;
-        this.projectService = projectService;
-        this.gitHubAppIntegrationService = gitHubAppIntegrationService;
-        this.setupCallbackService = setupCallbackService;
         this.repositoryLinkService = repositoryLinkService;
-        this.accessSourceService = accessSourceService;
-        this.accessRequestService = accessRequestService;
         this.jiraProperties = jiraProperties;
         this.projectJiraIntegrationRepository = projectJiraIntegrationRepository;
         this.projectJiraOAuthStateRepository = projectJiraOAuthStateRepository;
@@ -211,12 +198,29 @@ class SupervisorServiceImpl implements SupervisorService {
         this.jiraSprintProgressService = jiraSprintProgressService;
         this.jiraWorkloadService = jiraWorkloadService;
         this.projectFileService = projectFileService;
-        this.meetingChannelService = meetingChannelService;
-        this.meetingRecordService = meetingRecordService;
         this.restClient = restClientBuilder.build();
         this.milestonePolicyEngine = milestonePolicyEngine;
         this.projectMilestoneAggregateService = projectMilestoneAggregateService;
         this.projectAccessGuard = projectAccessGuard;
+        this.projectDtoMapper = new SupervisorProjectDtoMapper(
+                userRepository,
+                projectMemberRepository,
+                projectMilestoneRepository,
+                projectService,
+                repositoryLinkService,
+                projectJiraIntegrationRepository,
+                milestonePolicyEngine);
+        this.meetingDelegate = new SupervisorMeetingDelegate(meetingChannelService, meetingRecordService);
+        this.gitHubDelegate = new SupervisorGitHubDelegate(
+                projectAccessGuard,
+                projectService,
+                gitHubAppIntegrationService,
+                setupCallbackService,
+                repositoryLinkService,
+                accessSourceService,
+                accessRequestService,
+                projectRepository,
+                projectDtoMapper);
     }
 
     @Override
@@ -300,7 +304,7 @@ class SupervisorServiceImpl implements SupervisorService {
         }
 
         List<SupervisorDashboardDto.ProjectItem> dashboardProjects = projects.stream()
-                .map(p -> toDashboardProjectItem(
+                .map(p -> projectDtoMapper.toDashboardProjectItem(
                         p,
                         p.getMilestoneDate(),
                         jiraIndicators.getOrDefault(p.getId(), "NOT_CONNECTED")))
@@ -311,7 +315,7 @@ class SupervisorServiceImpl implements SupervisorService {
                         .comparing(Project::getLastActivityAt, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(Project::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(5)
-                .map(p -> toDashboardProjectItem(
+                .map(p -> projectDtoMapper.toDashboardProjectItem(
                         p,
                         p.getMilestoneDate(),
                         jiraIndicators.getOrDefault(p.getId(), "NOT_CONNECTED")))
@@ -339,7 +343,7 @@ class SupervisorServiceImpl implements SupervisorService {
 
         return projectRepository.findBySupervisorIdAndDeletedAtIsNullOrderByCreatedAtDesc(supervisor.getId())
                 .stream()
-                .map(this::toProjectSummary)
+                .map(projectDtoMapper::toProjectSummary)
                 .toList();
     }
 
@@ -351,7 +355,7 @@ class SupervisorServiceImpl implements SupervisorService {
 
         Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
 
-        SupervisorProjectDetailDto detail = toProjectDetail(project);
+        SupervisorProjectDetailDto detail = projectDtoMapper.toProjectDetail(project);
         ProjectFileListDto files = projectFileService.listFiles(
                 supervisor.getId().toString(),
                 project.getId().toString(),
@@ -387,7 +391,7 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setLastActivityAt(now);
 
         Project savedProject = projectRepository.save(project);
-        return toProjectDetail(savedProject);
+        return projectDtoMapper.toProjectDetail(savedProject);
     }
 
     @Override
@@ -409,7 +413,7 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setLastActivityAt(now);
 
         Project savedProject = projectRepository.save(project);
-        return toProjectDetail(savedProject);
+        return projectDtoMapper.toProjectDetail(savedProject);
     }
 
     @Override
@@ -434,7 +438,7 @@ class SupervisorServiceImpl implements SupervisorService {
         } else {
             repositoryLinkService.linkManualRepository(savedProject.getId(), normalizedRepositoryUrl, supervisor.getId());
         }
-        return toProjectDetail(savedProject);
+        return projectDtoMapper.toProjectDetail(savedProject);
     }
 
     @Override
@@ -464,7 +468,7 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setLastActivityAt(now);
         projectRepository.save(project);
 
-        return toProjectDetail(project);
+        return projectDtoMapper.toProjectDetail(project);
     }
 
     @Override
@@ -512,7 +516,7 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setLastActivityAt(now);
         projectRepository.save(project);
 
-        return toProjectDetail(project);
+        return projectDtoMapper.toProjectDetail(project);
     }
 
     @Override
@@ -578,7 +582,7 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setLastActivityAt(now);
         projectRepository.save(project);
 
-        return toProjectDetail(project);
+        return projectDtoMapper.toProjectDetail(project);
     }
 
     @Override
@@ -592,7 +596,7 @@ class SupervisorServiceImpl implements SupervisorService {
         return userRepository
                 .findTop10ByRoleAndEmailContainingIgnoreCaseOrderByEmailAsc(Roles.STUDENT, normalizedQuery)
                 .stream()
-                .map(this::toStudentSearchResult)
+                .map(projectDtoMapper::toStudentSearchResult)
                 .toList();
     }
 
@@ -657,7 +661,7 @@ class SupervisorServiceImpl implements SupervisorService {
 
             ProjectMilestone savedMilestone = projectMilestoneRepository.save(milestone);
             createdMilestones.add(savedMilestone);
-            milestones.add(toCreateMilestone(savedMilestone));
+            milestones.add(projectDtoMapper.toCreateMilestone(savedMilestone));
         }
 
         projectMilestoneAggregateService.applyTo(savedProject, createdMilestones);
@@ -672,8 +676,8 @@ class SupervisorServiceImpl implements SupervisorService {
                 updatedProject.getStatus(),
                 updatedProject.getProgressPercent(),
                 updatedProject.getMilestoneDate(),
-                students.stream().map(this::toStudentAssignment).toList(),
-                toCreateLeaderAssignment(updatedProject.getLeaderUserId()),
+                students.stream().map(projectDtoMapper::toStudentAssignment).toList(),
+                projectDtoMapper.toCreateLeaderAssignment(updatedProject.getLeaderUserId()),
                 milestones);
     }
 
@@ -684,11 +688,7 @@ class SupervisorServiceImpl implements SupervisorService {
             String projectId,
             String linkedRepositoryId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
-        UUID parsedProjectId = parseProjectId(projectId);
-
-        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
-        UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
-        return projectService.getGitHubDashboard(project.getId(), null, parsedLinkedRepositoryId);
+        return gitHubDelegate.getProjectGitHubDashboard(supervisor, projectId, linkedRepositoryId);
     }
 
     @Override
@@ -697,14 +697,10 @@ class SupervisorServiceImpl implements SupervisorService {
             String authenticatedUserId,
             String projectId,
             String linkedRepositoryId,
-            int page,
-            int size) {
+        int page,
+        int size) {
         User supervisor = resolveSupervisor(authenticatedUserId);
-        UUID parsedProjectId = parseProjectId(projectId);
-
-        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
-        UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
-        return projectService.getGitHubActivityPage(project.getId(), null, parsedLinkedRepositoryId, page, size);
+        return gitHubDelegate.getProjectGitHubActivityPage(supervisor, projectId, linkedRepositoryId, page, size);
     }
 
     @Override
@@ -713,14 +709,10 @@ class SupervisorServiceImpl implements SupervisorService {
             String authenticatedUserId,
             String projectId,
             String linkedRepositoryId,
-            int page,
-            int size) {
+        int page,
+        int size) {
         User supervisor = resolveSupervisor(authenticatedUserId);
-        UUID parsedProjectId = parseProjectId(projectId);
-
-        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
-        UUID parsedLinkedRepositoryId = parseLinkedRepositoryId(linkedRepositoryId);
-        return projectService.getGitHubContributorsPage(project.getId(), null, parsedLinkedRepositoryId, page, size);
+        return gitHubDelegate.getProjectGitHubContributorsPage(supervisor, projectId, linkedRepositoryId, page, size);
     }
 
     @Override
@@ -732,10 +724,7 @@ class SupervisorServiceImpl implements SupervisorService {
             int page,
             Integer size) {
         User supervisor = resolveSupervisor(authenticatedUserId);
-        UUID parsedProjectId = parseProjectId(projectId);
-        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
-        return projectService.getInstallationRepositories(project.getId(), installationId, supervisor.getId(), page,
-                size);
+        return gitHubDelegate.getGitHubInstallationRepositories(supervisor, projectId, installationId, page, size);
     }
     
     @Override
@@ -744,17 +733,7 @@ class SupervisorServiceImpl implements SupervisorService {
             String authenticatedUserId,
             String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
-        UUID parsedProjectId = parseProjectId(projectId);
-        
-        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
-        
-        List<com.supervisesuite.backend.projects.dto.GitHubAccessSourceDto> sources = accessSourceService.getProjectAccessSources(project.getId());
-        
-        List<GitHubAvailableRepositoriesDto> inventory = sources.stream()
-                .map(source -> repositoryLinkService.getAvailableRepositories(source.getId(), authenticatedUserId))
-                .toList();
-        
-        return new ProjectGitHubRepositoryListingDto(project.getId().toString(), inventory);
+        return gitHubDelegate.getProjectRepositoriesInventory(authenticatedUserId, supervisor, projectId);
     }
 
     @Override
@@ -763,9 +742,7 @@ class SupervisorServiceImpl implements SupervisorService {
             String authenticatedUserId,
             String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
-        UUID parsedProjectId = parseProjectId(projectId);
-        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
-        return gitHubAppIntegrationService.createProjectAccessRequest(parsedProjectId, supervisor.getId());
+        return gitHubDelegate.createGitHubRepositoryAccessRequest(supervisor, projectId);
     }
 
     @Override
@@ -775,12 +752,7 @@ class SupervisorServiceImpl implements SupervisorService {
             String projectId,
             String requestToken) {
         User supervisor = resolveSupervisor(authenticatedUserId);
-        UUID parsedProjectId = parseProjectId(projectId);
-        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
-        return gitHubAppIntegrationService.validateProjectAccessRequest(
-                parsedProjectId,
-                supervisor.getId(),
-                requestToken);
+        return gitHubDelegate.validateGitHubRepositoryAccessRequest(supervisor, projectId, requestToken);
     }
 
     @Override
@@ -790,12 +762,7 @@ class SupervisorServiceImpl implements SupervisorService {
             String projectId,
             String requestToken) {
         User supervisor = resolveSupervisor(authenticatedUserId);
-        UUID parsedProjectId = parseProjectId(projectId);
-        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
-        return gitHubAppIntegrationService.continueProjectAccessRequest(
-                parsedProjectId,
-                supervisor.getId(),
-                requestToken);
+        return gitHubDelegate.continueGitHubRepositoryAccessRequest(supervisor, projectId, requestToken);
     }
 
     @Override
@@ -804,13 +771,7 @@ class SupervisorServiceImpl implements SupervisorService {
             String authenticatedUserId,
             String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
-        UUID parsedProjectId = parseProjectId(projectId);
-        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
-
-        GitHubInstallStartDto setup = setupCallbackService.startDirectInstall(
-                parsedProjectId.toString(),
-                supervisor.getId().toString());
-        return setup.getGithubAuthorizeUrl();
+        return gitHubDelegate.buildGitHubSetupStartUrl(supervisor, projectId);
     }
 
     @Override
@@ -820,22 +781,7 @@ class SupervisorServiceImpl implements SupervisorService {
             String projectId,
             LinkProjectGitHubRepositoryRequest request) {
         User supervisor = resolveSupervisor(authenticatedUserId);
-        UUID parsedProjectId = parseProjectId(projectId);
-
-        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
-
-        ProjectGitHubRepositoryLinkDto linkedRepository = projectService.linkProjectToInstallationRepository(
-                project.getId(),
-                request.getInstallationId(),
-                request.getRepositoryId(),
-                supervisor.getId());
-
-        Instant now = Instant.now();
-        project.setUpdatedAt(now);
-        project.setLastActivityAt(now);
-        projectRepository.save(project);
-
-        return linkedRepository;
+        return gitHubDelegate.linkProjectGitHubRepository(supervisor, projectId, request);
     }
 
     @Override
@@ -844,114 +790,14 @@ class SupervisorServiceImpl implements SupervisorService {
             String authenticatedUserId,
             String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
-        UUID parsedProjectId = parseProjectId(projectId);
-
-        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
-
-        Instant now = Instant.now();
-        repositoryLinkService.disconnectAllLinks(project.getId());
-        project.setUpdatedAt(now);
-        project.setLastActivityAt(now);
-        Project savedProject = projectRepository.save(project);
-
-        return toProjectDetail(savedProject);
+        return gitHubDelegate.removeProjectGitHubAccessAuthorization(supervisor, projectId);
     }
 
     @Override
     @Transactional(noRollbackFor = GitHubInstallationDisconnectedException.class)
     public void refreshProjectGitHubData(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
-        UUID parsedProjectId = parseProjectId(projectId);
-
-        Project project = projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
-
-        ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
-        String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
-
-        projectService.refreshGitHubData(project.getId(), effectiveUrl);
-    }
-
-    private SupervisorProjectDetailDto toProjectDetail(Project project) {
-        ProjectGitHubRepositoriesDto githubRepositories = null;
-        try {
-            githubRepositories = repositoryLinkService.getProjectRepositories(
-                project.getId().toString(),
-                project.getSupervisor().getId().toString()
-            );
-        } catch (Exception ignored) {
-        }
-
-        ProjectGitHubAccessMetadata accessMetadata = repositoryLinkService.resolveLink(project.getId());
-        String effectiveUrl = accessMetadata != null ? accessMetadata.primaryRepositoryUrl() : null;
-
-        ProjectJiraIntegration jiraIntegration = projectJiraIntegrationRepository
-                .findFirstByProjectIdAndRevokedAtIsNullOrderByConnectedAtDesc(project.getId())
-                .orElse(null);
-
-        MilestoneDetailView milestoneDetailView = buildMilestoneDetailView(project.getId());
-
-        SupervisorProjectDetailDto detailDto = new SupervisorProjectDetailDto(
-                project.getId(),
-                project.getName(),
-                project.getDescription(),
-                project.getStatus(),
-                project.getBatch(),
-                project.getSemester(),
-                milestoneDetailView.milestoneDate(),
-                project.getProgressPercent(),
-                projectService.getGitHubPreview(project.getId(), effectiveUrl),
-                githubRepositories,
-                new SupervisorProjectDetailDto.JiraIntegration(
-                        jiraIntegration != null,
-                        jiraIntegration != null ? jiraIntegration.getWorkspaceName() : null,
-                    jiraIntegration != null ? jiraIntegration.getWorkspaceUrl() : null,
-                    jiraIntegration != null
-                        ? (jiraIntegration.getLastSyncedAt() != null
-                            ? jiraIntegration.getLastSyncedAt()
-                            : jiraIntegration.getConnectedAt())
-                        : null,
-                    jiraIntegration != null ? jiraIntegration.getTokenExpiresAt() : null,
-                    jiraIntegration != null ? jiraIntegration.getSyncStatus() : null),
-                project.getLastActivityAt(),
-                toDetailLeader(project.getLeaderUserId()),
-                getProjectMembers(project.getId()),
-                milestoneDetailView.milestones());
-        detailDto.setMilestoneInsights(milestoneDetailView.insights());
-        return detailDto;
-    }
-
-    private List<SupervisorProjectDetailDto.Member> getProjectMembers(UUID projectId) {
-        List<ProjectMember> projectMembers = projectMemberRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
-        List<UUID> memberIds = projectMembers.stream()
-                .map(ProjectMember::getUserId)
-                .toList();
-        Map<UUID, User> userById = new HashMap<>();
-        userRepository.findAllById(memberIds).forEach(user -> userById.put(user.getId(), user));
-
-        return projectMembers.stream()
-                .map(member -> toDetailMember(member, userById.get(member.getUserId())))
-                .filter(member -> member != null)
-                .toList();
-    }
-
-    private MilestoneDetailView buildMilestoneDetailView(UUID projectId) {
-        List<ProjectMilestone> projectMilestones = projectMilestoneRepository.findByProjectIdOrderBySequenceNoAsc(projectId);
-        MilestonePolicyEngine.MilestoneInsightsSnapshot snapshot =
-                milestonePolicyEngine.computeInsights(projectMilestones, LocalDate.now());
-
-        List<SupervisorProjectDetailDto.Milestone> milestoneDtos = projectMilestones.stream()
-                .map(milestone -> toDetailMilestone(
-                        milestone,
-                        snapshot.signalsByMilestoneId().get(milestone.getId())))
-                .toList();
-        SupervisorProjectDetailDto.MilestoneInsights insights = new SupervisorProjectDetailDto.MilestoneInsights(
-                snapshot.overdueOpenMilestones(),
-                snapshot.dueSoonCount(),
-                snapshot.timelineRiskLevel());
-        return new MilestoneDetailView(
-                milestoneDtos,
-                insights,
-                milestonePolicyEngine.computeProjectMilestoneDate(projectMilestones));
+        gitHubDelegate.refreshProjectGitHubData(supervisor, projectId);
     }
 
     private User resolveSupervisor(String authenticatedUserId) {
@@ -983,21 +829,14 @@ class SupervisorServiceImpl implements SupervisorService {
     @Transactional(readOnly = true)
     public GitHubAccessUpdatedSummaryDto getGitHubAccessUpdatedSummary(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
-        UUID parsedProjectId = parseProjectId(projectId);
-        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
-        
-        return accessRequestService.getPendingSummary(parsedProjectId);
+        return gitHubDelegate.getGitHubAccessUpdatedSummary(supervisor, projectId);
     }
 
     @Override
     @Transactional
     public GitHubAccessUpdatedAcknowledgeDto acknowledgeGitHubAccessUpdated(String authenticatedUserId, String projectId) {
         User supervisor = resolveSupervisor(authenticatedUserId);
-        UUID parsedProjectId = parseProjectId(projectId);
-        projectAccessGuard.requireSupervisorOwnsProject(supervisor, parsedProjectId);
-        
-        accessRequestService.acknowledgePending(parsedProjectId);
-        return new GitHubAccessUpdatedAcknowledgeDto(parsedProjectId);
+        return gitHubDelegate.acknowledgeGitHubAccessUpdated(supervisor, projectId);
     }
 
     @Override
@@ -1410,7 +1249,7 @@ class SupervisorServiceImpl implements SupervisorService {
         project.setUpdatedAt(now);
         project.setLastActivityAt(now);
         Project savedProject = projectRepository.save(project);
-        return toProjectDetail(savedProject);
+        return projectDtoMapper.toProjectDetail(savedProject != null ? savedProject : project);
     }
 
     @Override
@@ -1522,7 +1361,7 @@ class SupervisorServiceImpl implements SupervisorService {
     @Override
     @Transactional(readOnly = true)
     public List<MeetingChannelDto> getProjectMeetingChannels(String authenticatedUserId, String projectId) {
-        return meetingChannelService.listForSupervisor(authenticatedUserId, projectId);
+        return meetingDelegate.getProjectMeetingChannels(authenticatedUserId, projectId);
     }
 
     @Override
@@ -1532,7 +1371,7 @@ class SupervisorServiceImpl implements SupervisorService {
         String projectId,
         CreateMeetingChannelRequest request
     ) {
-        return meetingChannelService.createAsSupervisor(authenticatedUserId, projectId, request);
+        return meetingDelegate.addProjectMeetingChannel(authenticatedUserId, projectId, request);
     }
 
     @Override
@@ -1543,13 +1382,13 @@ class SupervisorServiceImpl implements SupervisorService {
         String channelId,
         UpdateMeetingChannelRequest request
     ) {
-        return meetingChannelService.updateAsSupervisor(authenticatedUserId, projectId, channelId, request);
+        return meetingDelegate.updateProjectMeetingChannel(authenticatedUserId, projectId, channelId, request);
     }
 
     @Override
     @Transactional
     public void deleteProjectMeetingChannel(String authenticatedUserId, String projectId, String channelId) {
-        meetingChannelService.deleteAsSupervisor(authenticatedUserId, projectId, channelId);
+        meetingDelegate.deleteProjectMeetingChannel(authenticatedUserId, projectId, channelId);
     }
 
     @Override
@@ -1559,13 +1398,13 @@ class SupervisorServiceImpl implements SupervisorService {
         String projectId,
         String channelId
     ) {
-        return meetingChannelService.approveAsSupervisor(authenticatedUserId, projectId, channelId);
+        return meetingDelegate.approveProjectMeetingChannel(authenticatedUserId, projectId, channelId);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<MeetingRecordDto> getProjectMeetingRecords(String authenticatedUserId, String projectId) {
-        return meetingRecordService.listForSupervisor(authenticatedUserId, projectId);
+        return meetingDelegate.getProjectMeetingRecords(authenticatedUserId, projectId);
     }
 
     @Override
@@ -1575,7 +1414,7 @@ class SupervisorServiceImpl implements SupervisorService {
         String projectId,
         CreateMeetingRecordRequest request
     ) {
-        return meetingRecordService.createAsSupervisor(authenticatedUserId, projectId, request);
+        return meetingDelegate.addProjectMeetingRecord(authenticatedUserId, projectId, request);
     }
 
     @Override
@@ -1586,13 +1425,13 @@ class SupervisorServiceImpl implements SupervisorService {
         String recordId,
         UpdateMeetingRecordRequest request
     ) {
-        return meetingRecordService.updateAsSupervisor(authenticatedUserId, projectId, recordId, request);
+        return meetingDelegate.updateProjectMeetingRecord(authenticatedUserId, projectId, recordId, request);
     }
 
     @Override
     @Transactional
     public void deleteProjectMeetingRecord(String authenticatedUserId, String projectId, String recordId) {
-        meetingRecordService.deleteAsSupervisor(authenticatedUserId, projectId, recordId);
+        meetingDelegate.deleteProjectMeetingRecord(authenticatedUserId, projectId, recordId);
     }
 
     @Override
@@ -1602,7 +1441,7 @@ class SupervisorServiceImpl implements SupervisorService {
         String projectId,
         String recordId
     ) {
-        return meetingRecordService.approveAsSupervisor(authenticatedUserId, projectId, recordId);
+        return meetingDelegate.approveProjectMeetingRecord(authenticatedUserId, projectId, recordId);
     }
 
     private ProjectMember buildProjectMember(
@@ -1618,126 +1457,8 @@ class SupervisorServiceImpl implements SupervisorService {
         return member;
     }
 
-    private StudentSearchResultDto toStudentSearchResult(User user) {
-        return new StudentSearchResultDto(
-                user.getId(),
-                user.getFirstName(),
-                user.getLastName(),
-                user.getEmail(),
-                user.getRegistrationNumber());
-    }
-
-    private CreateSupervisorProjectResponse.StudentAssignment toStudentAssignment(User user) {
-        return new CreateSupervisorProjectResponse.StudentAssignment(
-                user.getId(),
-                user.getFirstName(),
-                user.getLastName(),
-                user.getEmail(),
-                user.getRegistrationNumber());
-    }
-
-    private CreateSupervisorProjectResponse.StudentAssignment toCreateLeaderAssignment(UUID leaderUserId) {
-        if (leaderUserId == null) {
-            return null;
-        }
-        return userRepository.findById(leaderUserId)
-                .map(this::toStudentAssignment)
-                .orElse(null);
-    }
-
-    private CreateSupervisorProjectResponse.Milestone toCreateMilestone(ProjectMilestone milestone) {
-        return new CreateSupervisorProjectResponse.Milestone(
-                milestone.getId(),
-                milestone.getTitle(),
-                milestone.getDescription(),
-                milestone.getDueDate(),
-                milestone.getStatus(),
-                milestone.getSequenceNo());
-    }
-
-    private SupervisorProjectSummaryDto toProjectSummary(Project project) {
-        return new SupervisorProjectSummaryDto(
-                project.getId(),
-                project.getName(),
-                project.getDescription(),
-                project.getStatus(),
-                project.getBatch(),
-                project.getSemester(),
-                project.getMilestoneDate(),
-                project.getProgressPercent(),
-                projectMemberRepository.countByProjectId(project.getId()));
-    }
-
-    private SupervisorDashboardDto.ProjectItem toDashboardProjectItem(
-            Project project,
-            LocalDate effectiveMilestoneDate,
-            String jiraHealthIndicator) {
-        SupervisorDashboardDto.ProjectItem item = new SupervisorDashboardDto.ProjectItem(
-                project.getId(),
-                project.getName(),
-                project.getDescription(),
-                project.getStatus(),
-                effectiveMilestoneDate,
-                project.getLastActivityAt(),
-                project.getProgressPercent());
-        item.setJiraHealthIndicator(jiraHealthIndicator);
-        return item;
-    }
-
-    private SupervisorProjectDetailDto.Member toDetailMember(ProjectMember member, User user) {
-        if (user == null) {
-            return null;
-        }
-
-        return new SupervisorProjectDetailDto.Member(
-                user.getId(),
-                user.getFirstName(),
-                user.getLastName(),
-                user.getEmail(),
-                user.getRegistrationNumber(),
-                member.getMemberRole());
-    }
-
-    private SupervisorProjectDetailDto.Leader toDetailLeader(UUID leaderUserId) {
-        if (leaderUserId == null) {
-            return null;
-        }
-        return userRepository.findById(leaderUserId)
-                .map(this::toDetailLeader)
-                .orElse(null);
-    }
-
-    private SupervisorProjectDetailDto.Leader toDetailLeader(User user) {
-        return new SupervisorProjectDetailDto.Leader(
-                user.getId(),
-                user.getFirstName(),
-                user.getLastName(),
-                user.getEmail(),
-                user.getRegistrationNumber());
-    }
-
-    private SupervisorProjectDetailDto.Milestone toDetailMilestone(
-            ProjectMilestone milestone,
-            MilestonePolicyEngine.MilestoneSignal signal) {
-        SupervisorProjectDetailDto.Milestone milestoneDto = new SupervisorProjectDetailDto.Milestone(
-                milestone.getId(),
-                milestone.getTitle(),
-                milestone.getDescription(),
-                milestone.getDueDate(),
-                milestone.getStatus(),
-                milestone.getSequenceNo());
-        milestoneDto.setIsOverdue(signal != null && signal.isOverdue());
-        milestoneDto.setDaysOverdue(signal == null ? 0 : signal.daysOverdue());
-        milestoneDto.setIsChronologyViolation(signal != null && signal.isChronologyViolation());
-        return milestoneDto;
-    }
-
     private UUID parseProjectId(String projectId) {
         return EntityIdParser.parseOrNotFound(projectId);
-    }
-
-    private UUID parseLinkedRepositoryId(String linkedRepositoryId) {
-        return EntityIdParser.parseOrNull(linkedRepositoryId, "linkedRepositoryId");
     }
 
     private UUID parseMilestoneId(String milestoneId) {
@@ -1788,12 +1509,6 @@ class SupervisorServiceImpl implements SupervisorService {
                     "leaderStudentId",
                     "Leader must be an assigned student of this project.");
         }
-    }
-
-    private record MilestoneDetailView(
-            List<SupervisorProjectDetailDto.Milestone> milestones,
-            SupervisorProjectDetailDto.MilestoneInsights insights,
-            LocalDate milestoneDate) {
     }
 
     private String validateLifecycleStatus(String rawStatus) {
