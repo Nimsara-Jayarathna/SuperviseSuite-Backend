@@ -2,10 +2,8 @@ package com.supervisesuite.backend.projectfiles.service;
 
 import com.supervisesuite.backend.config.ProjectFileProperties;
 import com.supervisesuite.backend.common.constants.Roles;
-import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.error.ValidationException;
 import com.supervisesuite.backend.common.access.ProjectAccessGuard;
-import com.supervisesuite.backend.memberships.entity.ProjectMember;
 import com.supervisesuite.backend.memberships.repository.ProjectMemberRepository;
 import com.supervisesuite.backend.projectfiles.dto.ConfirmUploadRequest;
 import com.supervisesuite.backend.projectfiles.dto.ProjectFileDto;
@@ -29,9 +27,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -119,10 +115,6 @@ class ProjectFileServiceImplTest {
 
     @Test
     void listFiles_whenSupervisor_shouldReturnFiles() {
-        when(userRepository.findById(supervisor.getId())).thenReturn(Optional.of(supervisor));
-        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId()))
-                .thenReturn(Optional.of(project));
-
         ProjectFile file = new ProjectFile();
         file.setId(UUID.randomUUID());
         file.setProjectId(projectId);
@@ -146,11 +138,6 @@ class ProjectFileServiceImplTest {
 
     @Test
     void listFiles_whenStudentInProject_shouldReturnFiles() {
-        when(userRepository.findById(student.getId())).thenReturn(Optional.of(student));
-        when(projectRepository.findByIdAndDeletedAtIsNull(projectId)).thenReturn(Optional.of(project));
-        when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(student.getId(), projectId, Roles.STUDENT))
-                .thenReturn(true);
-
         when(projectFileRepository.findByProjectIdAndDeletedAtIsNullOrderByCreatedAtDesc(projectId))
                 .thenReturn(List.of());
 
@@ -164,9 +151,8 @@ class ProjectFileServiceImplTest {
 
     @Test
     void listFiles_whenStudentNotInProject_shouldThrowNotFound() {
-        when(userRepository.findById(student.getId())).thenReturn(Optional.of(student));
-        when(projectMemberRepository.existsByUserIdAndProjectIdAndMemberRole(student.getId(), projectId, Roles.STUDENT))
-                .thenReturn(false);
+        when(projectAccessGuard.requireStudentIsMember(student, projectId))
+                .thenThrow(new EntityNotFoundException());
 
         assertThatThrownBy(() -> projectFileService.listFiles(
                 student.getId().toString(),
@@ -176,10 +162,6 @@ class ProjectFileServiceImplTest {
 
     @Test
     void getUploadUrl_shouldReturnPresignedUrl() {
-        when(userRepository.findById(supervisor.getId())).thenReturn(Optional.of(supervisor));
-        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId()))
-                .thenReturn(Optional.of(project));
-
         UploadUrlRequest request = new UploadUrlRequest();
         request.setFileName("document.pdf");
         request.setContentType("application/pdf");
@@ -198,10 +180,6 @@ class ProjectFileServiceImplTest {
 
     @Test
     void confirmUpload_shouldSaveFile() {
-        when(userRepository.findById(supervisor.getId())).thenReturn(Optional.of(supervisor));
-        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId()))
-                .thenReturn(Optional.of(project));
-
         ConfirmUploadRequest request = new ConfirmUploadRequest();
         request.setFileName("submission.pdf");
         request.setFileType("application/pdf");
@@ -234,10 +212,6 @@ class ProjectFileServiceImplTest {
 
     @Test
     void confirmUpload_whenFileTooLarge_shouldThrowValidationException() {
-        when(userRepository.findById(supervisor.getId())).thenReturn(Optional.of(supervisor));
-        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId()))
-                .thenReturn(Optional.of(project));
-
         ConfirmUploadRequest request = new ConfirmUploadRequest();
         request.setFileName("submission.pdf");
         request.setFileType("application/pdf");
@@ -253,10 +227,6 @@ class ProjectFileServiceImplTest {
 
     @Test
     void getDownloadUrl_shouldReturnDownloadUrl() {
-        when(userRepository.findById(supervisor.getId())).thenReturn(Optional.of(supervisor));
-        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId()))
-                .thenReturn(Optional.of(project));
-
         UUID fileId = UUID.randomUUID();
         ProjectFile file = new ProjectFile();
         file.setS3Key("some-s3-key");
@@ -276,10 +246,6 @@ class ProjectFileServiceImplTest {
 
     @Test
     void deleteFile_shouldSoftDeleteAndRemoveFromS3() {
-        when(userRepository.findById(supervisor.getId())).thenReturn(Optional.of(supervisor));
-        when(projectRepository.findByIdAndSupervisor_IdAndDeletedAtIsNull(projectId, supervisor.getId()))
-                .thenReturn(Optional.of(project));
-
         UUID fileId = UUID.randomUUID();
         ProjectFile file = new ProjectFile();
         file.setS3Key("some-s3-key");

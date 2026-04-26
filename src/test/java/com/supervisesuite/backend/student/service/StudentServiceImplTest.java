@@ -126,7 +126,6 @@ class StudentServiceImplTest {
 
     @Test
     void getProjects_noMemberships_returnsEmptyList() {
-        when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
         when(projectMemberRepository.findByUserIdAndMemberRoleOrderByCreatedAtDesc(studentId, Roles.STUDENT))
             .thenReturn(List.of());
 
@@ -140,7 +139,6 @@ class StudentServiceImplTest {
         UUID projectId = UUID.randomUUID();
         UUID projectId2 = UUID.randomUUID();
 
-        when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
         when(projectMemberRepository.findByUserIdAndMemberRoleOrderByCreatedAtDesc(studentId, Roles.STUDENT))
             .thenReturn(List.of(
                 membership(studentId, projectId),
