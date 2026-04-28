@@ -250,6 +250,8 @@ public class GitHubSyncService {
 
             entity.setMessage(nullable(commit.getMessage(), ""));
             entity.setAuthor(nullable(commit.getAuthor(), "Unknown"));
+            entity.setGithubUsername(trimToNull(commit.getGithubUsername()));
+            entity.setGithubAvatarUrl(trimToNull(commit.getGithubAvatarUrl()));
             entity.setCommittedAt(commit.getCommittedAt());
             entity.setCommitType(resolveCommitType(commit.getMessage()));
             entity.setUpdatedAt(now);
@@ -262,6 +264,7 @@ public class GitHubSyncService {
 
         Map<String, Integer> countByContributor = new HashMap<>();
         Map<String, Instant> lastByContributor = new HashMap<>();
+        Map<String, ContributorIdentity> identityByContributor = new HashMap<>();
 
         for (ProjectRepositoryLinkCommit commit : commits) {
             String contributor = nullable(commit.getAuthor(), "Unknown");
@@ -272,6 +275,16 @@ public class GitHubSyncService {
                 if (existing == null || commit.getCommittedAt().isAfter(existing)) {
                     lastByContributor.put(contributor, commit.getCommittedAt());
                 }
+            }
+
+            if (!identityByContributor.containsKey(contributor) || hasBetterIdentity(commit, identityByContributor.get(contributor))) {
+                identityByContributor.put(
+                    contributor,
+                    new ContributorIdentity(
+                        trimToNull(commit.getGithubUsername()),
+                        trimToNull(commit.getGithubAvatarUrl())
+                    )
+                );
             }
         }
 
@@ -293,6 +306,9 @@ public class GitHubSyncService {
 
             entity.setCommitCount(entry.getValue());
             entity.setLastContributionAt(lastByContributor.get(contributorName));
+            ContributorIdentity identity = identityByContributor.get(contributorName);
+            entity.setGithubUsername(identity == null ? null : identity.githubUsername());
+            entity.setGithubAvatarUrl(identity == null ? null : identity.githubAvatarUrl());
             entity.setUpdatedAt(now);
             contributorRepository.save(entity);
         }
@@ -339,5 +355,24 @@ public class GitHubSyncService {
 
     private String nullable(String value, String fallback) {
         return hasText(value) ? value.trim() : fallback;
+    }
+
+    private String trimToNull(String value) {
+        return hasText(value) ? value.trim() : null;
+    }
+
+    private boolean hasBetterIdentity(ProjectRepositoryLinkCommit commit, ContributorIdentity existing) {
+        if (existing == null) {
+            return true;
+        }
+        boolean commitHasAvatar = hasText(commit.getGithubAvatarUrl());
+        boolean existingHasAvatar = hasText(existing.githubAvatarUrl());
+        if (commitHasAvatar != existingHasAvatar) {
+            return commitHasAvatar;
+        }
+        return hasText(commit.getGithubUsername()) && !hasText(existing.githubUsername());
+    }
+
+    private record ContributorIdentity(String githubUsername, String githubAvatarUrl) {
     }
 }

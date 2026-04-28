@@ -3,6 +3,8 @@ package com.supervisesuite.backend.meetings.service;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.common.error.UnauthorizedException;
 import com.supervisesuite.backend.common.error.ValidationException;
+import com.supervisesuite.backend.common.util.EntityIdParser;
+import com.supervisesuite.backend.common.util.UserDisplayNameFormatter;
 import com.supervisesuite.backend.meetings.dto.CreateMeetingChannelRequest;
 import com.supervisesuite.backend.meetings.dto.MeetingChannelDto;
 import com.supervisesuite.backend.meetings.dto.UpdateMeetingChannelRequest;
@@ -308,25 +310,14 @@ class MeetingChannelServiceImpl implements MeetingChannelService {
     }
 
     private String resolveUserDisplayName(User user) {
-        String fullName = ((user.getFirstName() == null ? "" : user.getFirstName()) + " "
-            + (user.getLastName() == null ? "" : user.getLastName())).trim();
-        return fullName.isEmpty() ? user.getEmail() : fullName;
+        return UserDisplayNameFormatter.format(user);
     }
 
     private UUID parseProjectId(String projectId) {
-        try {
-            return UUID.fromString(projectId);
-        } catch (IllegalArgumentException exception) {
-            throw new EntityNotFoundException();
-        }
+        return EntityIdParser.parseOrNotFound(projectId);
     }
 
     private UUID parseChannelId(String channelId) {
-        try {
-            return UUID.fromString(channelId);
-        } catch (IllegalArgumentException exception) {
-            throw new EntityNotFoundException();
-        }
+        return EntityIdParser.parseOrNotFound(channelId);
     }
 }
-

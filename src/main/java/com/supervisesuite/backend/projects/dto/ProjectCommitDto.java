@@ -5,16 +5,31 @@ import java.time.Instant;
 public class ProjectCommitDto {
     private String sha;
     private String message;
-    private String author;
+    private String authorName;
+    private String githubUsername;
+    private String githubAvatarUrl;
     private Instant committedAt;
 
     public ProjectCommitDto() {
     }
 
     public ProjectCommitDto(String sha, String message, String author, Instant committedAt) {
+        this(sha, message, author, null, null, committedAt);
+    }
+
+    public ProjectCommitDto(
+        String sha,
+        String message,
+        String authorName,
+        String githubUsername,
+        String githubAvatarUrl,
+        Instant committedAt
+    ) {
         this.sha = sha;
         this.message = message;
-        this.author = author;
+        this.authorName = authorName;
+        this.githubUsername = githubUsername;
+        this.githubAvatarUrl = githubAvatarUrl;
         this.committedAt = committedAt;
     }
 
@@ -35,11 +50,35 @@ public class ProjectCommitDto {
     }
 
     public String getAuthor() {
-        return author;
+        return authorName;
     }
 
     public void setAuthor(String author) {
-        this.author = author;
+        this.authorName = author;
+    }
+
+    public String getAuthorName() {
+        return authorName;
+    }
+
+    public void setAuthorName(String authorName) {
+        this.authorName = authorName;
+    }
+
+    public String getGithubUsername() {
+        return githubUsername;
+    }
+
+    public void setGithubUsername(String githubUsername) {
+        this.githubUsername = githubUsername;
+    }
+
+    public String getGithubAvatarUrl() {
+        return githubAvatarUrl;
+    }
+
+    public void setGithubAvatarUrl(String githubAvatarUrl) {
+        this.githubAvatarUrl = githubAvatarUrl;
     }
 
     public Instant getCommittedAt() {

@@ -1,25 +1,28 @@
 package com.supervisesuite.backend.auth.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.supervisesuite.backend.TestcontainersConfiguration;
 import com.supervisesuite.backend.auth.AuthTestBase;
 import com.supervisesuite.backend.auth.dto.LoginRequest;
 import com.supervisesuite.backend.common.constants.Roles;
 import com.supervisesuite.backend.users.entity.User;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 /**
  * Integration tests for {@code POST /api/auth/login}.
@@ -32,12 +35,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * enforced by {@link #cleanUp()}.
  */
 @SpringBootTest(
-    webEnvironment = WebEnvironment.RANDOM_PORT,
+    webEnvironment = WebEnvironment.MOCK,
     properties = {
         "APP_PORT=0",
         "JWT_SECRET=dGVzdC1zZWNyZXQtd2hpY2gtaXMtbG9uZy1lbm91Z2gtZm9yLXRlc3RpbmctcHVycG9zZXMtb25seQ=="
     }
 )
+@AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 class LoginEndpointTest extends AuthTestBase {
 
@@ -46,10 +50,13 @@ class LoginEndpointTest extends AuthTestBase {
     private static final String TEST_PASSWORD = "Secure@123";
 
     @Autowired
-    private TestRestTemplate restTemplate;
+    private MockMvc mockMvc;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void cleanUp() {
@@ -62,21 +69,17 @@ class LoginEndpointTest extends AuthTestBase {
     // -------------------------------------------------------------------------
 
     @Test
-    void login_validCredentials_returns200() {
-        ResponseEntity<Map> response = restTemplate.postForEntity(
-            LOGIN_URL, validRequest(), Map.class
-        );
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    void login_validCredentials_returns200() throws Exception {
+        mockMvc.perform(post(LOGIN_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(validRequest())))
+            .andExpect(status().isOk());
     }
 
     @Test
-    void login_validCredentials_responseBodyHasCorrectShape() {
-        ResponseEntity<Map> response = restTemplate.postForEntity(
-            LOGIN_URL, validRequest(), Map.class
-        );
-
-        Map<?, ?> body = response.getBody();
+    void login_validCredentials_responseBodyHasCorrectShape() throws Exception {
+        MvcResult result = performLogin(validRequest());
+        Map<?, ?> body = body(result);
         assertThat(body).isNotNull();
         assertThat(body.get("success")).isEqualTo(true);
         assertThat(body.get("message")).isEqualTo("Login successful.");
@@ -92,12 +95,9 @@ class LoginEndpointTest extends AuthTestBase {
     }
 
     @Test
-    void login_validCredentials_setsAccessTokenCookie() {
-        ResponseEntity<Map> response = restTemplate.postForEntity(
-            LOGIN_URL, validRequest(), Map.class
-        );
-
-        java.util.List<String> setCookieHeaders = response.getHeaders().get("Set-Cookie");
+    void login_validCredentials_setsAccessTokenCookie() throws Exception {
+        MvcResult result = performLogin(validRequest());
+        java.util.List<String> setCookieHeaders = result.getResponse().getHeaders("Set-Cookie");
         assertThat(setCookieHeaders).isNotNull();
         assertThat(setCookieHeaders).anyMatch(h -> h.startsWith("ss_access_token="));
         assertThat(setCookieHeaders).anyMatch(h ->
@@ -106,12 +106,9 @@ class LoginEndpointTest extends AuthTestBase {
     }
 
     @Test
-    void login_validCredentials_setsRefreshTokenCookie() {
-        ResponseEntity<Map> response = restTemplate.postForEntity(
-            LOGIN_URL, validRequest(), Map.class
-        );
-
-        java.util.List<String> setCookieHeaders = response.getHeaders().get("Set-Cookie");
+    void login_validCredentials_setsRefreshTokenCookie() throws Exception {
+        MvcResult result = performLogin(validRequest());
+        java.util.List<String> setCookieHeaders = result.getResponse().getHeaders("Set-Cookie");
         assertThat(setCookieHeaders).isNotNull();
         assertThat(setCookieHeaders).anyMatch(h -> h.startsWith("ss_refresh_token="));
         assertThat(setCookieHeaders).anyMatch(h ->
@@ -120,13 +117,11 @@ class LoginEndpointTest extends AuthTestBase {
     }
 
     @Test
-    void login_validCredentials_userInfoIsCorrect() {
-        ResponseEntity<Map> response = restTemplate.postForEntity(
-            LOGIN_URL, validRequest(), Map.class
-        );
+    void login_validCredentials_userInfoIsCorrect() throws Exception {
+        MvcResult result = performLogin(validRequest());
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        Map<String, Object> data = (Map<String, Object>) body(result).get("data");
         @SuppressWarnings("unchecked")
         Map<String, Object> user = (Map<String, Object>) data.get("user");
 
@@ -140,13 +135,11 @@ class LoginEndpointTest extends AuthTestBase {
     }
 
     @Test
-    void login_validCredentials_doesNotExposePasswordHash() {
-        ResponseEntity<Map> response = restTemplate.postForEntity(
-            LOGIN_URL, validRequest(), Map.class
-        );
+    void login_validCredentials_doesNotExposePasswordHash() throws Exception {
+        MvcResult result = performLogin(validRequest());
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        Map<String, Object> data = (Map<String, Object>) body(result).get("data");
         @SuppressWarnings("unchecked")
         Map<String, Object> user = (Map<String, Object>) data.get("user");
 
@@ -155,22 +148,23 @@ class LoginEndpointTest extends AuthTestBase {
     }
 
     @Test
-    void login_validCredentials_persistsRefreshTokenInDatabase() {
-        restTemplate.postForEntity(LOGIN_URL, validRequest(), Map.class);
+    void login_validCredentials_persistsRefreshTokenInDatabase() throws Exception {
+        performLogin(validRequest());
 
         assertThat(refreshTokenRepository.findAll()).hasSize(1);
     }
 
     @Test
-    void login_emailIsCaseInsensitive() {
+    void login_emailIsCaseInsensitive() throws Exception {
         // Register with lowercase; login with mixed case
         LoginRequest request = new LoginRequest();
         request.setEmail("Amal.Perera@University.AC.LK");
         request.setPassword(TEST_PASSWORD);
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        mockMvc.perform(post(LOGIN_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk());
     }
 
     // -------------------------------------------------------------------------
@@ -178,47 +172,62 @@ class LoginEndpointTest extends AuthTestBase {
     // -------------------------------------------------------------------------
 
     @Test
-    void login_wrongPassword_returns401() {
+    void login_wrongPassword_returns401() throws Exception {
         LoginRequest request = new LoginRequest();
         request.setEmail(TEST_EMAIL);
         request.setPassword("WrongPassword@1");
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
+        MvcResult result = mockMvc.perform(post(LOGIN_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isUnauthorized())
+            .andReturn();
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getHeaders().getContentType()).isNotNull();
-        assertThat(response.getHeaders().getContentType().isCompatibleWith(MediaType.APPLICATION_JSON)).isTrue();
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("success")).isEqualTo(false);
-        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
-        assertThat(response.getBody().get("message")).isEqualTo("Invalid email or password.");
+        assertThat(result.getResponse().getContentType()).isNotNull();
+        assertThat(MediaType.parseMediaType(result.getResponse().getContentType())
+            .isCompatibleWith(MediaType.APPLICATION_JSON)).isTrue();
+
+        Map<?, ?> body = body(result);
+        assertThat(body).isNotNull();
+        assertThat(body.get("success")).isEqualTo(false);
+        assertThat(error(body).get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(body.get("message")).isEqualTo("Invalid email or password.");
     }
 
     @Test
-    void login_unknownEmail_returns401() {
+    void login_unknownEmail_returns401() throws Exception {
         LoginRequest request = new LoginRequest();
         request.setEmail("nobody@university.ac.lk");
         request.setPassword(TEST_PASSWORD);
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
+        MvcResult result = mockMvc.perform(post(LOGIN_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isUnauthorized())
+            .andReturn();
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getHeaders().getContentType()).isNotNull();
-        assertThat(response.getHeaders().getContentType().isCompatibleWith(MediaType.APPLICATION_JSON)).isTrue();
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("success")).isEqualTo(false);
-        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(result.getResponse().getContentType()).isNotNull();
+        assertThat(MediaType.parseMediaType(result.getResponse().getContentType())
+            .isCompatibleWith(MediaType.APPLICATION_JSON)).isTrue();
+
+        Map<?, ?> body = body(result);
+        assertThat(body).isNotNull();
+        assertThat(body.get("success")).isEqualTo(false);
+        assertThat(error(body).get("code")).isEqualTo("UNAUTHORIZED");
         // Same message as wrong password — prevents user enumeration
-        assertThat(response.getBody().get("message")).isEqualTo("Invalid email or password.");
+        assertThat(body.get("message")).isEqualTo("Invalid email or password.");
     }
 
     @Test
-    void login_wrongPassword_doesNotPersistRefreshToken() {
+    void login_wrongPassword_doesNotPersistRefreshToken() throws Exception {
         LoginRequest request = new LoginRequest();
         request.setEmail(TEST_EMAIL);
         request.setPassword("WrongPassword@1");
 
-        restTemplate.postForEntity(LOGIN_URL, request, Map.class);
+        mockMvc.perform(post(LOGIN_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isUnauthorized());
 
         assertThat(refreshTokenRepository.findAll()).isEmpty();
     }
@@ -228,53 +237,77 @@ class LoginEndpointTest extends AuthTestBase {
     // -------------------------------------------------------------------------
 
     @Test
-    void login_missingEmail_returns400() {
+    void login_missingEmail_returns400() throws Exception {
         LoginRequest request = new LoginRequest();
         request.setEmail("");
         request.setPassword(TEST_PASSWORD);
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
+        MvcResult result = mockMvc.perform(post(LOGIN_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest())
+            .andReturn();
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
+        Map<?, ?> body = body(result);
+        assertThat(error(body).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
+        var details = (java.util.List<Map<?, ?>>) error(body).get("details");
         assertThat(details).anyMatch(d -> "email".equals(d.get("field")));
     }
 
     @Test
-    void login_invalidEmailFormat_returns400() {
+    void login_invalidEmailFormat_returns400() throws Exception {
         LoginRequest request = new LoginRequest();
         request.setEmail("not-an-email");
         request.setPassword(TEST_PASSWORD);
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
+        MvcResult result = mockMvc.perform(post(LOGIN_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest())
+            .andReturn();
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
+        Map<?, ?> body = body(result);
+        assertThat(error(body).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
+        var details = (java.util.List<Map<?, ?>>) error(body).get("details");
         assertThat(details).anyMatch(d -> "email".equals(d.get("field")));
     }
 
     @Test
-    void login_missingPassword_returns400() {
+    void login_missingPassword_returns400() throws Exception {
         LoginRequest request = new LoginRequest();
         request.setEmail(TEST_EMAIL);
         request.setPassword("");
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(LOGIN_URL, request, Map.class);
+        MvcResult result = mockMvc.perform(post(LOGIN_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest())
+            .andReturn();
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
+        Map<?, ?> body = body(result);
+        assertThat(error(body).get("code")).isEqualTo("VALIDATION_ERROR");
 
-        var details = (java.util.List<Map<?, ?>>) error(response).get("details");
+        var details = (java.util.List<Map<?, ?>>) error(body).get("details");
         assertThat(details).anyMatch(d -> "password".equals(d.get("field")));
     }
 
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    private MvcResult performLogin(LoginRequest request) throws Exception {
+        return mockMvc.perform(post(LOGIN_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk())
+            .andReturn();
+    }
+
+    private Map<?, ?> body(MvcResult result) throws Exception {
+        return objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
+    }
 
     private LoginRequest validRequest() {
         LoginRequest request = new LoginRequest();
@@ -296,7 +329,7 @@ class LoginEndpointTest extends AuthTestBase {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> error(ResponseEntity<Map> response) {
-        return (Map<String, Object>) response.getBody().get("error");
+    private Map<String, Object> error(Map<?, ?> body) {
+        return (Map<String, Object>) body.get("error");
     }
 }

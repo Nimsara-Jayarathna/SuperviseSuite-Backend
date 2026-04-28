@@ -148,13 +148,21 @@ public class ProjectGitHubDashboardDto {
     public static class Contributor {
         private String name;
         private int commitCount;
+        private String githubUsername;
+        private String avatarUrl;
 
         public Contributor() {
         }
 
         public Contributor(String name, int commitCount) {
+            this(name, commitCount, null, null);
+        }
+
+        public Contributor(String name, int commitCount, String githubUsername, String avatarUrl) {
             this.name = name;
             this.commitCount = commitCount;
+            this.githubUsername = githubUsername;
+            this.avatarUrl = avatarUrl;
         }
 
         public String getName() {
@@ -172,21 +180,52 @@ public class ProjectGitHubDashboardDto {
         public void setCommitCount(int commitCount) {
             this.commitCount = commitCount;
         }
+
+        public String getGithubUsername() {
+            return githubUsername;
+        }
+
+        public void setGithubUsername(String githubUsername) {
+            this.githubUsername = githubUsername;
+        }
+
+        public String getAvatarUrl() {
+            return avatarUrl;
+        }
+
+        public void setAvatarUrl(String avatarUrl) {
+            this.avatarUrl = avatarUrl;
+        }
     }
 
     public static class RecentCommit {
         private String sha;
         private String message;
         private String author;
+        private String githubUsername;
+        private String avatarUrl;
         private Instant committedAt;
 
         public RecentCommit() {
         }
 
         public RecentCommit(String sha, String message, String author, Instant committedAt) {
+            this(sha, message, author, null, null, committedAt);
+        }
+
+        public RecentCommit(
+            String sha,
+            String message,
+            String author,
+            String githubUsername,
+            String avatarUrl,
+            Instant committedAt
+        ) {
             this.sha = sha;
             this.message = message;
             this.author = author;
+            this.githubUsername = githubUsername;
+            this.avatarUrl = avatarUrl;
             this.committedAt = committedAt;
         }
 
@@ -212,6 +251,22 @@ public class ProjectGitHubDashboardDto {
 
         public void setAuthor(String author) {
             this.author = author;
+        }
+
+        public String getGithubUsername() {
+            return githubUsername;
+        }
+
+        public void setGithubUsername(String githubUsername) {
+            this.githubUsername = githubUsername;
+        }
+
+        public String getAvatarUrl() {
+            return avatarUrl;
+        }
+
+        public void setAvatarUrl(String avatarUrl) {
+            this.avatarUrl = avatarUrl;
         }
 
         public Instant getCommittedAt() {

@@ -1,6 +1,9 @@
 package com.supervisesuite.backend.supervisor.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import com.supervisesuite.backend.TestcontainersConfiguration;
 import com.supervisesuite.backend.auth.security.CookieService;
@@ -14,6 +17,8 @@ import com.supervisesuite.backend.projects.repository.ProjectMilestoneRepository
 import com.supervisesuite.backend.projects.repository.ProjectRepository;
 import com.supervisesuite.backend.users.entity.User;
 import com.supervisesuite.backend.users.repository.UserRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -21,32 +26,34 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest(
-    webEnvironment = WebEnvironment.RANDOM_PORT,
+    webEnvironment = WebEnvironment.MOCK,
     properties = {
         "APP_PORT=0",
         "JWT_SECRET=dGVzdC1zZWNyZXQtd2hpY2gtaXMtbG9uZy1lbm91Z2gtZm9yLXRlc3RpbmctcHVycG9zZXMtb25seQ=="
     }
 )
+@AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 class SupervisorProjectControllerTest {
 
     @Autowired
-    private TestRestTemplate restTemplate;
+    private MockMvc mockMvc;
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired
     private UserRepository userRepository;
@@ -79,18 +86,19 @@ class SupervisorProjectControllerTest {
         String token = jwtService.generateAccessToken(supervisor);
         String repositoryUrl = "https://github.com/facebook/react";
 
-        ResponseEntity<Map> response = patchRepository(
+        MvcResult response = patchRepository(
             project.getId(),
             Map.of("repositoryUrl", repositoryUrl),
             token
         );
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("success")).isEqualTo(true);
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.OK.value());
+        Map<?, ?> body = body(response);
+        assertThat(body).isNotNull();
+        assertThat(body.get("success")).isEqualTo(true);
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        Map<String, Object> data = (Map<String, Object>) body.get("data");
         @SuppressWarnings("unchecked")
         Map<String, Object> github = (Map<String, Object>) data.get("github");
         assertThat(github).isNotNull();
@@ -104,14 +112,15 @@ class SupervisorProjectControllerTest {
         String token = jwtService.generateAccessToken(supervisor);
         String repositoryUrl = "https://github.com/microsoft/vscode";
 
-        ResponseEntity<Map> response = patchRepository(
+        MvcResult response = patchRepository(
             project.getId(),
             Map.of("repositoryUrl", repositoryUrl),
             token
         );
 
+        Map<?, ?> body = body(response);
         @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        Map<String, Object> data = (Map<String, Object>) body.get("data");
         @SuppressWarnings("unchecked")
         Map<String, Object> github = (Map<String, Object>) data.get("github");
         assertThat(github).isNotNull();
@@ -123,18 +132,19 @@ class SupervisorProjectControllerTest {
         User supervisor = persistUser(Roles.SUPERVISOR, "supervisor3@university.ac.lk");
         String token = jwtService.generateAccessToken(supervisor);
 
-        ResponseEntity<Map> response = patchRepository(
+        MvcResult response = patchRepository(
             UUID.randomUUID(),
             Map.of("repositoryUrl", "http://github.com/user/repo"),
             token
         );
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        Map<?, ?> body = body(response);
+        assertThat(body).isNotNull();
+        assertThat(error(body).get("code")).isEqualTo("VALIDATION_ERROR");
 
         @SuppressWarnings("unchecked")
-        List<Map<String, Object>> details = (List<Map<String, Object>>) error(response).get("details");
+        List<Map<String, Object>> details = (List<Map<String, Object>>) error(body).get("details");
         assertThat(details).anyMatch(detail -> "repositoryUrl".equals(detail.get("field")));
     }
 
@@ -143,28 +153,30 @@ class SupervisorProjectControllerTest {
         User supervisor = persistUser(Roles.SUPERVISOR, "supervisor4@university.ac.lk");
         String token = jwtService.generateAccessToken(supervisor);
 
-        ResponseEntity<Map> response = patchRepository(
+        MvcResult response = patchRepository(
             UUID.randomUUID(),
             Map.of("repositoryUrl", "https://gitlab.com/user/repo"),
             token
         );
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        Map<?, ?> body = body(response);
+        assertThat(body).isNotNull();
+        assertThat(error(body).get("code")).isEqualTo("VALIDATION_ERROR");
     }
 
     @Test
     void patchRepository_unauthenticated_returns401() {
-        ResponseEntity<Map> response = patchRepository(
+        MvcResult response = patchRepository(
             UUID.randomUUID(),
             Map.of("repositoryUrl", "https://github.com/facebook/react"),
             null
         );
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(error(response).get("code")).isEqualTo("UNAUTHORIZED");
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+        Map<?, ?> body = body(response);
+        assertThat(body).isNotNull();
+        assertThat(error(body).get("code")).isEqualTo("UNAUTHORIZED");
     }
 
     @Test
@@ -172,15 +184,16 @@ class SupervisorProjectControllerTest {
         User student = persistUser(Roles.STUDENT, "student1@university.ac.lk");
         String token = jwtService.generateAccessToken(student);
 
-        ResponseEntity<Map> response = patchRepository(
+        MvcResult response = patchRepository(
             UUID.randomUUID(),
             Map.of("repositoryUrl", "https://github.com/facebook/react"),
             token
         );
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(error(response).get("code")).isEqualTo("FORBIDDEN");
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
+        Map<?, ?> body = body(response);
+        assertThat(body).isNotNull();
+        assertThat(error(body).get("code")).isEqualTo("FORBIDDEN");
     }
 
     @Test
@@ -189,14 +202,15 @@ class SupervisorProjectControllerTest {
         Project project = persistProject(supervisor);
         String token = jwtService.generateAccessToken(supervisor);
 
-        ResponseEntity<Map> response = getProjectJiraHealth(project.getId(), token);
+        MvcResult response = getProjectJiraHealth(project.getId(), token);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("success")).isEqualTo(true);
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.OK.value());
+        Map<?, ?> body = body(response);
+        assertThat(body).isNotNull();
+        assertThat(body.get("success")).isEqualTo(true);
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        Map<String, Object> data = (Map<String, Object>) body.get("data");
         assertThat(data).isNotNull();
         assertThat(data).containsKeys("completionPercent", "openIssues", "statusBreakdown", "bugRatio");
     }
@@ -207,11 +221,12 @@ class SupervisorProjectControllerTest {
         Project project = persistProject(supervisor);
         String token = jwtService.generateAccessToken(supervisor);
 
-        ResponseEntity<Map> response = refreshProjectJira(project.getId(), token);
+        MvcResult response = refreshProjectJira(project.getId(), token);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(error(response).get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        Map<?, ?> body = body(response);
+        assertThat(body).isNotNull();
+        assertThat(error(body).get("code")).isEqualTo("VALIDATION_ERROR");
     }
 
     @Test
@@ -223,13 +238,14 @@ class SupervisorProjectControllerTest {
         projectJiraIssueRepository.save(persistIssue(project.getId(), "PRJ-1", null, "Epic"));
         projectJiraIssueRepository.save(persistIssue(project.getId(), "PRJ-2", "PRJ-1", "Story"));
 
-        ResponseEntity<Map> response = getProjectJiraHierarchy(project.getId(), token);
+        MvcResult response = getProjectJiraHierarchy(project.getId(), token);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("success")).isEqualTo(true);
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.OK.value());
+        Map<?, ?> body = body(response);
+        assertThat(body).isNotNull();
+        assertThat(body.get("success")).isEqualTo(true);
         @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        Map<String, Object> data = (Map<String, Object>) body.get("data");
         assertThat(data).containsKeys("roots", "orphans");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> roots = (List<Map<String, Object>>) data.get("roots");
@@ -242,12 +258,13 @@ class SupervisorProjectControllerTest {
         Project project = persistProject(supervisor);
         String token = jwtService.generateAccessToken(supervisor);
 
-        ResponseEntity<Map> response = getProjectJiraHierarchy(project.getId(), token);
+        MvcResult response = getProjectJiraHierarchy(project.getId(), token);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.OK.value());
+        Map<?, ?> body = body(response);
+        assertThat(body).isNotNull();
         @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        Map<String, Object> data = (Map<String, Object>) body.get("data");
         assertThat(data).containsEntry("roots", List.of());
         assertThat(data).containsEntry("orphans", List.of());
     }
@@ -259,66 +276,71 @@ class SupervisorProjectControllerTest {
         Project project = persistProject(owner);
         String token = jwtService.generateAccessToken(anotherSupervisor);
 
-        ResponseEntity<Map> response = getProjectJiraHierarchy(project.getId(), token);
+        MvcResult response = getProjectJiraHierarchy(project.getId(), token);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
     }
 
-    private ResponseEntity<Map> patchRepository(UUID projectId, Map<String, Object> body, String accessToken) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        if (accessToken != null) {
-            headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + accessToken);
+    private MvcResult patchRepository(UUID projectId, Map<String, Object> body, String accessToken) {
+        try {
+            var request = patch("/api/supervisor/projects/" + projectId + "/repository")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body));
+            if (accessToken != null) {
+                request.cookie(accessCookie(accessToken));
+            }
+            return mockMvc.perform(request).andReturn();
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
         }
-
-        return restTemplate.exchange(
-            "/api/supervisor/projects/" + projectId + "/repository",
-            HttpMethod.PATCH,
-            new HttpEntity<>(body, headers),
-            Map.class
-        );
     }
 
-    private ResponseEntity<Map> getProjectJiraHealth(UUID projectId, String accessToken) {
-        HttpHeaders headers = new HttpHeaders();
-        if (accessToken != null) {
-            headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + accessToken);
+    private MvcResult getProjectJiraHealth(UUID projectId, String accessToken) {
+        try {
+            var request = get("/api/supervisor/projects/" + projectId + "/jira/health");
+            if (accessToken != null) {
+                request.cookie(accessCookie(accessToken));
+            }
+            return mockMvc.perform(request).andReturn();
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
         }
-
-        return restTemplate.exchange(
-            "/api/supervisor/projects/" + projectId + "/jira/health",
-            HttpMethod.GET,
-            new HttpEntity<>(headers),
-            Map.class
-        );
     }
 
-    private ResponseEntity<Map> refreshProjectJira(UUID projectId, String accessToken) {
-        HttpHeaders headers = new HttpHeaders();
-        if (accessToken != null) {
-            headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + accessToken);
+    private MvcResult refreshProjectJira(UUID projectId, String accessToken) {
+        try {
+            var request = post("/api/supervisor/projects/" + projectId + "/jira/refresh");
+            if (accessToken != null) {
+                request.cookie(accessCookie(accessToken));
+            }
+            return mockMvc.perform(request).andReturn();
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
         }
-
-        return restTemplate.exchange(
-            "/api/supervisor/projects/" + projectId + "/jira/refresh",
-            HttpMethod.POST,
-            new HttpEntity<>(headers),
-            Map.class
-        );
     }
 
-    private ResponseEntity<Map> getProjectJiraHierarchy(UUID projectId, String accessToken) {
-        HttpHeaders headers = new HttpHeaders();
-        if (accessToken != null) {
-            headers.add(HttpHeaders.COOKIE, CookieService.ACCESS_TOKEN_COOKIE + "=" + accessToken);
+    private MvcResult getProjectJiraHierarchy(UUID projectId, String accessToken) {
+        try {
+            var request = get("/api/supervisor/projects/" + projectId + "/jira/hierarchy");
+            if (accessToken != null) {
+                request.cookie(accessCookie(accessToken));
+            }
+            return mockMvc.perform(request).andReturn();
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
         }
+    }
 
-        return restTemplate.exchange(
-            "/api/supervisor/projects/" + projectId + "/jira/hierarchy",
-            HttpMethod.GET,
-            new HttpEntity<>(headers),
-            Map.class
-        );
+    private Cookie accessCookie(String accessToken) {
+        return new Cookie(CookieService.ACCESS_TOKEN_COOKIE, accessToken);
+    }
+
+    private Map<?, ?> body(MvcResult result) {
+        try {
+            return objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
     private User persistUser(String role, String email) {
@@ -357,7 +379,7 @@ class SupervisorProjectControllerTest {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> error(ResponseEntity<Map> response) {
-        return (Map<String, Object>) response.getBody().get("error");
+    private Map<String, Object> error(Map<?, ?> body) {
+        return (Map<String, Object>) body.get("error");
     }
 }
